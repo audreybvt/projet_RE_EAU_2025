@@ -55,14 +55,14 @@ plt.show()
 # --------------------------
 # 5️⃣ Exemple : carte des stations à un instant donné
 # --------------------------
-instant = 0  # premier pas de temps
-plt.figure(figsize=(8,6))
-sc = plt.scatter(lon, lat, c=niveau[instant,:], cmap="viridis")
-plt.colorbar(sc, label="Niveau piézométrique (m)")
-plt.xlabel("Longitude")
-plt.ylabel("Latitude")
-plt.title(f"Niveau piézométrique – {dates_dt[instant].date()}")
-plt.show()
+#instant = 0  # premier pas de temps
+#plt.figure(figsize=(8,6))
+#sc = plt.scatter(lon, lat, c=niveau[instant,:], cmap="viridis")
+#plt.colorbar(sc, label="Niveau piézométrique (m)")
+#plt.xlabel("Longitude")
+#plt.ylabel("Latitude")
+#plt.title(f"Niveau piézométrique – {dates_dt[instant].date()}")
+#plt.show()
 
 # --------------------------
 # 6️⃣ Fermer le fichier
