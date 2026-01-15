@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 # Ask for the path to the file we want to analyze
-path = Path(input("Please enter your path to your file (with / instead of anti-slash and without quotation marks):"))
+path = Path(input("Please enter your path to your file (with / instead of anti-slash and without quotation mark):"))
 
 suffix = path.suffix.lower()
 
