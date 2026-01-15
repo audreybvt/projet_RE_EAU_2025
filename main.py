@@ -30,10 +30,13 @@ print(df.info())
 # en fonction de la réponse demander les colonnes d'intéret :
 # - date, - une ou deux variables autres, plusieurs variables en fonction du temps ?
 
+### ATTENTIN PBM D'INDENTATION
+
 # cas 1 date 1 variable
 date = input("What is your date column name? mettre les spec de typo")
 column1 = input("What is your column of interest ?")
 
+'''
 #cas juste une variabel
 column1 = input("What is your column of interest ?")
 
@@ -45,3 +48,15 @@ column2 = input("What is your column 2 of interest ?")
 # cas 2 variables
 column1 = input("What is your column 1 of interest ?")
 column2 = input("What is your column 2 of interest ?")
+'''
+########
+
+#on convertit les colonnes dans el bon type si ce sont des objets
+#il faudra voir comment on gère les types de colonnes
+#mettre un test du type ?
+df[colonne] = (
+    df[colonne]
+    .str.replace(",",".", regex=False)
+    .astype(float)
+)
+
