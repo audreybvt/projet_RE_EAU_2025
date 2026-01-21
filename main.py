@@ -26,6 +26,97 @@ else:
 # CSV case
 df = pd.read_csv(path, sep = ";")
 print(df.info())
+
+number_of_variables = float(input("How many variables do you want to compare?” Enter the number:")) 
+
+date = input("What is the name of the column with the dates? Copy and paste its name:") 
+
+df[date] = pd.to_datetime(df[date], dayfirst=True) 
+
+if number_of_variables == 1: 
+    column1= input("What is the name of the column of interest? Copy and paste its name here (without quotation marks):") 
+    df[column1] = ( 
+
+        df[column1] 
+
+        .str.replace(",",".", regex=False) 
+
+        .astype(float) 
+
+    ) 
+    statistic1 = float(input("Which statistic do you want to compute and display? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    visualization1 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+
+if number_of_variables == 2: 
+    column2.1= input("What is the name of the first column of interest? Copy and paste its name here (without quotation marks):") 
+    df[column2.1] = ( 
+
+        df[column2.1] 
+
+        .str.replace(",",".", regex=False) 
+
+        .astype(float) 
+
+    ) 
+    column2.2= input("What is the name of the third column of interest? Copy and paste its name here (without quotation marks):") 
+    df[column2.2] = ( 
+
+        df[column2.2] 
+
+        .str.replace(",",".", regex=False) 
+
+        .astype(float) 
+
+    ) 
+    statistic2.1= float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    statistic2.2= float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    visualization2 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+
+if number_of_variables == 3: 
+    column3.1= float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    df[column3.1] = ( 
+
+        df[column3.1] 
+
+        .str.replace(",",".", regex=False) 
+
+        .astype(float) 
+
+    ) 
+    column3.2= float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    df[column3.2] = ( 
+
+        df[column3.2] 
+
+        .str.replace(",",".", regex=False) 
+
+        .astype(float) 
+
+    ) 
+    column3.3= float(input("Which statistic do you want to compute and display for the third column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    df[column3.3] = ( 
+
+        df[column3.3] 
+
+        .str.replace(",",".", regex=False) 
+
+        .astype(float) 
+
+    ) 
+    statistic3.1 = float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    statistic3.2 = float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    statistic3.3 = float(input("Which statistic do you want to compute and display for the third column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    visualization3 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+
+ 
+
+ 
+
+ 
+
+ 
+
+'''
 visualisation = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ..."))
 # Which kind of visualization do you want?
 # en fonction de la réponse demander les colonnes d'intéret :
@@ -97,4 +188,4 @@ elif visualisation == 6 :
 # Gérer le problème demande d'une courbe temporelle/demande d'une moyenne 
 statistic = float(input("Which statistic do you want to compute and display? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ..." ))
 
-
+'''
