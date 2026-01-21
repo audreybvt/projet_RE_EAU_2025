@@ -46,6 +46,8 @@ if number_of_variables == 1:
 
     ) 
     statistic1 = float(input("Which statistic do you want to compute and display? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    if statistic1 == 1:
+        print("The mean is", mean_value(df[column1]))
     visualization1 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
 
 if number_of_variables == 2: 
