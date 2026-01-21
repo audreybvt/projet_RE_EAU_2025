@@ -59,7 +59,10 @@ if number_of_variables == 1:
         s = float(input("Which threshold do you want?"))
         print("Number of occurences above the threshold", nombre_occurences_au_dessus_seuil(df[column1],s))
     if statistic1 == 6: #no statistics calculus one just wants to visualize and not necessary having the value of the statistics before
-        visualization1 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+        visualization1 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ..."))
+        if visualization1==1:
+        if visualization1==2:
+        
 
 if number_of_variables == 2: 
     column21= input("What is the name of the first column of interest? Copy and paste its name here (without quotation marks):") 
