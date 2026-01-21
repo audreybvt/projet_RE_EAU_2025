@@ -8,17 +8,24 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
 
+
 # --------------------------
 # 1️⃣ Ouvrir le fichier NetCDF
 # --------------------------
 nc_file = "niveau_PiezoFrance_CNRM-CERFACS-CNRM-CM5_rcp26_r1i1p1_CNRM-ALADIN63_v2_ADAMONT-France_BRGM-AquiFR_day_20050801-21000731.nc"
 nc = Dataset(nc_file, "r")
 
+#print(nc)
+#print(nc.variables.keys())
+#print(nc.dimensions.keys())
+
 # Variables
 niveau = nc.variables["niveau"]      # niveaux piézométriques
 time = nc.variables["time"]          # temps
 lat = nc.variables["Lat"][:]         # latitude stations
 lon = nc.variables["Lon"][:]         # longitude stations
+
+print(type(niveau))
 
 # --------------------------
 # 2️⃣ Convertir le temps en datetime
