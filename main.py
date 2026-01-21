@@ -48,64 +48,64 @@ if number_of_variables == 1:
     visualization1 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
 
 if number_of_variables == 2: 
-    column2.1= input("What is the name of the first column of interest? Copy and paste its name here (without quotation marks):") 
-    df[column2.1] = ( 
+    column21= input("What is the name of the first column of interest? Copy and paste its name here (without quotation marks):") 
+    df[column21] = ( 
 
-        df[column2.1] 
-
-        .str.replace(",",".", regex=False) 
-
-        .astype(float) 
-
-    ) 
-    column2.2= input("What is the name of the third column of interest? Copy and paste its name here (without quotation marks):") 
-    df[column2.2] = ( 
-
-        df[column2.2] 
+        df[column21] 
 
         .str.replace(",",".", regex=False) 
 
         .astype(float) 
 
     ) 
-    statistic2.1= float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    statistic2.2= float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    column22= input("What is the name of the third column of interest? Copy and paste its name here (without quotation marks):") 
+    df[column22] = ( 
+
+        df[column22] 
+
+        .str.replace(",",".", regex=False) 
+
+        .astype(float) 
+
+    ) 
+    statistic21= float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    statistic22= float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
     visualization2 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
 
 if number_of_variables == 3: 
-    column3.1= float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    df[column3.1] = ( 
+    column31= float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    df[column31] = ( 
 
-        df[column3.1] 
-
-        .str.replace(",",".", regex=False) 
-
-        .astype(float) 
-
-    ) 
-    column3.2= float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    df[column3.2] = ( 
-
-        df[column3.2] 
+        df[column31] 
 
         .str.replace(",",".", regex=False) 
 
         .astype(float) 
 
     ) 
-    column3.3= float(input("Which statistic do you want to compute and display for the third column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    df[column3.3] = ( 
+    column32= float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    df[column32] = ( 
 
-        df[column3.3] 
+        df[column32] 
 
         .str.replace(",",".", regex=False) 
 
         .astype(float) 
 
     ) 
-    statistic3.1 = float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    statistic3.2 = float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    statistic3.3 = float(input("Which statistic do you want to compute and display for the third column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    column33= float(input("Which statistic do you want to compute and display for the third column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    df[column33] = ( 
+
+        df[column33] 
+
+        .str.replace(",",".", regex=False) 
+
+        .astype(float) 
+
+    ) 
+    statistic31 = float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    statistic32 = float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
+    statistic33 = float(input("Which statistic do you want to compute and display for the third column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
     visualization3 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
 
  
