@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 from treatmentCSV import*
+from statistics import*
 
 
 # Ask for the path to the file we want to analyze
