@@ -25,7 +25,7 @@ else:
     
 
 # CSV case
-df = pd.read_csv(path, sep = ";")
+df = pd.read_csv(path, sep=";")
 print(df.info())
 
 number_of_variables = float(input("How many variables do you want to compare?” Enter the number:")) 
@@ -35,7 +35,7 @@ date = input("What is the name of the column with the dates? Copy and paste its 
 df[date] = pd.to_datetime(df[date], dayfirst=True) 
 
 if number_of_variables == 1: 
-    column1= input("What is the name of the column of interest? Copy and paste its name here (without quotation marks):") 
+    column1 = input("What is the name of the column of interest? Copy and paste its name here (without quotation marks):") 
     df[column1] = ( 
 
         df[column1] 
