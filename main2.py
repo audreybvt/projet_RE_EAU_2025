@@ -15,9 +15,10 @@ path = Path(input("Please enter your path to your file (with / instead of anti-s
 
 suffix = path.suffix.lower()
 
-dict_visualization_num_variables={1:[1,"date"],2:[2]}
+dict_visualization_num_variables={1:[1,"date"],2:[2]} # potentiellement inutile ?
 dict_visualization={"temporel":1,"histogramme":2}
 
+#les print vont partir probablement et remplacer par un traitement pour mettre tout sous forme de df a priori
 if suffix == ".csv":
     print("It is a CSV")
 elif suffix in (".nc", ".nc4", ".netcdf"):
