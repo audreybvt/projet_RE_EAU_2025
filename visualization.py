@@ -4,12 +4,8 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
 
+
 # ---------------- Create test DataFrame ----------------
-np.random.seed(42)
-
-import numpy as np
-import pandas as pd
-
 np.random.seed(42)
 
 columns = ["col1", "col2", "col3", "col4"]
@@ -155,6 +151,70 @@ def scatter_chart(df, col1, columns, title="Scatter Plot", xlabel=None, ylabel=N
     plt.show()
 
 
+def radar_chart(df):
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    # --- Choix de la colonne catégorie ---
+    try:
+        cat_idx = int(input("\nIndex de la colonne catégories (axes du radar) : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un nombre entier")
+
+    if cat_idx < 0 or cat_idx >= len(df.columns):
+        raise IndexError("Index de colonne catégorie invalide")
+
+    category_col = df.columns[cat_idx]
+
+    # --- Choix des colonnes de valeurs ---
+    value_idx_input = input(
+        "Index des colonnes de valeurs (séparés par une virgule, ex: 1,2) : "
+    )
+
+    try:
+        value_idx = sorted(
+            set(int(i.strip()) for i in value_idx_input.split(","))
+        )
+    except ValueError:
+        raise ValueError("Les index doivent être des nombres entiers")
+
+    if cat_idx in value_idx:
+        raise ValueError("La colonne catégorie ne peut pas être une colonne de valeurs")
+
+    for i in value_idx:
+        if i < 0 or i >= len(df.columns):
+            raise IndexError(f"Index invalide : {i}")
+
+    value_cols = [df.columns[i] for i in value_idx]
+
+    # --- Préparation du radar ---
+    categories = df[category_col].astype(str).values
+    N = len(categories)
+
+    angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
+    angles += angles[:1]
+
+    fig, ax = plt.subplots(figsize=(7,7), subplot_kw=dict(polar=True))
+    colors = cm.viridis(np.linspace(0, 1, len(value_cols)))
+
+    for i, col in enumerate(value_cols):
+        values = df[col].astype(float).values.tolist()
+        values += values[:1]
+
+        ax.plot(angles, values, linewidth=2, label=col, color=colors[i])
+        ax.fill(angles, values, alpha=0.25, color=colors[i])
+
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories)
+    ax.set_title("Radar Chart", y=1.08)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1))
+    ax.grid(True)
+
+    plt.show()# a voir si on laisse cette ligne
+
+
+
 
 # ----------------- Test -----------------
 
@@ -168,8 +228,16 @@ bar_chart(df_test, "col1", "col2", title="Bar Chart")
 plt.savefig("output/bar_chart.png")
 plt.close()
 
+# radar chart
+
+radar_chart(df_test)
+
+plt.savefig("output/radar_chart.png", bbox_inches="tight")
+plt.close()
+
 # Line chart
 line_chart(df_test, "col1", columns=[ "col2", "col3", "col4"], title="Line Chart Test")
 
+
 # scatter plot
-scatter_chart(df_test, "col1", columns=[ "col2", "col3", "col4"])
+#scatter_chart(df_test, "col1", columns=[ "col2", "col3", "col4"])
