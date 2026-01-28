@@ -6,6 +6,7 @@ import os
 
 
 # ---------------- Create test DataFrame ----------------
+'''
 np.random.seed(42)
 
 columns = ["col1", "col2", "col3", "col4"]
@@ -24,7 +25,7 @@ df_test.insert(0, "col1", col1)
 
 print("Test DataFrame:")
 print(df_test.head())
-
+'''
 
 # ---------------- Bar Chart ----------------
 
@@ -218,6 +219,7 @@ def radar_chart(df):
 
 # ----------------- Test -----------------
 
+'''
 # créer le dossier AVANT
 os.makedirs("output", exist_ok=True)
 
@@ -241,3 +243,4 @@ line_chart(df_test, "col1", columns=[ "col2", "col3", "col4"], title="Line Chart
 
 # scatter plot
 #scatter_chart(df_test, "col1", columns=[ "col2", "col3", "col4"])
+'''
