@@ -27,7 +27,7 @@ print("Test DataFrame:")
 print(df_test.head())
 '''
 
-# ---------------- Bar Chart ----------------
+# ---------------- Bar Chart ---------------- a été modifié pour correspondre à nouvelle structure
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -90,90 +90,111 @@ def bar_chart(df):
 
 
 
-# ---------------- Line Chart ----------------
+# ---------------- Line Chart ---------------- a été modifiée
 
-def line_chart(df, col1, columns, title="Line Chart", xlabel=None, ylabel=None, step=None):
-    """
-    Displays a line chart using one column for the x-axis and one or several columns for y-axis lines.
 
-    Parameters:
-    df      : pandas DataFrame containing the data
-    col1    : str, column name for x-axis
-    columns : list of str, column names to plot as lines
-    title   : str, optional, title of the chart
-    xlabel  : str, optional, label for x-axis (defaults to col1)
-    ylabel  : str, optional, label for y-axis (defaults to "Values")
-    step    : float, optional, step size for the grid on x and y axes
-     
-    Example:
-    line_chart(df, "Time", ["Temperature1", "Temperature2"], title="Mean Temperature vs Time", step=2)
-    """
-    colors = cm.viridis(np.linspace(0, 1, len(columns)))  # generate different colors per line
-    plt.figure(figsize=(10,6))
-    
-    # Plot each line
-    for i, col in enumerate(columns):
-        plt.plot(df[col1], df[col].astype(float), marker='o', color=colors[i], label=col)
+def line_chart(df):
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
 
-    plt.title(title)
-    plt.xlabel(xlabel if xlabel else col1)
-    plt.ylabel(ylabel if ylabel else "Values")
-    plt.ylim(bottom=0)  # start y-axis at 0
+    # --- Choix de la colonne X ---
+    try:
+        x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
     
-    # Optional: grid with step
-    if step and step > 0:
-        x_min, x_max = df[col1].min(), df[col1].max()
-        y_min, y_max = 0, df[columns].max().max()
-        plt.xticks(np.arange(x_min, x_max + step, step))
-        plt.yticks(np.arange(y_min, y_max + step, step))
+    if x_idx < 0 or x_idx >= len(df.columns):
+        raise IndexError("Index de colonne X invalide")
     
-    plt.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
-    plt.legend()
-    plt.show()
+    # --- Choix des colonnes Y ---
+    y_idx_input = input("Index des colonnes pour l'axe Y (séparés par une virgule, ex: 1,2) : ")
+    
+    try:
+        y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
+    except ValueError:
+        raise ValueError("Les index doivent être des nombres entiers")
+    
+    if x_idx in y_idx:
+        raise ValueError("La colonne X ne peut pas être dans les colonnes Y")
+    
+    for i in y_idx:
+        if i < 0 or i >= len(df.columns):
+            raise IndexError(f"Index Y invalide : {i}")
+    
+    x_col = df.columns[x_idx]
+    y_cols = [df.columns[i] for i in y_idx]
+
+    # --- Création du graphique ---
+    fig, ax = plt.subplots(figsize=(10,6))
+    colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
+
+    for i, col in enumerate(y_cols):
+        y = df[col].astype(float)
+        ax.plot(df[x_col], y, marker='o', label=col, color=colors[i])
+
+    ax.set_title(f"Line Chart: {', '.join(y_cols)} vs {x_col}")
+    ax.set_xlabel(x_col)
+    ax.set_ylabel("Values")
+    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
+    ax.legend()
+    
+    return fig  # retourne la figure pour pouvoir sauvegarder
 
 
 ##-------------- Scatter Plot ---------------
+def scatter_chart(df):
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
 
-def scatter_chart(df, col1, columns, title="Scatter Plot", xlabel=None, ylabel=None, step=None):
-    """
-    Displays a scatter plot using one column for the x-axis and one or several columns for y-axis points.
+    # --- Choix de la colonne X ---
+    try:
+        x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
+    
+    if x_idx < 0 or x_idx >= len(df.columns):
+        raise IndexError("Index de colonne X invalide")
+    
+    # --- Choix des colonnes Y ---
+    y_idx_input = input("Index des colonnes pour l'axe Y (séparés par une virgule, ex: 1,2) : ")
+    
+    try:
+        y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
+    except ValueError:
+        raise ValueError("Les index doivent être des nombres entiers")
+    
+    if x_idx in y_idx:
+        raise ValueError("La colonne X ne peut pas être dans les colonnes Y")
+    
+    for i in y_idx:
+        if i < 0 or i >= len(df.columns):
+            raise IndexError(f"Index Y invalide : {i}")
+    
+    x_col = df.columns[x_idx]
+    y_cols = [df.columns[i] for i in y_idx]
 
-    Parameters:
-    df      : pandas DataFrame containing the data
-    col1    : str, column name for x-axis
-    columns : list of str, column names to plot as scatter points
-    title   : str, optional, title of the chart
-    xlabel  : str, optional, label for x-axis (defaults to col1)
-    ylabel  : str, optional, label for y-axis (defaults to "Values")
-    step    : float, optional, step size for the grid on x and y axes
-     
-    Example:
-    scatter_chart(df, "Precipitation", ["fluid_flow1", "fluid_flow2"], title="Mean fluid flow vs precipitation", step=2)
-    """
-    colors = cm.viridis(np.linspace(0, 1, len(columns)))  # different color per column
-    plt.figure(figsize=(10,6))
-    
-    # Plot each column as scatter points
-    for i, col in enumerate(columns):
-        plt.scatter(df[col1], df[col].astype(float), color=colors[i], label=col, s=50)
+    # --- Création du graphique ---
+    fig, ax = plt.subplots(figsize=(10,6))
+    colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
 
-    plt.title(title)
-    plt.xlabel(xlabel if xlabel else col1)
-    plt.ylabel(ylabel if ylabel else "Values") 
-    plt.ylim(bottom=0)
-    plt.xlim(left=0)
-    
-    
-    if step and step > 0: # Grid with optional step
-        x_min, x_max = df[col1].min(), df[col1].max()
-        y_min, y_max = 0, df[columns].max().max()
-        plt.xticks(np.arange(x_min, x_max + step, step))
-        plt.yticks(np.arange(y_min, y_max + step, step))
-    
-    plt.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
-    plt.legend()
-    plt.show()
+    for i, col in enumerate(y_cols):
+        y = df[col].astype(float)
+        ax.scatter(df[x_col], y, label=col, color=colors[i], s=50)
 
+    ax.set_title(f"Scatter Plot: {', '.join(y_cols)} vs {x_col}")
+    ax.set_xlabel(x_col)
+    ax.set_ylabel("Values")
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
+    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
+    ax.legend()
+
+    return fig  # retourne la figure pour pouvoir sauvegarder
+
+
+# ---------------- Radar Chart ---------------- a été modifié pour correspondre à nouvelle structure
 
 def radar_chart(df):
     print("\nColonnes disponibles :")
