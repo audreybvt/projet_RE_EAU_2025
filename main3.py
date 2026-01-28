@@ -38,6 +38,13 @@ else:
 # CSV case
 df = pd.read_csv(path, sep=";")
 
+for col in df.columns:
+    if df[col].dtype == object:
+        df[col] = df[col].str.replace(",", ".", regex=False)
+        df[col] = pd.to_numeric(df[col], errors="ignore")
+        df[col] = pd.to_datetime(df[col], errors="ignore", dayfirst=True)
+
+
 print(dict_visualization)
 visualization = int(input("Enter the number of the visualization you want: "))
 
