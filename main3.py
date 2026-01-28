@@ -17,7 +17,7 @@ path = Path(input("Please enter your path to your file (with / instead of anti-s
 
 suffix = path.suffix.lower()
 
-#dict_visualization_num_variables={1:[1,"date"],2:[2]} # potentiellement inutile ?
+#Création des dictionnaires
 dict_visualization={"bar chart":1,"scatter plot":2,"line char":3, "radar chart":4, "histogram chart":5}
 menu = {
     1: bar_chart,
@@ -26,6 +26,16 @@ menu = {
     4: radar_chart,
     5: histogram_chart
 }
+
+dict_stats={"mean":1,"max":2,"min":3, "percentile":4, "nombre d'occurences au dessus d'un seuil":5}
+menu_stats = {
+    1: mean_value,
+    2: maximum_value,
+    3: minimum_value,
+    4: percentile,
+    5: nombre_occruences_au_dessus_seuil
+}
+
 
 #les print vont partir probablement et remplacer par un traitement pour mettre tout sous forme de df a priori
 if suffix == ".csv":
