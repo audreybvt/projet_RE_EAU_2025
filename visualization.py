@@ -29,41 +29,64 @@ print(df_test.head())
 
 # ---------------- Bar Chart ----------------
 
-def bar_chart(df, col1, col2, title="Bar Chart", xlabel=None, ylabel=None, display=True):
-    """
-    Displays a bar chart using one column for categories (x-axis) and one column for values (y-axis).
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import numpy as np
 
-    Parameters:
-    df      : pandas DataFrame containing the data
-    col1    : str, column name for x-axis (categories)
-    col2    : str, column name for y-axis (values)
-    title   : str, optional, title of the chart
-    xlabel  : str, optional, label for x-axis (defaults to col1)
-    ylabel  : str, optional, label for y-axis (defaults to col2)
-     
-    Example:
-    bar_chart(df, "Day", "Precipitation", title="Daily Precipitation")
+def bar_chart(df):
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
 
-    """
-    x = df[col1]
-    y = df[col2]
+    # --- Choix de la colonne X ---
+    try:
+        x_idx = int(input("\nIndex de la colonne pour l'axe X (catégories) : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
     
-    colors = cm.viridis(np.linspace(0, 1, len(x)))  # different color per bar
-    plt.figure(figsize=(8,5))
-    plt.bar(x, y, color=colors)
+    if x_idx < 0 or x_idx >= len(df.columns):
+        raise IndexError("Index de colonne X invalide")
     
-    plt.title(title)
-    plt.xlabel(xlabel if xlabel else col1)
-    plt.ylabel(ylabel if ylabel else col2)
+    # --- Choix de la colonne Y ---
+    try:
+        y_idx = int(input("Index de la colonne pour l'axe Y (valeurs) : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un nombre entier pour la colonne Y")
     
-    plt.grid(axis='y', linestyle='--', alpha=0.6)
+    if y_idx < 0 or y_idx >= len(df.columns):
+        raise IndexError("Index de colonne Y invalide")
     
-    # Display value on top of each bar
-    if display: 
+    if y_idx == x_idx:
+        raise ValueError("La colonne Y ne peut pas être la même que la colonne X")
+    
+    x_col = df.columns[x_idx]
+    y_col = df.columns[y_idx]
+
+    # --- Création du graphique ---
+    x = df[x_col]
+    y = df[y_col]
+
+    colors = cm.viridis(np.linspace(0, 1, len(x)))
+
+    fig, ax = plt.subplots(figsize=(8,5))
+    ax.bar(x, y, color=colors)
+
+    ax.set_title(f"Bar Chart: {y_col} vs {x_col}")
+    ax.set_xlabel(x_col)
+    ax.set_ylabel(y_col)
+    ax.grid(axis='y', linestyle='--', alpha=0.6)
+
+    # Affichage des valeurs au-dessus des barres
+    for i, v in enumerate(y):
+        ax.text(i, v + 0.05*np.max(y), f"{v:.2f}", ha='center', va='bottom')
+    
+    if len(y) < 30:
         for i, v in enumerate(y):
-            plt.text(i+1, v + 0.1, f"{v:.2f}", ha='center', va='bottom')
-    
-    plt.show()
+            ax.text(i, v + 0.01 * np.max(y), f"{v:.2f}", ha='center', va='bottom', fontsize=8)
+    else:
+        print(f"Trop de données ({len(y)} lignes) : les étiquettes de texte ont été désactivées pour la lisibilité.")
+
+    return fig  # retourne la figure pour pouvoir faire plt.savefig()
 
 
 
