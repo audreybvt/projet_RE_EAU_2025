@@ -52,4 +52,4 @@ fig = menu[visualization](df)
 plt.savefig(f"output/{menu[visualization].__name__}.png", bbox_inches="tight")
 plt.close(fig)
 
-print(f"✅ {menu[visualization].__name__}.png saved in output/")
+print(f"{menu[visualization].__name__}.png saved in output/")
