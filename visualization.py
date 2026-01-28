@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import os
 
 # ---------------- Create test DataFrame ----------------
 np.random.seed(42)
@@ -157,8 +158,15 @@ def scatter_chart(df, col1, columns, title="Scatter Plot", xlabel=None, ylabel=N
 
 # ----------------- Test -----------------
 
+# créer le dossier AVANT
+os.makedirs("output", exist_ok=True)
+
 # Bar chart 
 bar_chart(df_test, "col1", "col2", title="Bar Chart")
+
+# sauvegarde de la figure courante
+plt.savefig("output/bar_chart.png")
+plt.close()
 
 # Line chart
 line_chart(df_test, "col1", columns=[ "col2", "col3", "col4"], title="Line Chart Test")
