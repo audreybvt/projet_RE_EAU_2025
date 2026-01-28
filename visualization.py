@@ -259,6 +259,45 @@ def radar_chart(df):
     plt.show()# a voir si on laisse cette ligne
 
 
+# ---------------- Histogram Chart ---------------- a été modifié pour correspondre à nouvelle structure
+
+def histogram_chart(df):
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    # --- Choix de la colonne ---
+    try:
+        col_idx = int(input("\nIndex de la colonne à afficher en histogramme : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
+    
+    if col_idx < 0 or col_idx >= len(df.columns):
+        raise IndexError("Index de colonne invalide")
+    
+    col_name = df.columns[col_idx]
+
+    # --- Choix du nombre de bins ---
+    try:
+        bins = int(input("Nombre de bins pour l'histogramme : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un nombre entier pour le nombre de bins")
+    
+    if bins <= 0:
+        raise ValueError("Le nombre de bins doit être supérieur à 0")
+
+    # --- Création de l'histogramme ---
+    fig, ax = plt.subplots(figsize=(8,5))
+    values = df[col_name].astype(float)
+    
+    ax.hist(values, bins=bins, color='skyblue', edgecolor='black')
+    ax.set_title(f"Histogram of {col_name}")
+    ax.set_xlabel(col_name)
+    ax.set_ylabel("Count")
+    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
+
+    return fig  # retourne la figure pour sauvegarder
+
 
 
 # ----------------- Test -----------------
