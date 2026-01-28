@@ -8,12 +8,15 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from treatmentCSV import*
 from statistics import*
+from visualization_CSV import *
+from visualization_netCDF import *
 
 path = Path(input("Please enter your path to your file (with / instead of anti-slash and without quotation mark):"))
 
 # Determine if the file is a CSV or a NetCDF
 
 suffix = path.suffix.lower()
+print(suffix)
 
 dict_visualization_num_variables={1:[1,"date"],2:[2]} # potentiellement inutile ?
 dict_visualization={"temporel":1,"histogramme":2}
@@ -28,29 +31,35 @@ else:
     
 
 # CSV case
-df = pd.read_csv(path, sep=";")
+if suffix == ".csv":
+    df = pd.read_csv(path, sep=";")
 
-print(dict_visualization)
-visualization = int(input("Enter the number of the visualization you want: "))
+    print(dict_visualization)
+    type(dict_visualization)
+    visualization = int(input("Enter the number of the visualization you want: "))
 
-print(df.info())
+    print(df.info())
 
-print("Avec votre choix de visualisation, vous allez travailler sur", dict_visualization_num_variables[visualization], "colonnes.")
-colonnes_a_etudier = [0] * dict_visualization_num_variables[visualization][0]
-for i in range (dict_visualization_num_variables[visualization][0]):
-    print("i=",i+1)
-    colonnes_a_etudier[i]=int(input("Entrez le numero de la ie colonne à étudier : "))
+    print("Avec votre choix de visualisation, vous allez travailler sur", dict_visualization_num_variables[visualization], "colonnes.")
+    colonnes_a_etudier = [0] * dict_visualization_num_variables[visualization][0]
+    for i in range (dict_visualization_num_variables[visualization][0]):
+        print("i=",i+1)
+        colonnes_a_etudier[i]=int(input("Entrez le numero de la ie colonne à étudier : "))
 
 
 
-if len(dict_visualization_num_variables[visualization]) > 1:
-    index_date = int(input("Entrez l'index de votre colonne de date : "))
+    if len(dict_visualization_num_variables[visualization]) > 1:
+        index_date = int(input("Entrez l'index de votre colonne de date : "))
+        
+        df.iloc[:, index_date] = pd.to_datetime(
+            df.iloc[:, index_date],
+            dayfirst=True
+        )
+        
+        colonnes_a_etudier = [index_date] + colonnes_a_etudier
+
+    print(colonnes_a_etudier)
+
+# netCDF case
+#if suffix in (".nc", ".nc4", ".netcdf"):
     
-    df.iloc[:, index_date] = pd.to_datetime(
-        df.iloc[:, index_date],
-        dayfirst=True
-    )
-    
-    colonnes_a_etudier = [index_date] + colonnes_a_etudier
-
-print(colonnes_a_etudier)
