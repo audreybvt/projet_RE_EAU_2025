@@ -38,14 +38,18 @@ else:
 # CSV case
 df = pd.read_csv(path, sep=";")
 
-for col in df.columns:
-    if df[col].dtype == object:
-        df[col] = df[col].str.replace(",", ".", regex=False)
-        df[col] = pd.to_numeric(df[col], errors="ignore")
-        df[col] = pd.to_datetime(df[col], errors="ignore", dayfirst=True)
+df[df.columns[0]]=pd.to_datetime(df[df.columns[0]], dayfirst=True)
+for col in df.select_dtypes(include="object"):
+    df[col]=df[col].str.replace(",",".",regex=False).astype(float)
 
 
 print(dict_visualization)
 visualization = int(input("Enter the number of the visualization you want: "))
 
-menu[visualization](df)
+os.makedirs("output", exist_ok=True)
+
+fig = menu[visualization](df) 
+plt.savefig(f"output/{menu[visualization].__name__}.png", bbox_inches="tight")
+plt.close(fig)
+
+print(f"✅ {menu[visualization].__name__}.png saved in output/")
