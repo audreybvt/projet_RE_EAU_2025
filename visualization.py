@@ -142,7 +142,7 @@ def line_chart(df):
     return fig  # retourne la figure pour pouvoir sauvegarder
 
 
-##-------------- Scatter Plot ---------------
+##-------------- Scatter Plot --------------- a été modifié, il faut reprendre nonobstant pour que ce soit plus beau
 def scatter_chart(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
