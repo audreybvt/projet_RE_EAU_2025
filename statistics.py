@@ -32,7 +32,7 @@ def mean_value(df):
 
     return df
 
-def moyenne_entre_plusieurs_colonnes()
+#def moyenne_entre_plusieurs_colonnes()
 
 def maximum_value(X):
     return X.max()
