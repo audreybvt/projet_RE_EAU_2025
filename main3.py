@@ -33,7 +33,8 @@ menu_stats = {
     2: maximum_value,
     3: minimum_value,
     4: percentile,
-    5: nombre_ocurrences_au_dessus_seuil
+    5: nombre_ocurrences_au_dessus_seuil,
+    6: moyenne_multimodele
 }
 
 dict_indicateurs={"IPS":1}
