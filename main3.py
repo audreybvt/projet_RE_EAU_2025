@@ -36,6 +36,12 @@ menu_stats = {
     5: nombre_ocurrences_au_dessus_seuil
 }
 
+dict_indicateurs={"IPS":1}
+menu_indicateurs = {
+    1: IPS
+}
+
+
 
 #les print vont partir probablement et remplacer par un traitement pour mettre tout sous forme de df a priori
 if suffix == ".csv":
@@ -49,17 +55,35 @@ else:
 # CSV case
 df = pd.read_csv(path, sep=";")
 
-df[df.columns[0]]=pd.to_datetime(df[df.columns[0]], dayfirst=True)
+df[df.columns[0]]=pd.to_datetime(df[df.columns[0]], dayfirst=True) # On suppose que la première colonne est celle des dates
 for col in df.select_dtypes(include="object"):
     df[col]=df[col].str.replace(",",".",regex=False).astype(float)
+    
+
+print(df.info()) # Afficher à l'utilisateur les noms des colonnes que comporte son fichier
 
 
-#print(dict_stats)
-#stat_choice = int(input("Enter the number of the statistical operation you want: "))
-#df = menu_stats[stat_choice](df)  # retourne le dataframe modifié
-
+# Demande des indicateurs
 while True:
-    print("\nMenu statistiques disponibles :")
+    print("\nIndicateurs disponibles :")
+    for name, num in dict_indicateurs.items():
+        print(f"[{num}] {name}")
+    
+    indicator_choice = int(input("Entrez le numéro de l'indicateur à calculer (0 pour terminer) : "))
+    if indicator_choice == 0:
+        break  # sortir de la boucle
+
+    if indicator_choice not in menu_indicateurs:
+        print("Choix invalide, réessayez.")
+        continue
+
+    # Appel de la fonction choisie
+    df = menu_indicateurs[indicator_choice](df)
+    
+
+# Demande des statistiques
+while True:
+    print("\nCalculs statistiques disponibles :")
     for name, num in dict_stats.items():
         print(f"[{num}] {name}")
     
@@ -74,6 +98,7 @@ while True:
     # Appel de la fonction choisie
     df = menu_stats[stat_choice](df)
 
+# Demande de la visualisation
 print(dict_visualization)
 visualization = int(input("Enter the number of the visualization you want: "))
 
