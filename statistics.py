@@ -28,11 +28,54 @@ def mean_value(df):
     
     df[new_col_name] = mean_val  # répété sur toutes les lignes
 
-    print(f"\n✅ Colonne '{new_col_name}' ajoutée avec la moyenne de '{col_name}' = {mean_val:.2f}")
+    print(f"\n Colonne '{new_col_name}' ajoutée avec la moyenne de '{col_name}' = {mean_val:.2f}")
 
     return df
 
-#def moyenne_entre_plusieurs_colonnes()
+
+
+
+def moyenne_multimodele(df):
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    # --- Choix des colonnes ---
+    colonnes_input = input(
+        "Index des colonnes entre lesquelles effectuer une moyenne, séparés par une virgule (ex: 1,2,3) : "
+    )
+
+    try:
+        colonnes = sorted(set(int(i.strip()) for i in colonnes_input.split(",")))
+    except ValueError:
+        raise ValueError("Les index doivent être des nombres entiers")
+
+    for i in colonnes:
+        if i < 0 or i >= len(df.columns):
+            raise IndexError(f"Index invalide : {i}")
+
+    index_colonnes = [df.columns[i] for i in colonnes]
+
+    print(f"\n Colonnes sélectionnées : {index_colonnes}")
+
+    # --- Nom automatique de la nouvelle colonne ---
+    idx_str = "_".join(str(i) for i in colonnes)
+    new_col_name = f"moyenne_multimodele_{idx_str}"
+
+    # --- Calcul de la moyenne ligne par ligne ---
+    try:
+        mean_vals = df[index_colonnes].astype(float).mean(axis=1)
+    except Exception as e:
+        raise ValueError(f"Impossible de calculer la moyenne : {e}")
+
+    # --- Ajout au dataframe ---
+    df[new_col_name] = mean_vals
+
+    print(f"\n Colonne {new_col_name} ajoutée (moyenne ligne par ligne des colonnes sélectionnées)")
+
+    return df
+
+
 
 def maximum_value(X):
     return X.max()
