@@ -10,6 +10,7 @@ from pathlib import Path
 from treatmentCSV import*
 from statistics import*
 from visualization import*
+from indicators import*
 
 path = Path(input("Please enter your path to your file (with / instead of anti-slash and without quotation mark):"))
 

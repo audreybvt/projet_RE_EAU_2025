@@ -1,5 +1,6 @@
 # ---------------- mean ---------------- a été modifié pour correspondre à nouvelle structure
 #gérer le cas où il y a des nan pour mettre le moyenne là où, il y a des valeurs
+import pandas as pd
 
 def mean_value(df):
     print("\nColonnes disponibles :")
@@ -17,20 +18,58 @@ def mean_value(df):
     
     col_name = df.columns[col_idx]
 
-    # --- Nom automatique de la nouvelle colonne ---
-    new_col_name = f"mean_{col_name}"
+    # --- Affichage de la plage disponible ---
+    date_col = df.columns[0]
 
-    # --- Calcul de la moyenne et ajout de la colonne ---
+    min_date = df[date_col].min()
+    max_date = df[date_col].max()
+
+    print("\nPériode disponible dans le fichier :")
+    print(f" Du {min_date.date()} au {max_date.date()}")
+
+    # --- Choix de la période ---
+    print("\nDéfinition de la période (laisser vide pour utiliser toute la période)")
+
+    start_date = input("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date = input("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
+
+    df_period = df.copy()
+
+    if start_date:
+        start_date = pd.to_datetime(start_date, dayfirst=True)
+        df_period = df_period[df_period[date_col] >= start_date]
+
+    if end_date:
+        end_date = pd.to_datetime(end_date, dayfirst=True)
+        df_period = df_period[df_period[date_col] <= end_date]
+
+    if df_period.empty:
+        raise ValueError("Aucune donnée disponible sur la période sélectionnée")
+
+    # Calcul de la moyenne
     try:
-        mean_val = df[col_name].astype(float).mean()
+        mean_val = df_period[col_name].astype(float).mean()
     except Exception as e:
-        raise ValueError(f"Impossible de calculer la moyenne de la colonne {col_name} : {e}")
-    
-    df[new_col_name] = mean_val  # répété sur toutes les lignes
+        raise ValueError(f"Impossible de calculer la moyenne de {col_name} : {e}")
 
-    print(f"\n Colonne '{new_col_name}' ajoutée avec la moyenne de '{col_name}' = {mean_val:.2f}")
+    # --- Nom explicite de la colonne ---
+    period_str = ""
+    if start_date or end_date:
+        period_str = f"_{start_date.date() if start_date else 'start'}_" \
+                     f"{end_date.date() if end_date else 'end'}"
+
+    new_col_name = f"mean_{col_name}{period_str}"
+
+    df[new_col_name] = mean_val  # valeur répétée sur toutes les lignes
+
+    print(
+        f"\nColonne '{new_col_name}' ajoutée\n"
+        f"Moyenne de '{col_name}' sur {len(df_period)} lignes = {mean_val:.2f}"
+    )
 
     return df
+
+
 
 
 
