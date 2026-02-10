@@ -27,7 +27,7 @@ menu = {
     5: histogram_chart
 }
 
-dict_stats={"mean":1,"max":2,"min":3, "percentile":4, "nombre d'occurences au dessus d'un seuil":5}
+dict_stats={"mean":1,"max":2,"min":3, "percentile":4, "nombre d'occurences au dessus d'un seuil":5, "moyenne multimodele":6}
 menu_stats = {
     1: mean_value,
     2: maximum_value,
