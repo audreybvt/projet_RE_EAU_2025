@@ -3,6 +3,19 @@
 import pandas as pd
 import numpy as np
 
+def ask_date(message):
+    #fonction pour ne pas avoir à tout relancer en cas d'erreur de saisie
+    while True:
+        user_input = input(message).strip()
+        
+        if user_input == "":
+            return None  # L'utilisateur veut toute la période
+        
+        try:
+            return pd.to_datetime(user_input, dayfirst=True)
+        except Exception:
+            print("Format invalide ❌  Utilisez YYYY-MM-DD ou DD/MM/YYYY")
+
 def mean_value(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
@@ -22,26 +35,36 @@ def mean_value(df):
     # --- Affichage de la plage disponible ---
     date_col = df.columns[0]
 
-    min_date = df[date_col].min()
-    max_date = df[date_col].max()
+    # Filtrer uniquement les lignes où la colonne choisie n'est pas NaN
+    df_valid = df[df[col_name].notna()]
 
-    print("\nPériode disponible dans le fichier :")
+    if df_valid.empty:
+        raise ValueError(f"Aucune donnée valide dans la colonne '{col_name}'")
+
+    min_date = df_valid[date_col].min()
+    max_date = df_valid[date_col].max()
+
+    print("\nPériode disponible pour la colonne sélectionnée :")
     print(f" Du {min_date.date()} au {max_date.date()}")
+
+    #min_date = df[date_col].min()
+    #max_date = df[date_col].max()
+
+    #print("\nPériode disponible dans le fichier :")
+    #print(f" Du {min_date.date()} au {max_date.date()}")
 
     # --- Choix de la période ---
     print("\nDéfinition de la période (laisser vide pour utiliser toute la période)")
 
-    start_date = input("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date = input("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
     df_period = df.copy()
 
-    if start_date:
-        start_date = pd.to_datetime(start_date, dayfirst=True)
+    if start_date is not None:
         df_period = df_period[df_period[date_col] >= start_date]
 
-    if end_date:
-        end_date = pd.to_datetime(end_date, dayfirst=True)
+    if end_date is not None:
         df_period = df_period[df_period[date_col] <= end_date]
 
     if df_period.empty:
