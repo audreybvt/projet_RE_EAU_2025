@@ -84,3 +84,43 @@ plt.savefig(f"output/{menu[visualization].__name__}.png", bbox_inches="tight")
 plt.close(fig)
 
 print(f"{menu[visualization].__name__}.png saved in output/")
+
+
+# netCDF case
+ds = xr.open_dataset(path, sep=";")
+
+
+#for col in ds.select_dtypes(include="object"):
+    #df[col]=df[col].str.replace(",",".",regex=False).astype(float)
+
+
+#print(dict_stats)
+#stat_choice = int(input("Enter the number of the statistical operation you want: "))
+#df = menu_stats[stat_choice](df)  # retourne le dataframe modifié
+
+while True:
+    print("\nMenu statistiques disponibles :")
+    for name, num in dict_stats.items():
+        print(f"[{num}] {name}")
+    
+    stat_choice = int(input("Entrez le numéro de la stat à appliquer (0 pour terminer) : "))
+    if stat_choice == 0:
+        break  # sortir de la boucle
+
+    if stat_choice not in menu_stats:
+        print("Choix invalide, réessayez.")
+        continue
+
+    # Appel de la fonction choisie
+    ds = menu_stats[stat_choice](ds)
+
+print(dict_visualization)
+visualization = int(input("Enter the number of the visualization you want: "))
+
+os.makedirs("output", exist_ok=True)
+
+fig = menu[visualization](ds) 
+plt.savefig(f"output/{menu[visualization].__name__}.png", bbox_inches="tight")
+plt.close(fig)
+
+print(f"{menu[visualization].__name__}.png saved in output/")
