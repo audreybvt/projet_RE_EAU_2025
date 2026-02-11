@@ -101,8 +101,10 @@ while True:
     df = menu_stats[stat_choice](df)
 
 # Demande de la visualisation
-print(dict_visualization)
-visualization = int(input("Enter the number of the visualization you want: "))
+print("\nVisualisations disponibles :")
+for name, num in dict_visualization.items():
+    print(f"[{num}] {name}")
+visualization = int(input("Enter the index of the visualization you want: "))
 
 os.makedirs("output", exist_ok=True)
 
