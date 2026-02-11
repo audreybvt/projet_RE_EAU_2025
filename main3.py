@@ -116,6 +116,8 @@ os.makedirs("output", exist_ok=True)
 
 fig = menu[visualization](df) 
 plt.savefig(f"output/{menu[visualization].__name__}.png", bbox_inches="tight")
+print("Affichage de la figure, fermez la fenêtre pour continuer le script.")
+plt.show()
 plt.close(fig)
 
 print(f"{menu[visualization].__name__}.png saved in output/")
