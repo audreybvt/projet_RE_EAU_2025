@@ -56,6 +56,15 @@ else:
     
 
 # CSV case
+# prévisualisation
+print("\nAperçu des 5 premières lignes du fichier brut :")
+with open(path, 'r', encoding='utf-8-sig', errors='replace') as f:
+    for i in range(5):
+        line = f.readline()
+        clean_line = line.replace(";;", ";").strip(";")
+        print(f"Ligne {i} | {clean_line[:100]}...")
+print("____________________")
+
 # On demande à l'utilisateur combien de lignes de métadonnées il souhaite ignorer
 skip_n = int(input("Combien de lignes de métadonnées (en-têtes sans compter le nom des colonnes) y a t'il? "))
 df = pd.read_csv(path, sep=";", skiprows=skip_n)
@@ -70,54 +79,61 @@ for col in df.select_dtypes(include="object"):
 
 print(df.info()) # Afficher à l'utilisateur les noms des colonnes que comporte son fichier
 
-
+while True: 
 # Demande des indicateurs
-while True:
-    print("\nIndicateurs disponibles :")
-    for name, num in dict_indicateurs.items():
+    while True:
+        print("\nIndicateurs disponibles :")
+        for name, num in dict_indicateurs.items():
+            print(f"[{num}] {name}")
+        
+        indicator_choice = int(input("Entrez le numéro de l'indicateur à calculer (0 pour terminer) : "))
+        if indicator_choice == 0:
+            break  # sortir de la boucle
+
+        if indicator_choice not in menu_indicateurs:
+            print("Choix invalide, réessayez.")
+            continue
+
+        # Appel de la fonction choisie
+        df = menu_indicateurs[indicator_choice](df)
+        
+
+    # Demande des statistiques
+    while True:
+        print("\nCalculs statistiques disponibles :")
+        for name, num in dict_stats.items():
+            print(f"[{num}] {name}")
+        
+        stat_choice = int(input("Entrez le numéro de la stat à appliquer (0 pour terminer) : "))
+        if stat_choice == 0:
+            break  # sortir de la boucle
+
+        if stat_choice not in menu_stats:
+            print("Choix invalide, réessayez.")
+            continue
+
+        # Appel de la fonction choisie
+        df = menu_stats[stat_choice](df)
+
+    # Demande de la visualisation
+    print("\nVisualisations disponibles :")
+    for name, num in dict_visualization.items():
         print(f"[{num}] {name}")
-    
-    indicator_choice = int(input("Entrez le numéro de l'indicateur à calculer (0 pour terminer) : "))
-    if indicator_choice == 0:
-        break  # sortir de la boucle
+    visualization = int(input("Enter the index of the visualization you want: "))
 
-    if indicator_choice not in menu_indicateurs:
-        print("Choix invalide, réessayez.")
-        continue
+    os.makedirs("output", exist_ok=True)
 
-    # Appel de la fonction choisie
-    df = menu_indicateurs[indicator_choice](df)
-    
+    fig = menu[visualization](df) 
+    plt.savefig(f"output/{menu[visualization].__name__}.png", bbox_inches="tight")
+    print("Affichage de la figure, fermez la fenêtre pour continuer le script.")
+    plt.show()
+    plt.close(fig)
 
-# Demande des statistiques
-while True:
-    print("\nCalculs statistiques disponibles :")
-    for name, num in dict_stats.items():
-        print(f"[{num}] {name}")
-    
-    stat_choice = int(input("Entrez le numéro de la stat à appliquer (0 pour terminer) : "))
-    if stat_choice == 0:
-        break  # sortir de la boucle
+    print(f"{menu[visualization].__name__}.png saved in output/")
 
-    if stat_choice not in menu_stats:
-        print("Choix invalide, réessayez.")
-        continue
+    #choix de continuer
+    continuer = input("\nVoulez-vous effectuer une autre analyse/visualisation sur ce fichier ? (o/n) : ").lower()
+    if continuer != 'o':
+        print("Fin du programme. Au revoir !")
+        break
 
-    # Appel de la fonction choisie
-    df = menu_stats[stat_choice](df)
-
-# Demande de la visualisation
-print("\nVisualisations disponibles :")
-for name, num in dict_visualization.items():
-    print(f"[{num}] {name}")
-visualization = int(input("Enter the index of the visualization you want: "))
-
-os.makedirs("output", exist_ok=True)
-
-fig = menu[visualization](df) 
-plt.savefig(f"output/{menu[visualization].__name__}.png", bbox_inches="tight")
-print("Affichage de la figure, fermez la fenêtre pour continuer le script.")
-plt.show()
-plt.close(fig)
-
-print(f"{menu[visualization].__name__}.png saved in output/")

@@ -131,7 +131,7 @@ def line_chart(df):
 
     for i, col in enumerate(y_cols):
         y = df[col].astype(float)
-        ax.plot(df[x_col], y, marker='o', label=col, color=colors[i])
+        ax.plot(df[x_col], y, marker='o', markersize=2, label=col, color=colors[i])
 
     ax.set_title(f"Line Chart: {', '.join(y_cols)} vs {x_col}")
     ax.set_xlabel(x_col)
