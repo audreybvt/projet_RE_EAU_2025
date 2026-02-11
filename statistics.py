@@ -1,6 +1,7 @@
 # ---------------- mean ---------------- a été modifié pour correspondre à nouvelle structure
 #gérer le cas où il y a des nan pour mettre le moyenne là où, il y a des valeurs
 import pandas as pd
+import numpy as np
 
 def mean_value(df):
     print("\nColonnes disponibles :")
@@ -60,7 +61,8 @@ def mean_value(df):
 
     new_col_name = f"mean_{col_name}{period_str}"
 
-    df[new_col_name] = mean_val  # valeur répétée sur toutes les lignes
+    df[new_col_name] = np.where(df[col_name].isna(), np.nan, mean_val) #on crée la nouvelle colonne qui respecte les nan de la colonne
+    #d'origine
 
     print(
         f"\nColonne '{new_col_name}' ajoutée\n"
