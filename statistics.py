@@ -157,3 +157,89 @@ def nombre_ocurrences_au_dessus_seuil(X,seuil): # Attention à la définition de
             compteur+=1
     return compteur
     
+def rolling_mean_value(df):
+    import pandas as pd
+
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    # --- Choix de la colonne ---
+    try:
+        col_idx = int(input("\nIndex de la colonne pour la moyenne glissante : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
+    
+    if col_idx < 0 or col_idx >= len(df.columns):
+        raise IndexError("Index de colonne invalide")
+    
+    col_name = df.columns[col_idx]
+
+    # --- Colonne date (on suppose qu'elle est en 1ère position) ---
+    date_col = df.columns[0]
+
+    min_date = df[date_col].min()
+    max_date = df[date_col].max()
+
+    print("\nPériode disponible dans le fichier :")
+    print(f" Du {min_date.date()} au {max_date.date()}")
+
+    # --- Choix de la période ---
+    print("\nDéfinition de la période (laisser vide pour utiliser toute la période)")
+
+    start_date = input("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date = input("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
+
+    df_period = df.copy()
+
+    if start_date:
+        start_date = pd.to_datetime(start_date, dayfirst=True)
+        df_period = df_period[df_period[date_col] >= start_date]
+
+    if end_date:
+        end_date = pd.to_datetime(end_date, dayfirst=True)
+        df_period = df_period[df_period[date_col] <= end_date]
+
+    if df_period.empty:
+        raise ValueError("Aucune donnée disponible sur la période sélectionnée")
+
+    # --- Taille de la fenêtre ---
+    try:
+        window = int(input("\nTaille de la fenêtre pour la moyenne glissante (nombre de lignes) : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un entier pour la taille de la fenêtre")
+
+    if window <= 0:
+        raise ValueError("La fenêtre doit être strictement positive")
+
+    # --- Calcul moyenne glissante ---
+    try:
+        rolling_series = (
+            df_period[col_name]
+            .astype(float)
+            .rolling(window=window)
+            .mean()
+        )
+    except Exception as e:
+        raise ValueError(f"Impossible de calculer la moyenne glissante de {col_name} : {e}")
+
+    # --- Nom explicite de la colonne ---
+    period_str = ""
+    if start_date or end_date:
+        period_str = f"_{start_date.date() if start_date else 'start'}_" \
+                     f"{end_date.date() if end_date else 'end'}"
+
+    new_col_name = f"rolling_mean_{col_name}_w{window}{period_str}"
+
+    # On crée la colonne vide dans le df original
+    df[new_col_name] = None
+
+    # On remplit uniquement les lignes correspondant à la période
+    df.loc[df_period.index, new_col_name] = rolling_series
+
+    print(
+        f"\nColonne '{new_col_name}' ajoutée\n"
+        f"Moyenne glissante (fenêtre={window}) calculée sur {len(df_period)} lignes"
+    )
+
+    return df
