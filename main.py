@@ -39,9 +39,11 @@ menu_stats = {
     7: rolling_mean_value
 }
 
-dict_indicateurs={"IPS":1}
+dict_indicateurs={"IPS":1,
+                  "Qmoy":2}
 menu_indicateurs = {
-    1: IPS
+    1: IPS,
+    2: Qmoy
 }
 
 
