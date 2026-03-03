@@ -3,6 +3,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
+import matplotlib.dates as mdates
+
+
+def ask_date_visualization(message):
+    while True:
+        user_input = input(message).strip()
+        if user_input == "":
+            return None
+        try:
+            return pd.to_datetime(user_input, dayfirst=True) # à voir si on garde dayfirst
+        except Exception:
+            print("Format invalide ❌ Utilisez YYYY-MM-DD ou DD/MM/YYYY")
 
 
 # ---------------- Create test DataFrame ----------------
@@ -92,7 +104,96 @@ def bar_chart(df):
 
 # ---------------- Line Chart ---------------- a été modifiée
 
+def line_chart(df):
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
 
+    # --- Choix X ---
+    try:
+        x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
+    except ValueError:
+        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
+    
+    if x_idx < 0 or x_idx >= len(df.columns):
+        raise IndexError("Index de colonne X invalide")
+
+    # --- Choix Y ---
+    y_idx_input = input("Index des colonnes pour l'axe Y (séparés par une virgule, ex: 1,2) : ")
+    
+    try:
+        y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
+    except ValueError:
+        raise ValueError("Les index doivent être des nombres entiers")
+    
+    if x_idx in y_idx:
+        raise ValueError("La colonne X ne peut pas être dans les colonnes Y")
+    
+    for i in y_idx:
+        if i < 0 or i >= len(df.columns):
+            raise IndexError(f"Index Y invalide : {i}")
+    
+    x_col = df.columns[x_idx]
+    y_cols = [df.columns[i] for i in y_idx]
+
+    # --- Colonne temporelle (supposée être la première) ---
+    date_col = df.columns[0]
+
+    try:
+        df[date_col] = pd.to_datetime(df[date_col])
+    except Exception:
+        raise ValueError("La première colonne doit contenir des dates valides")
+
+    # --- Affichage période disponible ---
+    df_valid = df[df[date_col].notna()]
+    if df_valid.empty:
+        raise ValueError("Aucune date valide trouvée")
+
+    min_date = df_valid[date_col].min()
+    max_date = df_valid[date_col].max()
+
+    print("\nPériode disponible :")
+    print(f" Du {min_date.date()} au {max_date.date()}")
+
+    print("\nDéfinition de la période (laisser vide pour tout afficher)")
+
+    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date_visualization("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
+
+    df_period = df.copy()
+
+    if start_date is not None:
+        df_period = df_period[df_period[date_col] >= start_date]
+
+    if end_date is not None:
+        df_period = df_period[df_period[date_col] <= end_date]
+
+    if df_period.empty:
+        raise ValueError("Aucune donnée disponible sur la période sélectionnée")
+
+    # Optionnel : trier par date pour éviter des lignes cassées
+    #df_period = df_period.sort_values(by=date_col)
+
+    # --- Création du graphique ---
+    fig, ax = plt.subplots(figsize=(10,6))
+    colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
+
+    for i, col in enumerate(y_cols):
+        y = df_period[col].astype(float)
+        x = df_period[x_col]
+
+        ax.plot(x, y, marker='o', label=col, color=colors[i])
+
+    ax.set_title(f"Line Chart: {', '.join(y_cols)} vs {x_col}")
+    ax.set_xlabel(x_col)
+    ax.set_ylabel("Values")
+    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
+    ax.legend()
+
+    return fig
+
+'''
+Vieux line chart qui est faux
 def line_chart(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
@@ -125,13 +226,58 @@ def line_chart(df):
     x_col = df.columns[x_idx]
     y_cols = [df.columns[i] for i in y_idx]
 
+    
+
+    mask = pd.Series(True, index=df.index)
+
+    date_col = df.columns[0]
+
+    #try:
+        #date_series = pd.to_datetime(df[date_col])
+        #is_datetime = True
+    #except Exception:
+        #is_datetime = False
+
+    
+
+    
+    choice = input("Voulez-vous filtrer par période ? (o/n) : ").strip().lower()
+
+    if choice == "o":
+
+        min_date = date_col.min()
+        max_date = date_col.max()
+
+        print(f"Période disponible : {min_date.date()} → {max_date.date()}, attention, il peut y avoir des NaN")
+
+
+        start_date = ask_date_visualization("Date de début : ")
+        end_date   = ask_date_visualization("Date de fin   : ")
+
+        if start_date and end_date and end_date < start_date:
+            raise ValueError("La date de fin doit être postérieure à la date de début")
+
+        if start_date:
+            mask &= (date_series >= start_date)
+        if end_date:
+            mask &= (date_series <= end_date)
+
+        if not mask.any():
+            raise ValueError("Aucune donnée disponible sur cette période")
+
+    else:
+        print("\nLa première colonne n'est pas une date → filtrage ignoré.")
+
+
     # --- Création du graphique ---
+
     fig, ax = plt.subplots(figsize=(10,6))
     colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
 
     for i, col in enumerate(y_cols):
         y = df[col].astype(float)
-        ax.plot(df[x_col], y, marker='o', label=col, color=colors[i])
+        ax.plot(df[x_col][mask], y[mask], marker='o', label=col, color=colors[i])
+
 
     ax.set_title(f"Line Chart: {', '.join(y_cols)} vs {x_col}")
     ax.set_xlabel(x_col)
@@ -140,7 +286,7 @@ def line_chart(df):
     ax.legend()
     
     return fig  # retourne la figure pour pouvoir sauvegarder
-
+'''
 
 ##-------------- Scatter Plot --------------- a été modifié, il faut reprendre nonobstant pour que ce soit plus beau
 def scatter_chart(df):

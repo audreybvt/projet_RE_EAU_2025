@@ -1,3 +1,5 @@
+
+# troisième proposition
 #######################
 #######################
 # Import of the packages needed
@@ -7,15 +9,46 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from treatmentCSV import*
 from statistics import*
+from visualization import*
+from indicators import*
 
-
-# Ask for the path to the file we want to analyze
 path = Path(input("Please enter your path to your file (with / instead of anti-slash and without quotation mark):"))
 
 # Determine if the file is a CSV or a NetCDF
 
 suffix = path.suffix.lower()
 
+#Création des dictionnaires
+dict_visualization={"bar chart":1,"scatter plot":2,"line char":3, "radar chart":4, "histogram chart":5}
+menu = {
+    1: bar_chart,
+    2: scatter_chart,
+    3: line_chart,
+    4: radar_chart,
+    5: histogram_chart
+}
+
+dict_stats={"mean":1,"max":2,"min":3, "percentile":4, "nombre d'occurences au dessus d'un seuil":5, "moyenne multimodele":6, "moyenne glissante":7}
+menu_stats = {
+    1: mean_value,
+    2: maximum_value,
+    3: minimum_value,
+    4: percentile,
+    5: nombre_ocurrences_au_dessus_seuil,
+    6: moyenne_multimodele,
+    7: rolling_mean_value
+}
+
+dict_indicateurs={"IPS":1,
+                  "Qmoy":2}
+menu_indicateurs = {
+    1: IPS,
+    2: Qmoy
+}
+
+
+
+#les print vont partir probablement et remplacer par un traitement pour mettre tout sous forme de df a priori
 if suffix == ".csv":
     print("It is a CSV")
 elif suffix in (".nc", ".nc4", ".netcdf"):
@@ -25,184 +58,84 @@ else:
     
 
 # CSV case
-df = pd.read_csv(path, sep=";")
-print(df.info())
+# prévisualisation
+print("\nAperçu des 5 premières lignes du fichier brut :")
+with open(path, 'r', encoding='utf-8-sig', errors='replace') as f:
+    for i in range(5):
+        line = f.readline()
+        clean_line = line.replace(";;", ";").strip(";")
+        print(f"Ligne {i} | {clean_line[:100]}...")
+print("____________________")
 
-number_of_variables = float(input("How many variables do you want to compare?” Enter the number:")) 
+# On demande à l'utilisateur combien de lignes de métadonnées il souhaite ignorer
+skip_n = int(input("Combien de lignes de métadonnées (en-têtes sans compter le nom des colonnes) y a t'il? "))
+df = pd.read_csv(path, sep=";", skiprows=skip_n)
+# Nettoyage = supprimer les colonnes ou lignes entièrement vides (pas de dates, pas de noms ...)
+df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
 
-date = input("What is the name of the column with the dates? Copy and paste its name:") 
 
-df[date] = pd.to_datetime(df[date], dayfirst=True) 
+df[df.columns[0]]=pd.to_datetime(df[df.columns[0]], dayfirst=True) # On suppose que la première colonne est celle des dates
+for col in df.select_dtypes(include="object"):
+    df[col]=df[col].str.replace(",",".",regex=False).astype(float)
+    
 
-if number_of_variables == 1: 
-    column1 = input("What is the name of the column of interest? Copy and paste its name here (without quotation marks):") 
-    df[column1] = ( 
+print(df.info()) # Afficher à l'utilisateur les noms des colonnes que comporte son fichier
 
-        df[column1] 
+while True: 
+# Demande des indicateurs
+    while True:
+        print("\nIndicateurs disponibles :")
+        for name, num in dict_indicateurs.items():
+            print(f"[{num}] {name}")
+        
+        indicator_choice = int(input("Entrez le numéro de l'indicateur à calculer (0 pour terminer) : "))
+        if indicator_choice == 0:
+            break  # sortir de la boucle
 
-        .str.replace(",",".", regex=False) 
+        if indicator_choice not in menu_indicateurs:
+            print("Choix invalide, réessayez.")
+            continue
 
-        .astype(float) 
-
-    ) 
-    statistic1 = float(input("Which statistic do you want to compute and display? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    if statistic1 == 1:
-        print("The mean is", mean_value(df[column1]))
-    if statistic1 == 2:
-        print("The maximum is",maximum_value(df[column1]))
-    if statistic1 == 3:
-        print("The minimum is",minimum_value(df[column1]))
-    if statistic1 == 4:
-        p = float(input("Which percentile do you want (between 0 and 1 for exemple if you want 5 percent give us 0.05)?"))
-        print("The percentile is",percentile(df[column1],p))
-    if statistic1 == 5:
-        s = float(input("Which threshold do you want?"))
-        print("Number of occurences above the threshold", nombre_occurences_au_dessus_seuil(df[column1],s))
-    if statistic1 == 6: #no statistics calculus one just wants to visualize and not necessary having the value of the statistics before
-        visualization1 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ..."))
-        #if visualization1==1:
-        #if visualization1==2:
+        # Appel de la fonction choisie
+        df = menu_indicateurs[indicator_choice](df)
         
 
-if number_of_variables == 2: 
-    column21= input("What is the name of the first column of interest? Copy and paste its name here (without quotation marks):") 
-    df[column21] = ( 
+    # Demande des statistiques
+    while True:
+        print("\nCalculs statistiques disponibles :")
+        for name, num in dict_stats.items():
+            print(f"[{num}] {name}")
+        
+        stat_choice = int(input("Entrez le numéro de la stat à appliquer (0 pour terminer) : "))
+        if stat_choice == 0:
+            break  # sortir de la boucle
 
-        df[column21] 
+        if stat_choice not in menu_stats:
+            print("Choix invalide, réessayez.")
+            continue
 
-        .str.replace(",",".", regex=False) 
+        # Appel de la fonction choisie
+        df = menu_stats[stat_choice](df)
 
-        .astype(float) 
+    # Demande de la visualisation
+    print("\nVisualisations disponibles :")
+    for name, num in dict_visualization.items():
+        print(f"[{num}] {name}")
+    visualization = int(input("Enter the index of the visualization you want: "))
 
-    ) 
-    column22= input("What is the name of the third column of interest? Copy and paste its name here (without quotation marks):") 
-    df[column22] = ( 
+    os.makedirs("output", exist_ok=True)
 
-        df[column22] 
+    fig = menu[visualization](df) 
+    plt.savefig(f"output/{menu[visualization].__name__}.png", bbox_inches="tight")
+    print("Affichage de la figure, fermez la fenêtre pour continuer le script.")
+    plt.show()
+    plt.close(fig)
 
-        .str.replace(",",".", regex=False) 
+    print(f"{menu[visualization].__name__}.png saved in output/")
 
-        .astype(float) 
+    #choix de continuer
+    continuer = input("\nVoulez-vous effectuer une autre analyse/visualisation sur ce fichier ? (o/n) : ").lower()
+    if continuer != 'o':
+        print("Fin du programme. Au revoir !")
+        break
 
-    ) 
-    statistic21= float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    statistic22= float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    visualization2 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-
-if number_of_variables == 3: 
-    column31= float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    df[column31] = ( 
-
-        df[column31] 
-
-        .str.replace(",",".", regex=False) 
-
-        .astype(float) 
-
-    ) 
-    column32= float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    df[column32] = ( 
-
-        df[column32] 
-
-        .str.replace(",",".", regex=False) 
-
-        .astype(float) 
-
-    ) 
-    column33= float(input("Which statistic do you want to compute and display for the third column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    df[column33] = ( 
-
-        df[column33] 
-
-        .str.replace(",",".", regex=False) 
-
-        .astype(float) 
-
-    ) 
-    statistic31 = float(input("Which statistic do you want to compute and display for the first column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    statistic32 = float(input("Which statistic do you want to compute and display for the second column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    statistic33 = float(input("Which statistic do you want to compute and display for the third column? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-    visualization3 = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ...")) 
-
- 
-
- 
-
- 
-
- 
-
-'''
-visualisation = float(input("Which kind of visualization do you want? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ..."))
-# Which kind of visualization do you want?
-# en fonction de la réponse demander les colonnes d'intéret :
-# - date, - une ou deux variables autres, plusieurs variables en fonction du temps ?
-
-### ATTENTIN PBM D'INDENTATION
-
-# cas 1 date 1 variable
-if visualisation == 1 or visualisation == 2 :
-    date = input("What is your date column name? mettre les spec de typo")
-    column1 = input("What is your column of interest ?")
-    df[date] = pd.to_datetime(df[date], dayfirst=True)
-    df[column1] = (
-        df[column1]
-        .str.replace(",",".", regex=False)
-        .astype(float)
-    )
-
-#cas juste une variable
-elif visualisation == 3 :
-    column1 = input("What is your column of interest ?")
-    statistic = float(input("Which statistic do you want to compute and display? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ..." ))
-    df[column1] = (
-        df[column1]
-        .str.replace(",",".", regex=False)
-        .astype(float)
-    )
-
-# cas 1 date 2 variables
-elif visualisation == 4 or visualisation == 5 : :
-    date = input("What is your date column name? mettre les spec de typo")
-    column1 = input("What is your column 1 of interest ?")
-    column2 = input("What is your column 2 of interest ?")
-    df[date] = pd.to_datetime(df[date], dayfirst=True)
-    df[column1] = (
-        df[column1]
-        .str.replace(",",".", regex=False)
-        .astype(float)
-    )
-    df[column2] = (
-        df[column2]
-        .str.replace(",",".", regex=False)
-        .astype(float)
-    )
-
-# cas 2 variables
-elif visualisation == 6 :
-    column1 = input("What is your column 1 of interest ?")
-    column2 = input("What is your column 2 of interest ?")
-    statistic_column1 = float(input("Which statistic do you want to compute on your column 1 and display? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ..." ))
-    statistic_column2 = float(input("Which statistic do you want to compute on your column 2 and display? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ..." ))
-    df[column1] = (
-        df[column1]
-        .str.replace(",",".", regex=False)
-        .astype(float)
-    )
-    df[column2] = (
-        df[column2]
-        .str.replace(",",".", regex=False)
-        .astype(float)
-    )
-
-########
-
-#on convertit les colonnes dans le bon type si ce sont des objets
-#il faudra voir comment on gère les types de colonnes
-#mettre un test du type ?
-
-# Gérer le problème demande d'une courbe temporelle/demande d'une moyenne 
-statistic = float(input("Which statistic do you want to compute and display? Here are the possible choices, type the number corresponding to your choice: 1 2 3 ..." ))
-
-'''
