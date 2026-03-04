@@ -47,7 +47,7 @@ def mean_value(df):
 
 
     # --- Choix de la période ---
-    print("\nDéfinition de la période (laisser vide pour utiliser toute la période)")
+    print("\nDéfinition de la période sur laquelle calculer la moyenne temporelle (laisser vide pour utiliser toute la période)")
 
     start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
     end_date   = ask_date("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
@@ -163,9 +163,9 @@ def maximum_value(df):
     print("\nPériode disponible :")
     print(f" Du {min_date.date()} au {max_date.date()}")
 
-    print("\nDéfinition de la période (laisser vide pour toute la période)")
-    start_date = ask_date("Date de début : ")
-    end_date   = ask_date("Date de fin   : ")
+    print("\nDéfinition de la période sur laquelle calculer le maximum (laisser vide pour toute la période)")
+    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
     df_period = df.copy()
 
@@ -225,9 +225,9 @@ def minimum_value(df):
     print("\nPériode disponible :")
     print(f" Du {min_date.date()} au {max_date.date()}")
 
-    print("\nDéfinition de la période (laisser vide pour toute la période)")
-    start_date = ask_date("Date de début : ")
-    end_date   = ask_date("Date de fin   : ")
+    print("\nDéfinition de la période sur laquelle calculer le minimum (laisser vide pour toute la période)")
+    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
     df_period = df.copy()
 
@@ -294,9 +294,9 @@ def percentile(df):
     print("\nPériode disponible :")
     print(f" Du {min_date.date()} au {max_date.date()}")
 
-    print("\nDéfinition de la période (laisser vide pour toute la période)")
-    start_date = ask_date("Date de début : ")
-    end_date   = ask_date("Date de fin   : ")
+    print("\nDéfinition de la période sur laquelle calculer le percentile (laisser vide pour toute la période)")
+    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date("Date de fin (YYYY-MM-DD ou DD/MM/YYYY)  : ")
 
     df_period = df.copy()
 
@@ -363,10 +363,10 @@ def rolling_mean_value(df):
     print(f" Du {min_date.date()} au {max_date.date()}")
 
     # --- Choix de la période ---
-    print("\nDéfinition de la période (laisser vide pour utiliser toute la période)")
+    print("\nDéfinition de la période sur laquelle calculer la moyenne glissante (laisser vide pour utiliser toute la période)")
 
-    start_date = ask_date("Date de début : ")
-    end_date   = ask_date("Date de fin   : ")
+    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date("Date de fin (YYYY-MM-DD ou DD/MM/YYYY)  : ")
 
     df_period = df.copy()
 
