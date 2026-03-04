@@ -421,3 +421,6 @@ def rolling_mean_value(df):
     )
 
     return df
+
+def nombre_ocurrences_au_dessus_seuil(df):
+    return df 

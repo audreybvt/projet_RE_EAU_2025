@@ -57,11 +57,23 @@ menu_stats = {
     7: rolling_mean_value
 }
 
-dict_indicateurs={"IPS":1,
-                  "Qmoy":2}
+# Indicator selection dictionaries
+dict_indicateurs = {
+    "IPS": 1,
+    "Qmean": 2,
+    "Q90/95": 3,
+    "Q10/05": 4,
+    "VCN10": 5,
+    "VCX3": 6
+}
+
 menu_indicateurs = {
     1: IPS,
-    2: Qmoy
+    2: Qmean,
+    3: Q90_95,
+    4: Q10_05,
+    5: VCN10,
+    6: VCX3
 }
 
 
