@@ -130,7 +130,7 @@ def moyenne_multimodele(df):
 
     print(f"\n Colonne {new_col_name} ajoutée (moyenne ligne par ligne des colonnes sélectionnées)")
 
-    return df
+    return df 
 
 
 
