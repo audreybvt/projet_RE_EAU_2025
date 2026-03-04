@@ -1,5 +1,3 @@
-# ---------------- mean ---------------- a été modifié pour correspondre à nouvelle structure
-#gérer le cas où il y a des nan pour mettre le moyenne là où, il y a des valeurs
 import pandas as pd
 import numpy as np
 
@@ -47,11 +45,6 @@ def mean_value(df):
     print("\nPériode disponible pour la colonne sélectionnée :")
     print(f" Du {min_date.date()} au {max_date.date()}")
 
-    #min_date = df[date_col].min()
-    #max_date = df[date_col].max()
-
-    #print("\nPériode disponible dans le fichier :")
-    #print(f" Du {min_date.date()} au {max_date.date()}")
 
     # --- Choix de la période ---
     print("\nDéfinition de la période (laisser vide pour utiliser toute la période)")
@@ -141,8 +134,7 @@ def moyenne_multimodele(df):
 
 
 
-#def maximum_value(X):
-    #return X.max()
+
 
 def maximum_value(df):
     print("\nColonnes disponibles :")
@@ -205,8 +197,7 @@ def maximum_value(df):
     return df
 
     
-#def minimum_value(X):
-    #return X.min()
+
 def minimum_value(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
@@ -268,8 +259,7 @@ def minimum_value(df):
     return df
    
 
-#def percentile(X, q): # When the q_th percentile is needed, 0 < q < 1
-    #return X.quantile(q)
+
 def percentile(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
@@ -347,8 +337,7 @@ def nombre_ocurrences_au_dessus_seuil(X,seuil): # Attention à la définition de
 '''
 
 def rolling_mean_value(df):
-    import pandas as pd
-
+    
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
@@ -376,8 +365,8 @@ def rolling_mean_value(df):
     # --- Choix de la période ---
     print("\nDéfinition de la période (laisser vide pour utiliser toute la période)")
 
-    start_date = input("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date = input("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    start_date = ask_date("Date de début : ")
+    end_date   = ask_date("Date de fin   : ")
 
     df_period = df.copy()
 
