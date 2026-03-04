@@ -14,7 +14,7 @@ def ask_date_visualization(message):
         try:
             return pd.to_datetime(user_input, dayfirst=True) # à voir si on garde dayfirst
         except Exception:
-            print("Format invalide ❌ Utilisez YYYY-MM-DD ou DD/MM/YYYY")
+            print("Format invalide ; utilisez YYYY-MM-DD ou DD/MM/YYYY")
 
 
 # ---------------- Create test DataFrame ----------------
@@ -39,11 +39,13 @@ print("Test DataFrame:")
 print(df_test.head())
 '''
 
-# ---------------- Bar Chart ---------------- a été modifié pour correspondre à nouvelle structure
+# ---------------- Bar Chart ---------------- 
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
+
+'''
 
 def bar_chart(df):
     print("\nColonnes disponibles :")
@@ -99,10 +101,63 @@ def bar_chart(df):
         print(f"Trop de données ({len(y)} lignes) : les étiquettes de texte ont été désactivées pour la lisibilité.")
 
     return fig  # retourne la figure pour pouvoir faire plt.savefig()
+'''
+
+def bar_chart(df):
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    # --- Choix X ---
+    x_idx = int(input("\nIndex de la colonne pour l'axe X (catégories) : "))
+    y_idx = int(input("Index de la colonne pour l'axe Y (valeurs) : "))
+
+    if x_idx == y_idx:
+        raise ValueError("La colonne Y ne peut pas être la même que la colonne X")
+
+    x_col = df.columns[x_idx]
+    y_col = df.columns[y_idx]
+
+    # --- Gestion date ---
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+
+    df_valid = df[df[date_col].notna()]
+    if df_valid.empty:
+        raise ValueError("Aucune date valide trouvée")
+
+    print("\nPériode disponible :")
+    print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
+
+    print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
+    start_date = ask_date_visualization("Date de début : ")
+    end_date   = ask_date_visualization("Date de fin   : ")
+
+    df_period = df_valid.copy()
+
+    if start_date is not None:
+        df_period = df_period[df_period[date_col] >= start_date]
+    if end_date is not None:
+        df_period = df_period[df_period[date_col] <= end_date]
+
+    if df_period.empty:
+        raise ValueError("Aucune donnée sur la période sélectionnée")
+
+    # --- Graphique ---
+    fig, ax = plt.subplots(figsize=(8,5))
+    colors = cm.viridis(np.linspace(0, 1, len(df_period)))
+
+    ax.bar(df_period[x_col], df_period[y_col], color=colors)
+
+    ax.set_title(f"Bar Chart: {y_col} vs {x_col}")
+    ax.set_xlabel(x_col)
+    ax.set_ylabel(y_col)
+    ax.grid(axis='y', linestyle='--', alpha=0.6)
+
+    return fig
 
 
-
-# ---------------- Line Chart ---------------- a été modifiée
+# ---------------- Line Chart ---------------- 
 
 def line_chart(df):
     print("\nColonnes disponibles :")
@@ -155,7 +210,7 @@ def line_chart(df):
     print("\nPériode disponible :")
     print(f" Du {min_date.date()} au {max_date.date()}")
 
-    print("\nDéfinition de la période (laisser vide pour tout afficher)")
+    print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
 
     start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
     end_date   = ask_date_visualization("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
@@ -288,7 +343,8 @@ def line_chart(df):
     return fig  # retourne la figure pour pouvoir sauvegarder
 '''
 
-##-------------- Scatter Plot --------------- a été modifié, il faut reprendre nonobstant pour que ce soit plus beau
+##-------------- Scatter Plot ---------------
+'''
 def scatter_chart(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
@@ -338,10 +394,60 @@ def scatter_chart(df):
     ax.legend()
 
     return fig  # retourne la figure pour pouvoir sauvegarder
+'''
+def scatter_chart(df):
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
+    y_idx_input = input("Index des colonnes Y (ex: 1,2) : ")
+
+    y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
+
+    x_col = df.columns[x_idx]
+    y_cols = [df.columns[i] for i in y_idx]
+
+    # --- Date ---
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+
+    df_valid = df[df[date_col].notna()]
+    print("\nPériode disponible :")
+    print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
+
+    print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
+    start_date = ask_date_visualization("Date de début : ")
+    end_date   = ask_date_visualization("Date de fin   : ")
+
+    df_period = df_valid.copy()
+
+    if start_date is not None:
+        df_period = df_period[df_period[date_col] >= start_date]
+    if end_date is not None:
+        df_period = df_period[df_period[date_col] <= end_date]
+
+    if df_period.empty:
+        raise ValueError("Aucune donnée sur la période sélectionnée")
+
+    # --- Graphique ---
+    fig, ax = plt.subplots(figsize=(10,6))
+    colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
+
+    for i, col in enumerate(y_cols):
+        ax.scatter(df_period[x_col], df_period[col], label=col, color=colors[i], s=50)
+
+    ax.set_title(f"Scatter Plot")
+    ax.set_xlabel(x_col)
+    ax.set_ylabel("Values")
+    ax.grid(True, linestyle='--', alpha=0.5)
+    ax.legend()
+
+    return fig
 
 
-# ---------------- Radar Chart ---------------- a été modifié pour correspondre à nouvelle structure
-
+# ---------------- Radar Chart ----------------
+'''
 def radar_chart(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
@@ -404,9 +510,71 @@ def radar_chart(df):
 
     plt.show()# a voir si on laisse cette ligne
 
+'''
 
-# ---------------- Histogram Chart ---------------- a été modifié pour correspondre à nouvelle structure
+def radar_chart(df):
+    #choix 
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
 
+    cat_idx = int(input("\nIndex colonne catégories : "))
+    value_idx_input = input("Index colonnes valeurs (ex: 1,2) : ")
+
+    value_idx = sorted(set(int(i.strip()) for i in value_idx_input.split(",")))
+
+    category_col = df.columns[cat_idx]
+    value_cols = [df.columns[i] for i in value_idx]
+
+    # --- Date ---
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+
+    df_valid = df[df[date_col].notna()]
+
+    print("\nPériode disponible :")
+    print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
+
+    print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
+    start_date = ask_date_visualization("Date de début : ")
+    end_date   = ask_date_visualization("Date de fin   : ")
+
+    df_period = df_valid.copy()
+
+    if start_date is not None:
+        df_period = df_period[df_period[date_col] >= start_date]
+    if end_date is not None:
+        df_period = df_period[df_period[date_col] <= end_date]
+
+    if df_period.empty:
+        raise ValueError("Aucune donnée sur la période sélectionnée")
+
+    # --- Radar ---
+    categories = df_period[category_col].astype(str).values
+    N = len(categories)
+
+    angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
+    angles += angles[:1]
+
+    fig, ax = plt.subplots(figsize=(7,7), subplot_kw=dict(polar=True))
+    colors = cm.viridis(np.linspace(0, 1, len(value_cols)))
+
+    for i, col in enumerate(value_cols):
+        values = df_period[col].astype(float).values.tolist()
+        values += values[:1]
+
+        ax.plot(angles, values, label=col, color=colors[i])
+        ax.fill(angles, values, alpha=0.25, color=colors[i])
+
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories)
+    ax.set_title("Radar Chart")
+    ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1))
+
+    return fig
+
+# ---------------- Histogram Chart ----------------
+'''
 def histogram_chart(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
@@ -443,6 +611,53 @@ def histogram_chart(df):
     ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
 
     return fig  # retourne la figure pour sauvegarder
+'''
+
+def histogram_chart(df):
+    #version choix période
+    print("\nColonnes disponibles :")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    col_idx = int(input("\nIndex de la colonne : "))
+    bins = int(input("Nombre de bins : "))
+
+    col_name = df.columns[col_idx]
+
+    # --- Date ---
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+
+    df_valid = df[df[date_col].notna()]
+
+    print("\nPériode disponible :")
+    print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
+
+    print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
+    start_date = ask_date_visualization("Date de début : ")
+    end_date   = ask_date_visualization("Date de fin   : ")
+
+    df_period = df_valid.copy()
+
+    if start_date is not None:
+        df_period = df_period[df_period[date_col] >= start_date]
+    if end_date is not None:
+        df_period = df_period[df_period[date_col] <= end_date]
+
+    if df_period.empty:
+        raise ValueError("Aucune donnée sur la période sélectionnée")
+
+    # --- Graphique ---
+    fig, ax = plt.subplots(figsize=(8,5))
+    ax.hist(df_period[col_name].astype(float), bins=bins, 
+            color='skyblue', edgecolor='black')
+
+    ax.set_title(f"Histogram of {col_name}")
+    ax.set_xlabel(col_name)
+    ax.set_ylabel("Count")
+    ax.grid(True, linestyle='--', alpha=0.5)
+
+    return fig
 
 
 
