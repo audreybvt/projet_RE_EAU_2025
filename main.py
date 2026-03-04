@@ -40,10 +40,12 @@ menu_stats = {
 }
 
 dict_indicateurs={"IPS":1, 
-                  "Qmoy":2}
+                  "Qmoy":2,
+                  "Q90 & Q95":3}
 menu_indicateurs = {
     1: IPS,
-    2: Qmoy
+    2: Qmoy,
+    3: Q90_95
 }
 
 
