@@ -12,7 +12,7 @@ def mean_value(ds: xr.Dataset):
         da = ds[var]  # DataArray
         long_name = da.attrs.get("long_name", "—")
         units = da.attrs.get("units", "—")
-        print(f" [{i}] {var}   | {long_name}, units = {units}")
+        print(f" [{i}] {var}        | {long_name}, units : {units}")
 
     # --- Choix de la variable ---
     try:
@@ -38,7 +38,7 @@ def mean_value(ds: xr.Dataset):
     # Ajouter une variable constante avec broadcast
     ds[new_var_name] = xr.full_like(da, fill_value=mean_val)
 
-    print(f"\n✅ Variable '{new_var_name}' ajoutée avec la moyenne de '{var_name}' = {mean_val:.2f}")
+    print(f"Variable '{new_var_name}' ajoutée avec la moyenne de '{var_name}' = {mean_val:.2f}")
 
     return ds
 
