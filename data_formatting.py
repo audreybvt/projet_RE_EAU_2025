@@ -1,5 +1,35 @@
 import pandas as pd
 import xarray as xr
+from pathlib import Path
+
+def load_multiple_datasets(paths):
+    """
+    Charge plusieurs fichiers NetCDF et ajoute les dimensions
+    model et scenario avant de les combiner.
+    """
+
+    datasets = []
+
+    for path in paths:
+
+        ds = xr.open_dataset(path)
+
+        # récupération des métadonnées si elles existent
+        model = ds.attrs.get("model_id", "unknown_model")
+        scenario = ds.attrs.get("experiment_id", "unknown_scenario")
+
+        # ajout des dimensions
+        ds = ds.expand_dims(
+            model=[model],
+            scenario=[scenario]
+        )
+
+        datasets.append(ds)
+
+    # combinaison intelligente
+    combined = xr.combine_by_coords(datasets)
+
+    return combined
 
 def csv_to_xarray(filepath):
     """
