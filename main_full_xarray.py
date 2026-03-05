@@ -12,24 +12,45 @@ import visualization_xr as visu_xr
 import data_formatting as dt_form
 from os import makedirs
 
-path = Path(input("Please enter your path to your file (with / instead of anti-slash and without quotation mark):"))
+#Determine file format
+supported_file_format = {
+        1: "NetCDF",
+        2: "CSV"
+    }
 
-# Determine if the file is a CSV or a NetCDF
-
-suffix = path.suffix.lower()
-
-if suffix == ".csv": # CSV case
+while True:
     
-    print("It is a CSV")
+    print("\nSupported file formats:")
+    for num, name in supported_file_format.items():
+        print(f"[{num}] {name}")
+    
+    print("\nNote: Multiple files are supported only for NetCDF files.")
+
+    file_format = int(input("\nSelect the format of your file: "))
+
+    if file_format not in supported_file_format:
+        print("Invalid choice, please try again")
+        continue
+    else:
+        break
+
+
+#Opening CSV file
+if supported_file_format[file_format] == "CSV":
+    
+    path = input("Please enter your path to your file :")
+    path = Path(path.strip().replace("\\", "/"))
+
     ds = dt_form.csv_to_xarray(path)
-    
-elif suffix in (".nc", ".nc4", ".netcdf"): # netCDF case
-    
-    print("It is a NetCDF")
-    ds = xr.open_dataset(path)
 
-elif suffix not in (".csv", ".nc", ".nc4", ".netcdf"):
-    print("It is not a CSV nor a NetCDF: type not supported yet by this code.")
+#Opening NetCDF file(s)
+elif supported_file_format[file_format] == "NetCDF": # NetCDF case
+    
+    paths = input("Enter path(s) separated by commas : ").split(",")
+
+    paths = [Path(p.strip().replace("\\", "/")) for p in paths]
+
+    ds = dt_form.load_multiple_datasets(paths)
 
 
 #Création des dictionnaires

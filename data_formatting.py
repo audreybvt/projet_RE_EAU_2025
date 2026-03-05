@@ -12,17 +12,27 @@ def load_multiple_datasets(paths):
 
     for path in paths:
 
-        ds = xr.open_dataset(path)
+        ds = xr.open_dataset(path, decode_cf=False)
 
         # récupération des métadonnées si elles existent
-        model = ds.attrs.get("model_id", "unknown_model")
-        scenario = ds.attrs.get("experiment_id", "unknown_scenario")
-
+        scenario = ds.attrs.get("experiment_id", "unknown")
+        gcm = ds.attrs.get("driving_model_id", "unknown")
+        rcm = ds.attrs.get("model_id", "unknown")
+        bc = ds.attrs.get("bc_method_id", "unknown")
+        hy_model = ds.attrs.get("hy_model_id", "unknown")
+        
+        
+        if "unknown" in (gcm, rcm, bc, hy_model, scenario) :
+            return print("The format of the file is not appropriate")
+        
+        
         # ajout des dimensions
-        ds = ds.expand_dims(
-            model=[model],
-            scenario=[scenario]
-        )
+        ds = ds.expand_dims({
+            "scenario": [scenario],
+            "gcm": [gcm],
+            "rcm": [rcm],
+            "hy_model": [hy_model],
+        })
 
         datasets.append(ds)
 
