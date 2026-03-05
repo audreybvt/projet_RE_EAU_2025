@@ -223,13 +223,14 @@ def line_chart(df):
     y_cols = [df.columns[i] for i in y_idx]
 
     
-    # --- Colonne temporelle (supposée être la première) ---
-    date_col = df.columns[0]
+    # --- Colonne temporelle (si x est au format date on suppose que c'est x sinon on suppose que c'est la première colonne) ---
+    is_date = pd.api.types.is_datetime64_any_dtype(df[x_col])
 
-    try:
-        df[date_col] = pd.to_datetime(df[date_col])
-    except Exception:
-        raise ValueError("La première colonne doit contenir des dates valides")
+    if is_date:
+        date_col = x_col
+    else: 
+        date_col = df.columns[0] #If not, default to the first column
+
 
     # --- Affichage période disponible ---
     df_valid = df[df[date_col].notna()]
@@ -257,7 +258,7 @@ def line_chart(df):
 
     if df_period.empty:
         raise ValueError("Aucune donnée disponible sur la période sélectionnée")
-
+    print(df_period)
     # Optionnel : trier par date pour éviter des lignes cassées
     #df_period = df_period.sort_values(by=date_col)
 

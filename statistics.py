@@ -243,3 +243,49 @@ def rolling_mean_value(df):
     )
 
     return df
+
+
+#groupement par mois 
+
+def Qmonth_interannual(df):
+    """
+    Calcule la moyenne interannuelle par mois (12 valeurs) 
+    et les concatène au DataFrame original.
+    """
+    print("\n--- Moyenne Interannuelle par Mois (Régime) ---")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    # Sélection des colonnes
+    while True:
+        try:
+            idx_t = int(input("\nIndex de la colonne Date: "))
+            idx_q = int(input("Index de la colonne Débit (Q): "))
+            col_t, col_q = df.columns[idx_t], df.columns[idx_q]
+            break
+        except (ValueError, IndexError):
+            print("Entrée invalide.")
+
+    # Conversion en datetime
+    df[col_t] = pd.to_datetime(df[col_t])
+
+    try:
+        # 1. Calcul des moyennes groupées par mois (1 à 12)
+        # On crée un petit df de 12 lignes
+        stats_mensuelles = df.groupby(df[col_t].dt.month)[col_q].mean().reset_index()
+        
+        # 2. On renomme pour la clarté
+        # Month_Num (1-12) et la valeur moyenne
+        stats_mensuelles.columns = ['Month_Num_Inter', 'Q_Interannuel_Mensuel']
+        
+        # 3. Concatenation (le petit tableau sera placé en haut à droite du df)
+        df = pd.concat([df, stats_mensuelles], axis=1)
+
+        print("\n Colonne 'Q_Interannuel_Mensuel' concaténée (12 premières lignes).")
+        print(stats_mensuelles)
+
+    except Exception as e:
+        print(f"Erreur de calcul : {e}")
+
+    return df
+

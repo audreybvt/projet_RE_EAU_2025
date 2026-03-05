@@ -46,7 +46,7 @@ menu = {
     5: histogram_chart
 }
 
-dict_stats={"mean":1,"max":2,"min":3, "percentile":4, "nombre d'occurences au dessus d'un seuil":5, "moyenne multimodele":6, "moyenne glissante":7}
+dict_stats={"mean":1,"max":2,"min":3, "percentile":4, "nombre d'occurences au dessus d'un seuil":5, "moyenne multimodele":6, "moyenne glissante":7, "Groupement par mois":8}
 menu_stats = {
     1: mean_value,
     2: maximum_value,
@@ -54,7 +54,8 @@ menu_stats = {
     4: percentile,
     5: nombre_ocurrences_au_dessus_seuil,
     6: moyenne_multimodele,
-    7: rolling_mean_value
+    7: rolling_mean_value,
+    8: Qmonth_interannual
 }
 
 # Indicator selection dictionaries
