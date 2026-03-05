@@ -17,88 +17,10 @@ def ask_date_visualization(message):
             print("Format invalide ; utilisez YYYY-MM-DD ou DD/MM/YYYY")
 
 
-# ---------------- Create test DataFrame ----------------
-'''
-np.random.seed(42)
 
-columns = ["col1", "col2", "col3", "col4"]
-
-# Create col1 explicitly
-col1 = np.arange(1, 21)  # 1, 2, ..., 20
-
-# Create DataFrame for the remaining columns (col2, col3, col4)
-df_test = pd.DataFrame(
-    np.random.rand(20, 3) * 20 + 10,  # values between 10 and 30
-    columns=columns[1:]
-)
-
-# Insert col1 as the first column
-df_test.insert(0, "col1", col1)
-
-print("Test DataFrame:")
-print(df_test.head())
-'''
 
 # ---------------- Bar Chart ---------------- 
 
-
-'''
-
-def bar_chart(df):
-    print("\nColonnes disponibles :")
-    for i, col in enumerate(df.columns):
-        print(f" [{i}] {col}")
-
-    # --- Choix de la colonne X ---
-    try:
-        x_idx = int(input("\nIndex de la colonne pour l'axe X (catégories) : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
-    
-    if x_idx < 0 or x_idx >= len(df.columns):
-        raise IndexError("Index de colonne X invalide")
-    
-    # --- Choix de la colonne Y ---
-    try:
-        y_idx = int(input("Index de la colonne pour l'axe Y (valeurs) : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne Y")
-    
-    if y_idx < 0 or y_idx >= len(df.columns):
-        raise IndexError("Index de colonne Y invalide")
-    
-    if y_idx == x_idx:
-        raise ValueError("La colonne Y ne peut pas être la même que la colonne X")
-    
-    x_col = df.columns[x_idx]
-    y_col = df.columns[y_idx]
-
-    # --- Création du graphique ---
-    x = df[x_col]
-    y = df[y_col]
-
-    colors = cm.viridis(np.linspace(0, 1, len(x)))
-
-    fig, ax = plt.subplots(figsize=(8,5))
-    ax.bar(x, y, color=colors)
-
-    ax.set_title(f"Bar Chart: {y_col} vs {x_col}")
-    ax.set_xlabel(x_col)
-    ax.set_ylabel(y_col)
-    ax.grid(axis='y', linestyle='--', alpha=0.6)
-
-    # Affichage des valeurs au-dessus des barres
-    for i, v in enumerate(y):
-        ax.text(i, v + 0.05*np.max(y), f"{v:.2f}", ha='center', va='bottom')
-    
-    if len(y) < 30:
-        for i, v in enumerate(y):
-            ax.text(i, v + 0.01 * np.max(y), f"{v:.2f}", ha='center', va='bottom', fontsize=8)
-    else:
-        print(f"Trop de données ({len(y)} lignes) : les étiquettes de texte ont été désactivées pour la lisibilité.")
-
-    return fig  # retourne la figure pour pouvoir faire plt.savefig()
-'''
 
 def bar_chart(df):
     print("\nColonnes disponibles :")
@@ -245,7 +167,7 @@ def line_chart(df):
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
 
     start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date_visualization("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
     df_period = df.copy()
 
@@ -296,7 +218,7 @@ def line_chart(df):
         y = df_period[col].astype(float)
         x = df_period[x_col]
 
-        ax.plot(x, y, marker='o', label=legend_labels[i], color=colors[i])
+        ax.plot(x, y, marker='o', markersize=3, linewidth=1, label=legend_labels[i], color=colors[i])
 
     ax.set_title(custom_title)
     ax.set_xlabel(x_label)
@@ -306,154 +228,10 @@ def line_chart(df):
 
     return fig
 
-'''
-Vieux line chart qui est faux
-def line_chart(df):
-    print("\nColonnes disponibles :")
-    for i, col in enumerate(df.columns):
-        print(f" [{i}] {col}")
 
-    # --- Choix de la colonne X ---
-    try:
-        x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
-    
-    if x_idx < 0 or x_idx >= len(df.columns):
-        raise IndexError("Index de colonne X invalide")
-    
-    # --- Choix des colonnes Y ---
-    y_idx_input = input("Index des colonnes pour l'axe Y (séparés par une virgule, ex: 1,2) : ")
-    
-    try:
-        y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
-    except ValueError:
-        raise ValueError("Les index doivent être des nombres entiers")
-    
-    if x_idx in y_idx:
-        raise ValueError("La colonne X ne peut pas être dans les colonnes Y")
-    
-    for i in y_idx:
-        if i < 0 or i >= len(df.columns):
-            raise IndexError(f"Index Y invalide : {i}")
-    
-    x_col = df.columns[x_idx]
-    y_cols = [df.columns[i] for i in y_idx]
-
-    
-
-    mask = pd.Series(True, index=df.index)
-
-    date_col = df.columns[0]
-
-    #try:
-        #date_series = pd.to_datetime(df[date_col])
-        #is_datetime = True
-    #except Exception:
-        #is_datetime = False
-
-    
-
-    
-    choice = input("Voulez-vous filtrer par période ? (o/n) : ").strip().lower()
-
-    if choice == "o":
-
-        min_date = date_col.min()
-        max_date = date_col.max()
-
-        print(f"Période disponible : {min_date.date()} → {max_date.date()}, attention, il peut y avoir des NaN")
-
-
-        start_date = ask_date_visualization("Date de début : ")
-        end_date   = ask_date_visualization("Date de fin   : ")
-
-        if start_date and end_date and end_date < start_date:
-            raise ValueError("La date de fin doit être postérieure à la date de début")
-
-        if start_date:
-            mask &= (date_series >= start_date)
-        if end_date:
-            mask &= (date_series <= end_date)
-
-        if not mask.any():
-            raise ValueError("Aucune donnée disponible sur cette période")
-
-    else:
-        print("\nLa première colonne n'est pas une date → filtrage ignoré.")
-
-
-    # --- Création du graphique ---
-
-    fig, ax = plt.subplots(figsize=(10,6))
-    colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
-
-    for i, col in enumerate(y_cols):
-        y = df[col].astype(float)
-        ax.plot(df[x_col][mask], y[mask], marker='o', label=col, color=colors[i])
-
-
-    ax.set_title(f"Line Chart: {', '.join(y_cols)} vs {x_col}")
-    ax.set_xlabel(x_col)
-    ax.set_ylabel("Values")
-    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
-    ax.legend()
-    
-    return fig  # retourne la figure pour pouvoir sauvegarder
-'''
 
 ##-------------- Scatter Plot ---------------
-'''
-def scatter_chart(df):
-    print("\nColonnes disponibles :")
-    for i, col in enumerate(df.columns):
-        print(f" [{i}] {col}")
 
-    # --- Choix de la colonne X ---
-    try:
-        x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
-    
-    if x_idx < 0 or x_idx >= len(df.columns):
-        raise IndexError("Index de colonne X invalide")
-    
-    # --- Choix des colonnes Y ---
-    y_idx_input = input("Index des colonnes pour l'axe Y (séparés par une virgule, ex: 1,2) : ")
-    
-    try:
-        y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
-    except ValueError:
-        raise ValueError("Les index doivent être des nombres entiers")
-    
-    if x_idx in y_idx:
-        raise ValueError("La colonne X ne peut pas être dans les colonnes Y")
-    
-    for i in y_idx:
-        if i < 0 or i >= len(df.columns):
-            raise IndexError(f"Index Y invalide : {i}")
-    
-    x_col = df.columns[x_idx]
-    y_cols = [df.columns[i] for i in y_idx]
-
-    # --- Création du graphique ---
-    fig, ax = plt.subplots(figsize=(10,6))
-    colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
-
-    for i, col in enumerate(y_cols):
-        y = df[col].astype(float)
-        ax.scatter(df[x_col], y, label=col, color=colors[i], s=50)
-
-    ax.set_title(f"Scatter Plot: {', '.join(y_cols)} vs {x_col}")
-    ax.set_xlabel(x_col)
-    ax.set_ylabel("Values")
-    ax.set_xlim(left=0)
-    ax.set_ylim(bottom=0)
-    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
-    ax.legend()
-
-    return fig  # retourne la figure pour pouvoir sauvegarder
-'''
 def scatter_chart(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
@@ -502,8 +280,8 @@ def scatter_chart(df):
     print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
 
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
-    start_date = ask_date_visualization("Date de début : ")
-    end_date   = ask_date_visualization("Date de fin   : ")
+    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date_visualization("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
     df_period = df_valid.copy()
 
@@ -546,8 +324,17 @@ def scatter_chart(df):
     fig, ax = plt.subplots(figsize=(10,6))
     colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
 
+    #for i, col in enumerate(y_cols):
+        #ax.scatter(df_period[x_col],df_period[col],label=legend_labels[i],color=colors[i],s=50)
+
     for i, col in enumerate(y_cols):
-        ax.scatter(df_period[x_col],df_period[col],label=legend_labels[i],color=colors[i],s=50)
+
+        x = pd.to_numeric(df_period[x_col], errors="coerce")
+        y = pd.to_numeric(df_period[col], errors="coerce")
+
+        data = pd.DataFrame({x_col: x, col: y}).dropna()
+
+        ax.scatter(data[x_col],data[col],label=legend_labels[i],color=colors[i],s=50)
 
     ax.set_title(custom_title)
     ax.set_xlabel(x_label)
@@ -673,18 +460,33 @@ def radar_chart(df):
     print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
 
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
-    start_date = ask_date_visualization("Date de début : ")
-    end_date   = ask_date_visualization("Date de fin   : ")
+    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date_visualization("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
     df_period = df_valid.copy()
 
-    if start_date is not None:
-        df_period = df_period[df_period[date_col] >= start_date]
-    if end_date is not None:
-        df_period = df_period[df_period[date_col] <= end_date]
+
+    ###
+# Filtrer df_period selon la colonne de dates choisie pour le radar
+    df_period = df_period[df_period[category_col] >= start_date] if start_date is not None else df_period
+    df_period = df_period[df_period[category_col] <= end_date]   if end_date   is not None else df_period
+    ###
+
+    #if start_date is not None:
+        #df_period = df_period[df_period[date_col] >= start_date]
+    #if end_date is not None:
+        #df_period = df_period[df_period[date_col] <= end_date]
+
+
 
     if df_period.empty:
         raise ValueError("Aucune donnée sur la période sélectionnée")
+
+    # Supprimer les lignes sans valeurs pour le radar
+    df_period = df_period.dropna(subset=value_cols, how="all")
+
+    if df_period.empty:
+        raise ValueError("Aucune valeur disponible pour les colonnes sélectionnées sur cette période")
     
     # --- Titre global ---
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
@@ -705,7 +507,9 @@ def radar_chart(df):
             raise ValueError("Le nombre de noms doit correspondre au nombre de colonnes de valeurs")
 
     # --- Radar ---
-    categories = df_period[category_col].astype(str).values
+    #categories = df_period[category_col].astype(str).values
+    categories = df_period[category_col].dropna().astype(str).values
+    #categories = df_period[date_col].dt.strftime('%Y-%m-%d').values
     N = len(categories)
     if N < 3:
         raise ValueError("Un radar nécessite au moins 3 catégories")
@@ -716,17 +520,24 @@ def radar_chart(df):
     fig, ax = plt.subplots(figsize=(7,7), subplot_kw=dict(polar=True))
     colors = cm.viridis(np.linspace(0, 1, len(value_cols)))
 
+    # --- Ajustement de l'échelle radiale ---
+    val_min = df_period[value_cols].min().min()
+    val_max = df_period[value_cols].max().max()
+    margin = 0.05 * (val_max - val_min)  # 5% de marge
+    ax.set_ylim(val_min - margin, val_max + margin)
+
     for i, col in enumerate(value_cols):
         values = df_period[col].astype(float).values.tolist()
         values += values[:1]
 
         ax.plot(angles, values, label=legend_labels[i], color=colors[i])
-        ax.fill(angles, values, alpha=0.25, color=colors[i])
+        #ax.fill(angles, values, alpha=0.25, color=colors[i])
 
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(categories)
+    
     ax.set_title(custom_title)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1))
+    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
 
     return fig
 
@@ -810,8 +621,8 @@ def histogram_chart(df):
     print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
 
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
-    start_date = ask_date_visualization("Date de début : ")
-    end_date   = ask_date_visualization("Date de fin   : ")
+    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date_visualization("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
     df_period = df_valid.copy()
 
