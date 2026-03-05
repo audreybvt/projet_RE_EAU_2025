@@ -340,3 +340,107 @@ def VCX3(df):
     return df
 
 
+
+def over_threshold(df):    ### Renvoie des valeurs numériques, ne modifie pas le DataFrame d'entrée
+    """
+    Count occurrences above a threshold with tolerance,
+    and compute episode statistics (duration and Peak Over Threshold (POT)).
+    """
+
+    print("\nOver-threshold indicator: available columns")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    # --- Column selection ---
+    try:
+        idx = int(input("\nIndex of the column to analyse: "))
+        col = df.columns[idx]
+    except (ValueError, IndexError):
+        raise ValueError("Invalid column index.")
+
+    # --- Threshold value ---
+    try:
+        seuil = float(input("Enter threshold value: "))
+    except ValueError:
+        raise ValueError("Threshold must be a number.")
+
+    # --- Tolerance percentage ---
+    try:
+        tol = float(input("Tolerance percentage (%) around threshold: "))
+        if tol < 0:
+            raise ValueError
+    except ValueError:
+        raise ValueError("Tolerance must be a positive number.")
+
+    # --- Effective threshold ---
+    seuil_effectif = seuil * (1 + tol / 100)
+
+    print(f"\nEffective threshold used: {seuil_effectif:.3f}")
+    print(f"(threshold {seuil} with tolerance {tol}%)")
+
+    # --- Convert to numeric ---
+    try:
+        values = df[col].astype(float)
+    except Exception:
+        raise ValueError("Selected column cannot be converted to numeric values.")
+
+    # --- Count exceedances ---
+    exceed = values > seuil_effectif
+    count = exceed.sum()
+
+    print(f"\nNumber of occurrences above threshold: {count}")
+    print(f"Total observations: {len(values)}")
+    print(f"Percentage of exceedance: {100 * count / len(values):.2f}%")
+
+    # ======================================================
+    # Episode detection
+    # ======================================================
+
+    episodes = []
+    pot_values = []
+
+    current_duration = 0
+    current_peak = None
+
+    for val, exc in zip(values, exceed):
+
+        if exc:
+            current_duration += 1
+
+            if current_peak is None:
+                current_peak = val
+            else:
+                current_peak = max(current_peak, val)
+
+        else:
+            if current_duration > 0:
+                episodes.append(current_duration)
+                pot_values.append(current_peak)
+
+            current_duration = 0
+            current_peak = None
+
+    # dernier épisode si la série finit au-dessus du seuil
+    if current_duration > 0:
+        episodes.append(current_duration)
+        pot_values.append(current_peak)
+
+    # ======================================================
+    # Episode statistics
+    # ======================================================
+
+    if len(episodes) > 0:
+
+        mean_duration = np.mean(episodes)
+
+        print("\nEpisode statistics:")
+        print(f"Number of independent episodes: {len(episodes)}")
+        print(f"Mean episode duration: {mean_duration:.2f}")
+
+        print("\nPeak Over Threshold (POT) values:")
+        print(pot_values[:10])  # affiche les 10 premiers
+
+    else:
+        print("\nNo exceedance episodes detected.")
+
+    return df

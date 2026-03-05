@@ -64,7 +64,8 @@ dict_indicateurs = {
     "Q90/95": 3,
     "Q10/05": 4,
     "VCN10": 5,
-    "VCX3": 6
+    "VCX3": 6,
+    "over_threshold":7
 }
 
 menu_indicateurs = {
@@ -73,7 +74,8 @@ menu_indicateurs = {
     3: Q90_95,
     4: Q10_05,
     5: VCN10,
-    6: VCX3
+    6: VCX3,
+    7: over_threshold
 }
 
 
