@@ -27,29 +27,35 @@ def bar_chart(df):
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-   # --- Choix de la colonne X ---
-    try:
-        x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
-    
-    if x_idx < 0 or x_idx >= len(df.columns):
-        raise IndexError("Index de colonne X invalide")
 
 
-# --- Choix de la colonne Y ---
-    try:
-        y_idx = int(input("Index de la colonne pour l'axe Y : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne Y")
-    
-    if y_idx < 0 or y_idx >= len(df.columns):
-        raise IndexError("Index de colonne Y invalide")
+    # --- Choix de la colonne X ---
+    while True:
+        try:
+            x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
+            if x_idx < 0 or x_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne X invalide.")
 
+    # --- Choix de la colonne Y ---
+    while True:
+        try:
+            y_idx = int(input("Index de la colonne pour l'axe Y : "))
+            if y_idx < 0 or y_idx >= len(df.columns):
+                raise IndexError
+            if y_idx == x_idx:
+                raise ValueError
+            break
+        except ValueError:
+            print("La colonne Y doit être différente de la colonne X.")
+        except IndexError:
+            print("Index de colonne Y invalide.")
 
-    if x_idx == y_idx:
-        raise ValueError("La colonne Y ne peut pas être la même que la colonne X")
-
+      
     x_col = df.columns[x_idx]
     y_col = df.columns[y_idx]
 
@@ -117,29 +123,40 @@ def line_chart(df):
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-    # --- Choix X ---
-    try:
-        x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
     
-    if x_idx < 0 or x_idx >= len(df.columns):
-        raise IndexError("Index de colonne X invalide")
+    # --- Choix X ---
+    while True:
+        try:
+            x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
+            if x_idx < 0 or x_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne X invalide.")
 
     # --- Choix Y ---
-    y_idx_input = input("Index des colonnes pour l'axe Y (séparés par une virgule, ex: 1,2) : ")
-    
-    try:
-        y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
-    except ValueError:
-        raise ValueError("Les index doivent être des nombres entiers")
-    
-    if x_idx in y_idx:
-        raise ValueError("La colonne X ne peut pas être dans les colonnes Y")
-    
-    for i in y_idx:
-        if i < 0 or i >= len(df.columns):
-            raise IndexError(f"Index Y invalide : {i}")
+    while True:
+        try:
+            y_idx_input = input("Index des colonnes pour l'axe Y (ex: 1,2) : ")
+            y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
+
+            if x_idx in y_idx:
+                raise ValueError
+
+            for i in y_idx:
+                if i < 0 or i >= len(df.columns):
+                    raise IndexError
+
+            break
+
+        except ValueError:
+            print("Les colonnes Y doivent être des entiers et différentes de X.")
+        except IndexError:
+            print("Un index Y est invalide.")
+
+
     
     x_col = df.columns[x_idx]
     y_cols = [df.columns[i] for i in y_idx]
@@ -237,30 +254,38 @@ def scatter_chart(df):
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-# --- Choix de la colonne X ---
-    try:
-        x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
-    
-    if x_idx < 0 or x_idx >= len(df.columns):
-        raise IndexError("Index de colonne X invalide")
 
-    
+    # --- Choix de la colonne X ---
+    while True:
+        try:
+            x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
+            if x_idx < 0 or x_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne X invalide.")
+
     # --- Choix des colonnes Y ---
-    y_idx_input = input("Index des colonnes pour l'axe Y (séparés par une virgule, ex: 1,2) : ")
-    
-    try:
-        y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
-    except ValueError:
-        raise ValueError("Les index doivent être des nombres entiers")
-    
-    if x_idx in y_idx:
-        raise ValueError("La colonne X ne peut pas être dans les colonnes Y")
-    
-    for i in y_idx:
-        if i < 0 or i >= len(df.columns):
-            raise IndexError(f"Index Y invalide : {i}")
+    while True:
+        try:
+            y_idx_input = input("Index des colonnes pour l'axe Y (ex: 1,2) : ")
+            y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
+
+            if x_idx in y_idx:
+                raise ValueError
+
+            for i in y_idx:
+                if i < 0 or i >= len(df.columns):
+                    raise IndexError
+
+            break
+
+        except ValueError:
+            print("Les colonnes Y doivent être des entiers et différentes de X.")
+        except IndexError:
+            print("Un index Y est invalide.")
 
     
     x_col = df.columns[x_idx]
@@ -419,31 +444,42 @@ def radar_chart(df):
 
 
     # --- Choix de la colonne catégorie ---
-    try:
-        cat_idx = int(input("\nIndex de la colonne catégories (axes du radar) : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier")
-
-    if cat_idx < 0 or cat_idx >= len(df.columns):
-        raise IndexError("Index de colonne catégorie invalide")
+    while True:
+        try:
+            cat_idx = int(input("\nIndex de la colonne catégories (axes du radar) : "))
+            if cat_idx < 0 or cat_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
 
     category_col = df.columns[cat_idx]
 
+
+
     # --- Choix des colonnes de valeurs ---
-    value_idx_input = input("Index des colonnes de valeurs (séparés par une virgule, ex: 1,2) : ")
+    while True:
+        try:
+            value_idx_input = input("Index des colonnes de valeurs (séparés par une virgule, ex: 1,2) : ")
+            value_idx = sorted(set(int(i.strip()) for i in value_idx_input.split(",")))
 
-    try:
-        value_idx = sorted(set(int(i.strip()) for i in value_idx_input.split(",")))
-    except ValueError:
-        raise ValueError("Les index doivent être des nombres entiers")
+            if cat_idx in value_idx:
+                raise ValueError
 
-    if cat_idx in value_idx:
-        raise ValueError("La colonne catégorie ne peut pas être une colonne de valeurs")
+            for i in value_idx:
+                if i < 0 or i >= len(df.columns):
+                    raise IndexError
 
-    for i in value_idx:
-        if i < 0 or i >= len(df.columns):
-            raise IndexError(f"Index invalide : {i}")
+            break
 
+        except ValueError:
+            print("Les colonnes doivent être des entiers et différentes de la colonne catégorie.")
+        except IndexError:
+            print("Un index est invalide.")
+
+  
     value_cols = [df.columns[i] for i in value_idx]
     
 
@@ -588,28 +624,33 @@ def histogram_chart(df):
         print(f" [{i}] {col}")
 
 
-# --- Choix de la colonne ---
-    try:
-        col_idx = int(input("\nIndex de la colonne à représenter en histogramme : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-    
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
-    
+
+    # --- Choix de la colonne ---
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne à représenter : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
+
     col_name = df.columns[col_idx]
 
-    
 
     # --- Choix du nombre de bins ---
-    try:
-        bins = int(input("Nombre de bins pour l'histogramme : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour le nombre de bins")
+    while True:
+        try:
+            bins = int(input("Nombre de bins pour l'histogramme : "))
+            if bins <= 0:
+                raise ValueError
+            break
+        except ValueError:
+            print("Le nombre de bins doit être un entier strictement positif.")
     
-    if bins <= 0:
-        raise ValueError("Le nombre de bins doit être supérieur à 0")
-    
+ 
 
     # --- Période d'affichage ---
     date_col = df.columns[0]
