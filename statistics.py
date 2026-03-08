@@ -19,14 +19,20 @@ def mean_value(df):
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-    # --- Choix de la colonne ---
-    try:
-        col_idx = int(input("\nIndex de la colonne pour calculer la moyenne : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-    
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
+    # --- Choix de la colonne ---  
+
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne pour calculer la moyenne : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
+
+
     
     col_name = df.columns[col_idx]
 
@@ -97,20 +103,25 @@ def moyenne_multimodele(df):
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-    # --- Choix des colonnes ---
-    colonnes_input = input(
-        "Index des colonnes entre lesquelles effectuer une moyenne, séparés par une virgule (ex: 1,2,3) : "
-    )
+    # --- Choix des colonnes ---     
+    while True:
+        try:
+            colonnes_input = input("Index des colonnes entre lesquelles effectuer une moyenne (ex: 1,2,3) : ")
 
-    try:
-        colonnes = sorted(set(int(i.strip()) for i in colonnes_input.split(",")))
-    except ValueError:
-        raise ValueError("Les index doivent être des nombres entiers")
+            colonnes = sorted(set(int(i.strip()) for i in colonnes_input.split(",")))
 
-    for i in colonnes:
-        if i < 0 or i >= len(df.columns):
-            raise IndexError(f"Index invalide : {i}")
+            for i in colonnes:
+                if i < 0 or i >= len(df.columns):
+                    raise IndexError
 
+            break
+
+        except ValueError:
+            print("Les index doivent être des nombres entiers.")
+        except IndexError:
+            print("Un index de colonne est invalide.")
+
+    
     index_colonnes = [df.columns[i] for i in colonnes]
 
     print(f"\n Colonnes sélectionnées : {index_colonnes}")
@@ -140,14 +151,18 @@ def maximum_value(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
+ 
 
-    try:
-        col_idx = int(input("\nIndex de la colonne pour calculer le maximum : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne pour calculer le maximum : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
 
     col_name = df.columns[col_idx]
     date_col = df.columns[0]
@@ -202,14 +217,18 @@ def minimum_value(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
+  
 
-    try:
-        col_idx = int(input("\nIndex de la colonne pour calculer le minimum : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne pour calculer le minimum : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
 
     col_name = df.columns[col_idx]
     date_col = df.columns[0]
@@ -260,28 +279,37 @@ def minimum_value(df):
    
 
 
+###############
+
 def percentile(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
+   
 
-    try:
-        col_idx = int(input("\nIndex de la colonne : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index invalide")
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
 
     col_name = df.columns[col_idx]
     date_col = df.columns[0]
+   
 
-    try:
-        q = float(input("Percentile souhaité (ex: 0.9 pour 90%) : "))
-        if not 0 < q < 1:
-            raise ValueError
-    except ValueError:
-        raise ValueError("Le percentile doit être un nombre entre 0 et 1")
+    while True:
+        try:
+            q = float(input("Percentile souhaité (ex: 0.9 pour 90%) : "))
+            if not 0 < q < 1:
+                raise ValueError
+            break
+        except ValueError:
+            print("Le percentile doit être un nombre entre 0 et 1.")
 
     df_valid = df[df[col_name].notna()]
 
@@ -329,6 +357,8 @@ def percentile(df):
    
 
 
+##################
+
 def rolling_mean_value(df):
     
     print("\nColonnes disponibles :")
@@ -336,14 +366,17 @@ def rolling_mean_value(df):
         print(f" [{i}] {col}")
 
     # --- Choix de la colonne ---
-    try:
-        col_idx = int(input("\nIndex de la colonne pour la moyenne glissante : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-    
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
-    
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne pour la moyenne glissante : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
+
     col_name = df.columns[col_idx]
 
     # --- Colonne date (on suppose qu'elle est en 1ère position) ---
@@ -374,14 +407,17 @@ def rolling_mean_value(df):
     if df_period.empty:
         raise ValueError("Aucune donnée disponible sur la période sélectionnée")
 
-    # --- Taille de la fenêtre ---
-    try:
-        window = int(input("\nTaille de la fenêtre pour la moyenne glissante (nombre de lignes) : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un entier pour la taille de la fenêtre")
+    # --- Taille de la fenêtre ---   
 
-    if window <= 0:
-        raise ValueError("La fenêtre doit être strictement positive")
+    while True:
+        try:
+            window = int(input("\nTaille de la fenêtre pour la moyenne glissante (nombre de lignes) : "))
+            if window <= 0:
+                raise ValueError
+            break
+        except ValueError:
+            print("La fenêtre doit être un entier strictement positif.")
+            
 
     # --- Calcul moyenne glissante ---
     try:
@@ -415,5 +451,3 @@ def rolling_mean_value(df):
 
     return df
 
-def nombre_ocurrences_au_dessus_seuil(df):
-    return df 
