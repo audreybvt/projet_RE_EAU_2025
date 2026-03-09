@@ -108,18 +108,25 @@ def bar_chart(df):
     print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
 
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
-    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
+       
+    while True:
 
-    df_period = df_valid.copy()
+        start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
-    if start_date is not None:
-        df_period = df_period[df_period[date_col] >= start_date]
-    if end_date is not None:
-        df_period = df_period[df_period[date_col] <= end_date]
+        df_period = df_valid.copy()
 
-    if df_period.empty:
-        raise ValueError("Aucune donnée sur la période sélectionnée")
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
+
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
+
+
     
     period_text = format_period_text(start_date, end_date)
 
@@ -222,19 +229,23 @@ def line_chart(df):
 
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
 
-    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    while True:
 
-    df_period = df.copy()
+        start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
-    if start_date is not None:
-        df_period = df_period[df_period[date_col] >= start_date]
+        df_period = df_valid.copy()
 
-    if end_date is not None:
-        df_period = df_period[df_period[date_col] <= end_date]
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
 
-    if df_period.empty:
-        raise ValueError("Aucune donnée disponible sur la période sélectionnée")
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
+
     
     period_text = format_period_text(start_date, end_date)
 
@@ -347,18 +358,23 @@ def scatter_chart(df):
     print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
 
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
-    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date_visualization("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    while True:
 
-    df_period = df_valid.copy()
+        start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
-    if start_date is not None:
-        df_period = df_period[df_period[date_col] >= start_date]
-    if end_date is not None:
-        df_period = df_period[df_period[date_col] <= end_date]
+        df_period = df_valid.copy()
 
-    if df_period.empty:
-        raise ValueError("Aucune donnée sur la période sélectionnée")
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
+
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
+
     
     period_text = format_period_text(start_date, end_date)
     
@@ -498,6 +514,9 @@ def radar_chart(df):
     if df_period.empty:
         raise ValueError("Aucune donnée sur la période sélectionnée")
     
+
+    
+    
     period_text = format_period_text(start_date, end_date)
 
     # Supprimer les lignes sans valeurs pour le radar
@@ -608,18 +627,22 @@ def histogram_chart(df):
     print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
 
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
-    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date_visualization("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    while True:
 
-    df_period = df_valid.copy()
+        start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
-    if start_date is not None:
-        df_period = df_period[df_period[date_col] >= start_date]
-    if end_date is not None:
-        df_period = df_period[df_period[date_col] <= end_date]
+        df_period = df_valid.copy()
 
-    if df_period.empty:
-        raise ValueError("Aucune donnée sur la période sélectionnée")
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
+
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
     
     period_text = format_period_text(start_date, end_date)
     
