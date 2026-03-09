@@ -5,7 +5,7 @@ import matplotlib.cm as cm
 import os
 import matplotlib.dates as mdates
 
-
+"""
 def ask_date_visualization(message):
     while True:
         user_input = input(message).strip()
@@ -15,6 +15,42 @@ def ask_date_visualization(message):
             return pd.to_datetime(user_input, dayfirst=True) # à voir si on garde dayfirst
         except Exception:
             print("Format invalide ; utilisez YYYY-MM-DD ou DD/MM/YYYY")
+"""
+
+
+def ask_date_visualization(message):
+    while True:
+        user_input = input(message).strip()
+
+        if user_input == "":
+            return None
+
+        try:
+
+            # format ISO
+            if "-" in user_input:
+                return pd.to_datetime(user_input, format="%Y-%m-%d")
+
+            # format français
+            elif "/" in user_input:
+                return pd.to_datetime(user_input, format="%d/%m/%Y")
+
+            else:
+                raise ValueError
+
+        except Exception:
+            print("Format invalide ; utilisez YYYY-MM-DD ou DD/MM/YYYY")
+
+
+def format_period_text(start_date, end_date):
+    if start_date is None and end_date is None:
+        return " (toutes les dates)"
+    elif start_date is None:
+        return f" (jusqu'au {end_date.date()})"
+    elif end_date is None:
+        return f" (depuis le {start_date.date()})"
+    else:
+        return f" ({start_date.date()} → {end_date.date()})"
 
 
 
@@ -72,8 +108,8 @@ def bar_chart(df):
     print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
 
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
-    start_date = ask_date_visualization("Date de début : ")
-    end_date   = ask_date_visualization("Date de fin   : ")
+    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
     df_period = df_valid.copy()
 
@@ -84,6 +120,8 @@ def bar_chart(df):
 
     if df_period.empty:
         raise ValueError("Aucune donnée sur la période sélectionnée")
+    
+    period_text = format_period_text(start_date, end_date)
 
     # --- Titres personnalisés des axes ---
     x_label = input(f"Titre pour l'axe X (laisser vide pour '{x_col}') : ").strip()
@@ -97,9 +135,10 @@ def bar_chart(df):
 
     # --- Titre global ---
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
+    
 
     if custom_title == "":
-        custom_title = f"Bar chart: {y_label} en fonction de {x_label}"
+        custom_title = f"Bar chart: {y_label} en fonction de {x_label}{period_text}"
         
 
     # --- Graphique ---
@@ -196,6 +235,8 @@ def line_chart(df):
 
     if df_period.empty:
         raise ValueError("Aucune donnée disponible sur la période sélectionnée")
+    
+    period_text = format_period_text(start_date, end_date)
 
     # Optionnel : trier par date pour éviter des lignes cassées
     #df_period = df_period.sort_values(by=date_col)
@@ -213,7 +254,8 @@ def line_chart(df):
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
 
     if custom_title == "":
-        custom_title = f"Line chart: {', '.join(y_cols)} en fonction de {x_label}"
+        custom_title = f"Line chart: {', '.join(y_cols)} en fonction de {x_label}{period_text}"
+
 
     
     # --- Légende personnalisée ---
@@ -318,6 +360,8 @@ def scatter_chart(df):
     if df_period.empty:
         raise ValueError("Aucune donnée sur la période sélectionnée")
     
+    period_text = format_period_text(start_date, end_date)
+    
 
     # --- Titres des axes ---
     x_label = input(f"Titre pour l'axe X (laisser vide pour '{x_col}') : ").strip()
@@ -332,7 +376,7 @@ def scatter_chart(df):
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
 
     if custom_title == "":
-        custom_title = f"Scatter chart: {', '.join(y_cols)} en fonction de {x_label}"
+        custom_title = f"Scatter chart: {', '.join(y_cols)} en fonction de {x_label}{period_text}"
 
     # --- Légende personnalisée ---
     legend_input = input("Noms pour la légende (séparés par une virgule (ex: Variable A,Variable B), laisser vide pour noms par défaut) : ").strip()
@@ -453,6 +497,8 @@ def radar_chart(df):
 
     if df_period.empty:
         raise ValueError("Aucune donnée sur la période sélectionnée")
+    
+    period_text = format_period_text(start_date, end_date)
 
     # Supprimer les lignes sans valeurs pour le radar
     df_period = df_period.dropna(subset=value_cols, how="all")
@@ -460,11 +506,13 @@ def radar_chart(df):
     if df_period.empty:
         raise ValueError("Aucune valeur disponible pour les colonnes sélectionnées sur cette période")
     
+    period_text = format_period_text(start_date, end_date)
+    
     # --- Titre global ---
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
 
     if custom_title == "":
-        custom_title = f"Radar chart: {', '.join(value_cols)}"
+        custom_title = f"Radar chart: {', '.join(value_cols)}{period_text}"
 
 
     # --- Légende personnalisée ---
@@ -573,6 +621,8 @@ def histogram_chart(df):
     if df_period.empty:
         raise ValueError("Aucune donnée sur la période sélectionnée")
     
+    period_text = format_period_text(start_date, end_date)
+    
     # --- Titres des axes ---
     x_label = input(f"Titre pour l'axe X (laisser vide pour '{col_name}') : ").strip()
     if x_label == "":
@@ -586,7 +636,7 @@ def histogram_chart(df):
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
 
     if custom_title == "":
-        custom_title = f"Histogramme de {x_label}"
+        custom_title = f"Histogramme de {x_label}{period_text}"
 
     # --- Graphique ---
     fig, ax = plt.subplots(figsize=(8,5))
