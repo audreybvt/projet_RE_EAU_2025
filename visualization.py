@@ -1,3 +1,5 @@
+import calendar
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -59,112 +61,142 @@ def format_period_text(start_date, end_date):
 
 
 def bar_chart(df):
-    print("\nColonnes disponibles :")
+    print("\nAvailable columns:")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-
-
-    # --- Choix de la colonne X ---
+    # --- Choice of X column ---
     while True:
         try:
-            x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
+            # Correction : Utilisation de int() au lieu de str() pour l'index
+            x_idx = int(input("\nIndex for X-axis column: "))
             if x_idx < 0 or x_idx >= len(df.columns):
                 raise IndexError
             break
         except ValueError:
-            print("Veuillez entrer un nombre entier.")
+            print("Please enter a valid integer.")
         except IndexError:
-            print("Index de colonne X invalide.")
+            print("Invalid column index for X.")
 
-    # --- Choix de la colonne Y ---
+    # --- Choice of Y column ---
     while True:
         try:
-            y_idx = int(input("Index de la colonne pour l'axe Y : "))
+            y_idx = int(input("Index for Y-axis column: "))
             if y_idx < 0 or y_idx >= len(df.columns):
                 raise IndexError
             if y_idx == x_idx:
                 raise ValueError
             break
         except ValueError:
-            print("La colonne Y doit être différente de la colonne X.")
+            print("Y column must be different from X column.")
         except IndexError:
-            print("Index de colonne Y invalide.")
+            print("Invalid column index for Y.")
 
-      
     x_col = df.columns[x_idx]
     y_col = df.columns[y_idx]
 
-    
-    # --- Gestion date ---
+    # --- Date handling ---
+    # On suppose que la colonne 0 est la date pour le filtrage temporel
     date_col = df.columns[0]
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
 
     df_valid = df[df[date_col].notna()]
     if df_valid.empty:
-        raise ValueError("Aucune date valide trouvée")
+        # Si aucune date n'est trouvée (ex: on travaille sur un résumé de 12 lignes),
+        # on utilise le dataframe tel quel pour éviter l'erreur.
+        df_valid = df.copy()
+        print("\nNote: No valid dates found for filtering, using raw data.")
+    else:
+        print("\nAvailable period:")
+        print(f" From {df_valid[date_col].min().date()} to {df_valid[date_col].max().date()}")
 
-    print("\nPériode disponible :")
-    print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
-
-    print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
+    print("\nDefine the display period (leave empty to show all)")
        
     while True:
-
-        start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-        end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        # Hypothèse: les fonctions ask_date_visualization et format_period_text existent ailleurs
+        start_date = ask_date_visualization("Start date (YYYY-MM-DD or DD/MM/YYYY): ")
+        end_date   = ask_date_visualization("End date (YYYY-MM-DD or DD/MM/YYYY): ")
 
         if start_date and end_date and start_date > end_date:
-            print("La date de début doit être antérieure à la date de fin.")
+            print("Start date must be before end date.")
             continue
 
         df_period = df_valid.copy()
 
-        if start_date is not None:
-            df_period = df_period[df_period[date_col] >= start_date]
-        if end_date is not None:
-            df_period = df_period[df_period[date_col] <= end_date]
+        # On ne filtre par date que si des dates valides existent
+        if not df_valid[date_col].isna().all():
+            if start_date is not None:
+                df_period = df_period[df_period[date_col] >= start_date]
+            if end_date is not None:
+                df_period = df_period[df_period[date_col] <= end_date]
 
         if df_period.empty:
-            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+            print("No data for this period. Please enter other dates.")
         else:
             break
 
-
-    
     period_text = format_period_text(start_date, end_date)
 
-    # --- Titres personnalisés des axes ---
-    x_label = input(f"Titre pour l'axe X (laisser vide pour '{x_col}') : ").strip()
-    y_label = input(f"Titre pour l'axe Y (laisser vide pour '{y_col}') : ").strip()
+    # --- Custom Axis Labels ---
+    x_label = input(f"Label for X-axis (leave empty for '{x_col}'): ").strip()
+    y_label = input(f"Label for Y-axis (leave empty for '{y_col}'): ").strip()
 
-    if x_label == "":
-        x_label = x_col
+    x_label = x_label if x_label != "" else x_col
+    y_label = y_label if y_label != "" else y_col
 
-    if y_label == "":
-        y_label = y_col
-
-    # --- Titre global ---
-    custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
+    # --- Global Title ---
+    custom_title = input("Chart title (leave empty for automatic title): ").strip()
     
-
     if custom_title == "":
-        custom_title = f"Bar chart: {y_label} en fonction de {x_label}{period_text}"
-        
+        custom_title = f"Bar chart: {y_label} vs {x_label}{period_text}"
+
+    # Sorting month and season 
+    
+    month_order = [calendar.month_name[i] for i in range(1, 13)] # from january to december
+    season_order = ['Spring', 'Summer', 'Autumn', 'Winter'] # to adjust if different season name (wet season, dry season eventually)
+    df_plot = df_period.copy()
+    sample_val = str(df_plot[x_col].iloc[0]) if not df_plot.empty else ""
+    
+    sort_key = None
+    if any(m in df_plot[x_col].values for m in month_order):
+        sort_key = month_order
+    elif any(s in df_plot[x_col].values for s in season_order):
+        sort_key = season_order
+
+    if sort_key:
+        df_plot[x_col] = pd.Categorical(df_plot[x_col], categories=sort_key, ordered=True)
+        df_plot = df_plot.sort_values(x_col)
 
     # --- Graphique ---
     fig, ax = plt.subplots(figsize=(8,5))
+    
+    # On utilise maintenant df_plot qui est trié
+    x_data = df_plot[x_col].astype(str)
+    y_data = df_plot[y_col]
+
+    colors = cm.viridis(np.linspace(0, 1, len(df_plot)))
+    ax.bar(x_data, y_data, color=colors)
+    # --- Plotting ---
+    fig, ax = plt.subplots(figsize=(8,5))
+    
+    # X est traité comme des chaînes de caractères 
+    x_data = df_period[x_col].astype(str)
+    y_data = df_period[y_col]
+
     colors = cm.viridis(np.linspace(0, 1, len(df_period)))
 
-    ax.bar(df_period[x_col], df_period[y_col], color=colors)
+    ax.bar(x_data, y_data, color=colors)
 
     ax.set_title(custom_title)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.grid(axis='y', linestyle='--', alpha=0.6)
+    
+    # Rotation des labels X si ce sont des noms longs (mois, saisons)
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
 
     return fig
-
 
 # ---------------- Line Chart ---------------- 
 

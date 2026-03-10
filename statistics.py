@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-
+import calendar
 
 '''
 def ask_date(message):
@@ -481,50 +481,56 @@ def rolling_mean_value(df):
     return df
 
 
-
-
-
-
-#groupement par mois 
+# Interannual monthly average 
 
 def Qmonth_interannual(df):
     """
-    Calcule la moyenne interannuelle par mois (12 valeurs) 
-    et les concatène au DataFrame original.
+    Calculates the interannual monthly average (12 values) 
+    and concatenates them to the original DataFrame with different naming.
     """
-    print("\n--- Moyenne Interannuelle par Mois (Régime) ---")
+    print("Interannual Monthly Average: available columns")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-    # Sélection des colonnes
+    # Column Selection
     while True:
         try:
-            idx_t = int(input("\nIndex de la colonne Date: "))
-            idx_q = int(input("Index de la colonne Débit (Q): "))
+            idx_t = int(input("Index of the Date column: "))
+            idx_q = int(input("Index of the Discharge (Q) column: "))
             col_t, col_q = df.columns[idx_t], df.columns[idx_q]
             break
         except (ValueError, IndexError):
-            print("Entrée invalide.")
+            print("Invalid input.")
 
-    # Conversion en datetime
+    # Convert to datetime
     df[col_t] = pd.to_datetime(df[col_t])
 
     try:
-        # 1. Calcul des moyennes groupées par mois (1 à 12)
-        # On crée un petit df de 12 lignes
-        stats_mensuelles = df.groupby(df[col_t].dt.month)[col_q].mean().reset_index()
-        
-        # 2. On renomme pour la clarté
-        # Month_Num (1-12) et la valeur moyenne
-        stats_mensuelles.columns = ['Month_Num_Inter', 'Q_Interannuel_Mensuel']
-        
-        # 3. Concatenation (le petit tableau sera placé en haut à droite du df)
-        df = pd.concat([df, stats_mensuelles], axis=1)
+        # Calculate monthly averages (grouped by month 1-12)
+        monthly_stats = df.groupby(df[col_t].dt.month)[col_q].mean().reset_index()
+        monthly_stats[col_t] = monthly_stats[col_t].apply(lambda x: calendar.month_name[x]) #convert month number to name
 
-        print("\n Colonne 'Q_Interannuel_Mensuel' concaténée (12 premières lignes).")
-        print(stats_mensuelles)
+        # Column Naming
+        # Format: NewName_OldName_index (ex:Interannual_month_col-name_1, Month_col-name_1)
+
+        base_val_name = f"Interannual_month_{col_q}"
+        base_idx_name = f"Month_{col_q}"
+        
+        # Check for existing columns to increment the counter (it counts how many columns already start with our new base name)
+        occurrence = sum(1 for c in df.columns if str(c).startswith(base_val_name)) + 1
+        
+        final_col_q = f"{base_val_name}_{occurrence}"
+        final_col_t = f"{base_idx_name}_{occurrence}"
+        
+        monthly_stats.columns = [final_col_t, final_col_q]
+        
+        # Concatenation 
+        df = pd.concat([df, monthly_stats], axis=1)
+
+        print(f"\n Column '{final_col_q}' concatenated successfully.")
+        print(monthly_stats)
 
     except Exception as e:
-        print(f"Erreur de calcul : {e}")
+        print(f"Calculation Error: {e}")
 
     return df
