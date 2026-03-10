@@ -624,6 +624,11 @@ def radar_chart(df):
     angles += angles[:1]
 
     fig, ax = plt.subplots(figsize=(7,7), subplot_kw=dict(polar=True))
+
+    # Sens horaire
+    ax.set_theta_direction(-1)          # Inverse le sens de rotation
+    ax.set_theta_offset(np.pi / 2)      # Commence en haut (12h)
+
     colors = cm.viridis(np.linspace(0, 1, len(value_cols)))
 
     # --- Ajustement de l'échelle radiale ---
@@ -641,11 +646,13 @@ def radar_chart(df):
 
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(categories)
-    
+
     ax.set_title(custom_title)
     ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
 
     return fig
+
+
 
 # ---------------- Histogram Chart ----------------
 
