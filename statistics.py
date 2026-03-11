@@ -84,19 +84,25 @@ def mean_value(df):
     # --- Choix de la période ---
     print("\nDéfinition de la période sur laquelle calculer la moyenne temporelle (laisser vide pour utiliser toute la période)")
 
-    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    while True:
+        start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date("Date de fin   (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
-    df_period = df.copy()
+        df_period = df.copy()
 
-    if start_date is not None:
-        df_period = df_period[df_period[date_col] >= start_date]
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
 
-    if end_date is not None:
-        df_period = df_period[df_period[date_col] <= end_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
 
-    if df_period.empty:
-        raise ValueError("Aucune donnée disponible sur la période sélectionnée")
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
+    
+
+
 
     # Calcul de la moyenne
     try:
@@ -208,19 +214,23 @@ def maximum_value(df):
     print(f" Du {min_date.date()} au {max_date.date()}")
 
     print("\nDéfinition de la période sur laquelle calculer le maximum (laisser vide pour toute la période)")
-    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
+    
+    while True:
+        start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
-    df_period = df.copy()
+        df_period = df.copy()
 
-    if start_date is not None:
-        df_period = df_period[df_period[date_col] >= start_date]
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
 
-    if end_date is not None:
-        df_period = df_period[df_period[date_col] <= end_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
 
-    if df_period.empty:
-        raise ValueError("Aucune donnée disponible sur la période sélectionnée")
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
 
     max_val = df_period[col_name].astype(float).max()
 
@@ -274,19 +284,24 @@ def minimum_value(df):
     print(f" Du {min_date.date()} au {max_date.date()}")
 
     print("\nDéfinition de la période sur laquelle calculer le minimum (laisser vide pour toute la période)")
-    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
+       
+    while True:
+        start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
-    df_period = df.copy()
+        df_period = df.copy()
 
-    if start_date is not None:
-        df_period = df_period[df_period[date_col] >= start_date]
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
 
-    if end_date is not None:
-        df_period = df_period[df_period[date_col] <= end_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
 
-    if df_period.empty:
-        raise ValueError("Aucune donnée disponible sur la période sélectionnée")
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
+
 
     min_val = df_period[col_name].astype(float).min()
 
@@ -352,19 +367,25 @@ def percentile(df):
     print(f" Du {min_date.date()} au {max_date.date()}")
 
     print("\nDéfinition de la période sur laquelle calculer le percentile (laisser vide pour toute la période)")
-    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date("Date de fin (YYYY-MM-DD ou DD/MM/YYYY)  : ")
+    
+    while True:
+        start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
-    df_period = df.copy()
+        df_period = df.copy()
 
-    if start_date is not None:
-        df_period = df_period[df_period[date_col] >= start_date]
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
 
-    if end_date is not None:
-        df_period = df_period[df_period[date_col] <= end_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
 
-    if df_period.empty:
-        raise ValueError("Aucune donnée sur la période sélectionnée")
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
+
+
 
     perc_val = df_period[col_name].astype(float).quantile(q)
 
@@ -419,22 +440,24 @@ def rolling_mean_value(df):
 
     # --- Choix de la période ---
     print("\nDéfinition de la période sur laquelle calculer la moyenne glissante (laisser vide pour utiliser toute la période)")
+    
+    while True:
+        start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
 
-    start_date = ask_date("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date("Date de fin (YYYY-MM-DD ou DD/MM/YYYY)  : ")
+        df_period = df.copy()
 
-    df_period = df.copy()
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
 
-    if start_date:
-        start_date = pd.to_datetime(start_date, dayfirst=True)
-        df_period = df_period[df_period[date_col] >= start_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
 
-    if end_date:
-        end_date = pd.to_datetime(end_date, dayfirst=True)
-        df_period = df_period[df_period[date_col] <= end_date]
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
 
-    if df_period.empty:
-        raise ValueError("Aucune donnée disponible sur la période sélectionnée")
 
     # --- Taille de la fenêtre ---   
 
