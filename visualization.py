@@ -55,6 +55,18 @@ def format_period_text(start_date, end_date):
         return f" ({start_date.date()} → {end_date.date()})"
 
 
+def build_axis_label(label, unit):
+    """
+    Construit le label d'axe avec unité si elle existe.
+    Exemple :
+    label="Temperature", unit="°C" -> "Temperature (°C)"
+    """
+    unit = unit.strip()
+    if unit == "":
+        return label
+    return f"{label} ({unit})"
+
+
 
 
 # ---------------- Bar Chart ---------------- 
@@ -143,6 +155,17 @@ def bar_chart(df):
 
     x_label = x_label if x_label != "" else x_col
     y_label = y_label if y_label != "" else y_col
+
+
+    # --- Units ---
+    x_unit = input("Unit for X-axis (leave empty for none): ").strip()
+    y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+
+    # Build final labels
+    x_label = build_axis_label(x_label, x_unit)
+    y_label = build_axis_label(y_label, y_unit)
+
+
 
     # --- Global Title ---
     custom_title = input("Chart title (leave empty for automatic title): ").strip()
@@ -293,13 +316,19 @@ def line_chart(df):
     #df_period = df_period.sort_values(by=date_col)
 
     # --- Titres personnalisés des axes ---
-    x_label = input(f"Titre pour l'axe X (laisser vide pour '{x_col}') : ").strip()
-    if x_label == "":
-        x_label = x_col
+    x_label = input(f"Label for X-axis (leave empty for '{x_col}'): ").strip()
+    y_label = input(f"Label for Y-axis (leave empty for 'Values'): ").strip()
 
-    y_label = input("Titre pour l'axe Y (laisser vide pour 'Values') : ").strip()
-    if y_label == "":
-        y_label = "Values"
+    x_label = x_label if x_label != "" else x_col
+    y_label = y_label if y_label != "" else "Values"
+
+    # --- Units ---
+    x_unit = input("Unit for X-axis (leave empty for none): ").strip()
+    y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+
+    # Build final labels
+    x_label = build_axis_label(x_label, x_unit)
+    y_label = build_axis_label(y_label, y_unit)
 
     # --- Titre global ---
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
@@ -424,13 +453,21 @@ def scatter_chart(df):
     
 
     # --- Titres des axes ---
-    x_label = input(f"Titre pour l'axe X (laisser vide pour '{x_col}') : ").strip()
-    if x_label == "":
-        x_label = x_col
 
-    y_label = input("Titre pour l'axe Y (laisser vide pour 'Values') : ").strip()
-    if y_label == "":
-        y_label = "Values"
+    x_label = input(f"Label for X-axis (leave empty for '{x_col}'): ").strip()
+    y_label = input(f"Label for Y-axis (leave empty for 'Values'): ").strip()
+
+    x_label = x_label if x_label != "" else x_col
+    y_label = y_label if y_label != "" else "Values"
+
+    # --- Units ---
+    x_unit = input("Unit for X-axis (leave empty for none): ").strip()
+    y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+
+    # Build final labels
+    x_label = build_axis_label(x_label, x_unit)
+    y_label = build_axis_label(y_label, y_unit)
+
 
     # --- Titre global ---
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
@@ -537,32 +574,6 @@ def radar_chart(df):
 
     print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
 
-    '''
-    start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
-    end_date   = ask_date_visualization("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
-
-
-    df_period = df_valid.copy()
-
-
-    ###
-# Filtrer df_period selon la colonne de dates choisie pour le radar
-    df_period = df_period[df_period[category_col] >= start_date] if start_date is not None else df_period
-    df_period = df_period[df_period[category_col] <= end_date]   if end_date   is not None else df_period
-    ###
-
-    #if start_date is not None:
-        #df_period = df_period[df_period[date_col] >= start_date]
-    #if end_date is not None:
-        #df_period = df_period[df_period[date_col] <= end_date]
-
-
-
-    if df_period.empty:
-        raise ValueError("Aucune donnée sur la période sélectionnée")
-    
-    '''
-
 
     while True:
 
@@ -597,8 +608,18 @@ def radar_chart(df):
     # --- Titre global ---
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
 
+    # --- Units for radar values ---
+    units_input = input("Unités des variables radar (ex: kW, %, ms) - laisser vide si aucune : ").strip()
+
+    if units_input != "":
+        units_text = f" ({units_input})"
+    else:
+        units_text = ""
+
     if custom_title == "":
-        custom_title = f"Radar chart: {', '.join(value_cols)}{period_text}"
+        custom_title = f"Radar chart: {', '.join(value_cols)}{units_text}{period_text}"
+    else:
+        custom_title = f"{custom_title}{units_text}"
 
 
     # --- Légende personnalisée ---
@@ -725,13 +746,20 @@ def histogram_chart(df):
     period_text = format_period_text(start_date, end_date)
     
     # --- Titres des axes ---
-    x_label = input(f"Titre pour l'axe X (laisser vide pour '{col_name}') : ").strip()
-    if x_label == "":
-        x_label = col_name
+    x_label = input(f"Label for X-axis (leave empty for '{col_name}'): ").strip()
+    y_label = input(f"Label for Y-axis (leave empty for 'Count'): ").strip()
 
-    y_label = input("Titre pour l'axe Y (laisser vide pour 'Count') : ").strip()
-    if y_label == "":
-        y_label = "Count"
+    x_label = x_label if x_label != "" else col_name
+    y_label = y_label if y_label != "" else "Count"
+
+    # --- Units ---
+    x_unit = input("Unit for X-axis (leave empty for none): ").strip()
+    y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+
+    # Build final labels
+    x_label = build_axis_label(x_label, x_unit)
+    y_label = build_axis_label(y_label, y_unit)
+
 
     # --- Titre global ---
     custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
