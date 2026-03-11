@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
+import calendar
 
+'''
 def ask_date(message):
     #fonction pour ne pas avoir à tout relancer en cas d'erreur de saisie
     while True:
@@ -13,20 +15,53 @@ def ask_date(message):
             return pd.to_datetime(user_input, dayfirst=True)
         except Exception:
             print("Format invalide ; utilisez YYYY-MM-DD ou DD/MM/YYYY")
+'''
+
+
+def ask_date(message):
+    while True:
+        user_input = input(message).strip()
+
+        if user_input == "":
+            return None
+
+        try:
+
+            # format ISO
+            if "-" in user_input:
+                return pd.to_datetime(user_input, format="%Y-%m-%d")
+
+            # format français
+            elif "/" in user_input:
+                return pd.to_datetime(user_input, format="%d/%m/%Y")
+
+            else:
+                raise ValueError
+
+        except Exception:
+            print("Format invalide ; utilisez YYYY-MM-DD ou DD/MM/YYYY")
+
+        
 
 def mean_value(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-    # --- Choix de la colonne ---
-    try:
-        col_idx = int(input("\nIndex de la colonne pour calculer la moyenne : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-    
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
+    # --- Choix de la colonne ---  
+
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne pour calculer la moyenne : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
+
+
     
     col_name = df.columns[col_idx]
 
@@ -97,20 +132,25 @@ def moyenne_multimodele(df):
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-    # --- Choix des colonnes ---
-    colonnes_input = input(
-        "Index des colonnes entre lesquelles effectuer une moyenne, séparés par une virgule (ex: 1,2,3) : "
-    )
+    # --- Choix des colonnes ---     
+    while True:
+        try:
+            colonnes_input = input("Index des colonnes entre lesquelles effectuer une moyenne (ex: 1,2,3) : ")
 
-    try:
-        colonnes = sorted(set(int(i.strip()) for i in colonnes_input.split(",")))
-    except ValueError:
-        raise ValueError("Les index doivent être des nombres entiers")
+            colonnes = sorted(set(int(i.strip()) for i in colonnes_input.split(",")))
 
-    for i in colonnes:
-        if i < 0 or i >= len(df.columns):
-            raise IndexError(f"Index invalide : {i}")
+            for i in colonnes:
+                if i < 0 or i >= len(df.columns):
+                    raise IndexError
 
+            break
+
+        except ValueError:
+            print("Les index doivent être des nombres entiers.")
+        except IndexError:
+            print("Un index de colonne est invalide.")
+
+    
     index_colonnes = [df.columns[i] for i in colonnes]
 
     print(f"\n Colonnes sélectionnées : {index_colonnes}")
@@ -140,14 +180,18 @@ def maximum_value(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
+ 
 
-    try:
-        col_idx = int(input("\nIndex de la colonne pour calculer le maximum : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne pour calculer le maximum : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
 
     col_name = df.columns[col_idx]
     date_col = df.columns[0]
@@ -202,14 +246,18 @@ def minimum_value(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
+  
 
-    try:
-        col_idx = int(input("\nIndex de la colonne pour calculer le minimum : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne pour calculer le minimum : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
 
     col_name = df.columns[col_idx]
     date_col = df.columns[0]
@@ -260,28 +308,37 @@ def minimum_value(df):
    
 
 
+###############
+
 def percentile(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
+   
 
-    try:
-        col_idx = int(input("\nIndex de la colonne : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index invalide")
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
 
     col_name = df.columns[col_idx]
     date_col = df.columns[0]
+   
 
-    try:
-        q = float(input("Percentile souhaité (ex: 0.9 pour 90%) : "))
-        if not 0 < q < 1:
-            raise ValueError
-    except ValueError:
-        raise ValueError("Le percentile doit être un nombre entre 0 et 1")
+    while True:
+        try:
+            q = float(input("Percentile souhaité (ex: 0.9 pour 90%) : "))
+            if not 0 < q < 1:
+                raise ValueError
+            break
+        except ValueError:
+            print("Le percentile doit être un nombre entre 0 et 1.")
 
     df_valid = df[df[col_name].notna()]
 
@@ -329,6 +386,8 @@ def percentile(df):
    
 
 
+##################
+
 def rolling_mean_value(df):
     
     print("\nColonnes disponibles :")
@@ -336,14 +395,17 @@ def rolling_mean_value(df):
         print(f" [{i}] {col}")
 
     # --- Choix de la colonne ---
-    try:
-        col_idx = int(input("\nIndex de la colonne pour la moyenne glissante : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-    
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
-    
+    while True:
+        try:
+            col_idx = int(input("\nIndex de la colonne pour la moyenne glissante : "))
+            if col_idx < 0 or col_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
+
     col_name = df.columns[col_idx]
 
     # --- Colonne date (on suppose qu'elle est en 1ère position) ---
@@ -374,14 +436,17 @@ def rolling_mean_value(df):
     if df_period.empty:
         raise ValueError("Aucune donnée disponible sur la période sélectionnée")
 
-    # --- Taille de la fenêtre ---
-    try:
-        window = int(input("\nTaille de la fenêtre pour la moyenne glissante (nombre de lignes) : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un entier pour la taille de la fenêtre")
+    # --- Taille de la fenêtre ---   
 
-    if window <= 0:
-        raise ValueError("La fenêtre doit être strictement positive")
+    while True:
+        try:
+            window = int(input("\nTaille de la fenêtre pour la moyenne glissante (nombre de lignes) : "))
+            if window <= 0:
+                raise ValueError
+            break
+        except ValueError:
+            print("La fenêtre doit être un entier strictement positif.")
+            
 
     # --- Calcul moyenne glissante ---
     try:
@@ -415,5 +480,57 @@ def rolling_mean_value(df):
 
     return df
 
-def nombre_ocurrences_au_dessus_seuil(df):
-    return df 
+
+# Interannual monthly average 
+
+def Qmonth_interannual(df):
+    """
+    Calculates the interannual monthly average (12 values) 
+    and concatenates them to the original DataFrame with different naming.
+    """
+    print("Interannual Monthly Average: available columns")
+    for i, col in enumerate(df.columns):
+        print(f" [{i}] {col}")
+
+    # Column Selection
+    while True:
+        try:
+            idx_t = int(input("Index of the Date column: "))
+            idx_q = int(input("Index of the Discharge (Q) column: "))
+            col_t, col_q = df.columns[idx_t], df.columns[idx_q]
+            break
+        except (ValueError, IndexError):
+            print("Invalid input.")
+
+    # Convert to datetime
+    df[col_t] = pd.to_datetime(df[col_t])
+
+    try:
+        # Calculate monthly averages (grouped by month 1-12)
+        monthly_stats = df.groupby(df[col_t].dt.month)[col_q].mean().reset_index()
+        monthly_stats[col_t] = monthly_stats[col_t].apply(lambda x: calendar.month_name[x]) #convert month number to name
+
+        # Column Naming
+        # Format: NewName_OldName_index (ex:Interannual_month_col-name_1, Month_col-name_1)
+
+        base_val_name = f"Interannual_month_{col_q}"
+        base_idx_name = f"Month_{col_q}"
+        
+        # Check for existing columns to increment the counter (it counts how many columns already start with our new base name)
+        occurrence = sum(1 for c in df.columns if str(c).startswith(base_val_name)) + 1
+        
+        final_col_q = f"{base_val_name}_{occurrence}"
+        final_col_t = f"{base_idx_name}_{occurrence}"
+        
+        monthly_stats.columns = [final_col_t, final_col_q]
+        
+        # Concatenation 
+        df = pd.concat([df, monthly_stats], axis=1)
+
+        print(f"\n Column '{final_col_q}' concatenated successfully.")
+        print(monthly_stats)
+
+    except Exception as e:
+        print(f"Calculation Error: {e}")
+
+    return df
