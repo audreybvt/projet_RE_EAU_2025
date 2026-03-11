@@ -336,7 +336,7 @@ def bar_chart(df):
     return fig
 
 # ---------------- Line Chart ---------------- 
-
+'''
 def line_chart(ds: xr.Dataset):
     """
     Trace une série temporelle depuis un xarray.Dataset
@@ -438,6 +438,140 @@ def line_chart(ds: xr.Dataset):
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
+    ax.legend()
+
+    return fig
+'''
+
+def line_chart(ds: xr.Dataset):
+
+    if not isinstance(ds, xr.Dataset):
+        raise TypeError("Attendu : xarray.Dataset")
+
+    # ----------------------
+    # Choix variables
+    # ----------------------
+
+    x_name = ask_variable(ds, prompt="Variable pour X : ")
+
+    y_names = ask_variable(
+        ds,
+        multiple=True,
+        prompt="Variables pour Y (séparées par ,) : "
+    )
+
+    # ----------------------
+    # période
+    # ----------------------
+
+    start_date, end_date = ask_time_period(ds)
+    ds = subset_time(ds, start_date, end_date)
+
+    # ----------------------
+    # X
+    # ----------------------
+
+    x_arr = ds[x_name] if x_name in ds else ds.coords[x_name]
+
+    if x_arr.ndim != 1:
+        raise ValueError("X doit être 1D")
+
+    x_dim = x_arr.dims[0]
+    x_vals = x_arr.values
+
+    # ----------------------
+    # figure
+    # ----------------------
+
+    fig, ax = plt.subplots(figsize=(10,6))
+
+    # ----------------------
+    # boucle Y
+    # ----------------------
+
+    for y_name in y_names:
+
+        da = ds[y_name]
+
+        if x_dim not in da.dims:
+            print(f"{y_name} ignoré (pas de dimension {x_dim})")
+            continue
+
+        # dimensions restantes
+        dims = [d for d in da.dims if d != x_dim]
+
+        selections = {}
+
+        for dim in dims:
+
+            coords = da.coords[dim].values
+
+            if len(coords) == 1:
+                selections[dim] = coords
+                continue
+
+            print(f"\nDimension '{dim}' :")
+
+            for i,v in enumerate(coords):
+                print(f"[{i}] {v}")
+
+            choice = input(
+                f"indices pour {dim} (ex 0,1 ou all) : "
+            ).strip()
+
+            if choice == "all":
+                selections[dim] = coords
+            else:
+                idx = [int(i) for i in choice.split(",")]
+                selections[dim] = coords[idx]
+
+        # ----------------------
+        # combinaisons
+        # ----------------------
+
+        import itertools
+
+        combos = list(
+            itertools.product(*selections.values())
+        )
+
+        dims_names = list(selections.keys())
+
+        colors = cm.viridis(
+            np.linspace(0,1,len(combos))
+        )
+
+        for i,combo in enumerate(combos):
+
+            sel = dict(zip(dims_names,combo))
+
+            da_sel = da.sel(**sel)
+
+            y_vals = da_sel.values
+
+            label = y_name
+
+            if sel:
+                label += " | " + ", ".join(
+                    f"{k}={v}" for k,v in sel.items()
+                )
+
+            ax.plot(
+                x_vals,
+                y_vals,
+                label=label,
+                linewidth=1,
+                color=colors[i]
+            )
+
+    # ----------------------
+    # style
+    # ----------------------
+
+    ax.set_xlabel(x_name)
+    ax.set_ylabel("Value")
+    ax.set_title("Line chart")
+    ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend()
 
     return fig

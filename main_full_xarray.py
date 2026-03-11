@@ -66,7 +66,7 @@ menu_visu = {
 
 dict_stats={"mean":1,"max":2,"min":3, "percentile":4, "nombre d'occurences au dessus d'un seuil":5}
 menu_stats = {
-    1: stat_xr.mean_value,
+    1: stat_xr.mean_value_time,
     #2: stat_xr.maximum_value,     #Fonction à écrire après
     #3: stat_xr.minimum_value,
     #4: stat_xr.percentile,
