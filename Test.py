@@ -15,30 +15,44 @@ ds = xr.open_dataset(nc_file, decode_cf=False)
 ds2 = xr.open_dataset(nc_file_2, decode_cf=False)
 
 ds            # résumé complet
-print(ds.data_vars)  # variables disponibles
+ds.data_vars  # variables disponibles
 ds.dims       # dimensions
 ds.coords     # coordonnées
-print(ds.attrs)      # attributs globaux
+ds.attrs      # attributs globaux
+
+print(ds["niveau"])
+print(ds["niveau"].values)
+data = ds["niveau"].values.ravel()
+data = data[np.isfinite(data)]
+print(data)
+
+'''
+print(ds["time"])
+
+
 
 da = ds["niveau"]
 da.dims
 da.shape
 da.attrs
 
-for ds in [ds, ds2]:
-    gcm = ds.attrs.get("driving_model_id", "unknown")
-    rcm = ds.attrs.get("model_id", "unknown")
-    bc = ds.attrs.get("bc_method_id", "unknown")
-    hy_model = ds.attrs.get("hy_model_id", "unknown")
-    scenario = ds.attrs.get("experiment_id", "unknown")
+for dataset in [ds, ds2]:
+    gcm = dataset.attrs.get("driving_model_id", "unknown")
+    rcm = dataset.attrs.get("model_id", "unknown")
+    bc = dataset.attrs.get("bc_method_id", "unknown")
+    hy_model = dataset.attrs.get("hy_model_id", "unknown")
+    scenario = dataset.attrs.get("experiment_id", "unknown")
 
-    ds = ds.expand_dims({
+    # Créer une seule dimension "model_chain"
+    model_chain = f"{gcm}-{rcm}-{bc}-{hy_model}"
+
+    # Étendre le dataset avec les deux nouvelles dimensions
+    dataset = dataset.expand_dims({
         "scenario": [scenario],
-        "gcm": [gcm],
-        "rcm": [rcm],
-        "hy_model": [hy_model],
+        "model_chain": [model_chain]
     })
 
-combined = xr.combine_by_coords([ds,ds2], combine_attrs="drop_conflicts")
+print(ds)
+combined = xr.combine_by_coords([ds,ds2], combine_attrs="drop")
 
-
+'''

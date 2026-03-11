@@ -6,10 +6,11 @@
 import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
-from pathlib import Path
 import statistics_xr as stat_xr
 import visualization_xr as visu_xr
 import data_formatting as dt_form
+import indicators as indic
+from pathlib import Path
 from os import makedirs
 
 #Determine file format
@@ -54,8 +55,8 @@ elif supported_file_format[file_format] == "NetCDF": # NetCDF case
 
 
 #Création des dictionnaires
-dict_visualization={"bar chart":1,"scatter plot":2,"line chart":3, "radar chart":4, "histogram chart":5}
-menu_visu_xr = {
+dict_visu={"bar chart":1,"scatter plot":2,"line chart":3, "radar chart":4, "histogram chart":5}
+menu_visu = {
     1: visu_xr.bar_chart,
     2: visu_xr.scatter_chart,
     3: visu_xr.line_chart,
@@ -64,7 +65,7 @@ menu_visu_xr = {
 }
 
 dict_stats={"mean":1,"max":2,"min":3, "percentile":4, "nombre d'occurences au dessus d'un seuil":5}
-menu_stats_xr = {
+menu_stats = {
     1: stat_xr.mean_value,
     #2: stat_xr.maximum_value,     #Fonction à écrire après
     #3: stat_xr.minimum_value,
@@ -72,31 +73,124 @@ menu_stats_xr = {
     #5: stat_xr.nombre_ocurrences_au_dessus_seuil
 }
 
-while True:
-    print("\nMenu statistiques disponibles :")
-    for name, num in dict_stats.items():
+# Indicator selection dictionaries
+dict_indicateurs = {
+    "IPS": 1,
+    "Qmean": 2,
+    "Q90/95": 3,
+    "Q10/05": 4,
+    "VCN10": 5,
+    "VCX3": 6,
+    "over_threshold":7
+}
+
+menu_indicateurs = {
+    1: indic.IPS,
+    2: indic.Qmean,
+    3: indic.Q90_95,
+    4: indic.Q10_05,
+    5: indic.VCN10,
+    6: indic.VCX3,
+    7: indic.over_threshold
+}
+
+while True: 
+# Demande des indicateurs
+    while True:
+        print("\nIndicateurs disponibles :")
+        for name, num in dict_indicateurs.items():
+            print(f"[{num}] {name}")
+        
+        # indicator_choice = int(input("Entrez le numéro de l'indicateur à calculer (0 pour terminer) : "))
+        while True:
+            try:
+                indicator_choice = int(input("Entrez le numéro de l'indicateur à calculer (0 pour terminer) : "))
+        
+                if indicator_choice == 0:
+                    break
+            
+                if indicator_choice not in menu_indicateurs:
+                    print("Choix invalide, réessayez.")
+                    continue
+            
+                break
+        
+            except ValueError:
+                print("Veuillez entrer un nombre entier valide.")
+        if indicator_choice == 0:
+            break  # sortir de la boucle
+
+        #if indicator_choice not in menu_indicateurs:
+            #print("Choix invalide, réessayez.")
+            #continue
+
+        # Appel de la fonction choisie
+        ds = menu_indicateurs[indicator_choice](ds)
+        
+
+    # Demande des statistiques
+    while True:
+        print("\nCalculs statistiques disponibles :")
+        for name, num in dict_stats.items():
+            print(f"[{num}] {name}")
+        
+        #stat_choice = int(input("Entrez le numéro de la stat à appliquer (0 pour terminer) : "))
+
+        while True:
+            try:
+                stat_choice = int(input("Entrez le numéro de la stat à appliquer (0 pour terminer) : "))
+        
+                if stat_choice == 0:
+                    break
+            
+                if stat_choice not in menu_stats:
+                    print("Choix invalide, réessayez.")
+                    continue
+            
+                break
+        
+            except ValueError:
+                print("Veuillez entrer un nombre entier valide.")
+        if stat_choice == 0:
+            break  # sortir de la boucle
+
+        #if stat_choice not in menu_stats:
+            #print("Choix invalide, réessayez.")
+            #continue
+
+        # Appel de la fonction choisie
+        ds = menu_stats[stat_choice](ds)
+
+    # Demande de la visualisation
+    print("\nVisualisations disponibles :")
+    for name, num in dict_visu.items():
         print(f"[{num}] {name}")
-    
-    stat_choice = int(input("Entrez le numéro de la stat à appliquer (0 pour terminer) : "))
-    if stat_choice == 0:
-        break  # sortir de la boucle
+    #visualization = int(input("Enter the index of the visualization you want: "))
+    while True:
+        try:
+            visualization = int(input("Enter the index of the visualization you want: "))
+        
+            if visualization not in menu_visu:
+                print("Choix invalide.")
+                continue
+            
+            break
+        
+        except ValueError:
+            print("Veuillez entrer un nombre entier valide.")
 
-    if stat_choice not in menu_stats_xr:
-        print("Choix invalide, réessayez.")
-        continue
+    makedirs("output", exist_ok=True)
 
-    # Appel de la fonction choisie
-    ds = menu_stats_xr[stat_choice](ds)
+    fig = menu_visu[visualization](ds)
+    plt.savefig(f"output/{menu_visu[visualization].__name__}.png", bbox_inches="tight")
+    print("Affichage de la figure, fermez la fenêtre pour continuer le script.")
+    plt.show()
+    plt.close(fig)
 
-print(dict_visualization)
-visualization = int(input("Enter the number of the visualization you want: "))
+    print(f"{menu_visu[visualization].__name__}.png saved in output/")
 
-makedirs("output", exist_ok=True)
-
-fig = menu_visu_xr[visualization](ds)
-plt.show()
-plt.savefig(f"output/{menu_visu_xr[visualization].__name__}.png", bbox_inches="tight")
-plt.close(fig)
-
-print(f"{menu_visu_xr[visualization].__name__}.png saved in output/")
-
+    #choix de continuer
+    continuer = input("\nVoulez-vous effectuer une autre analyse/visualisation sur ce fichier ? (o/n) : ").lower()
+    if continuer != 'o':
+        print("Fin du programme. Au revoir !")
+        break

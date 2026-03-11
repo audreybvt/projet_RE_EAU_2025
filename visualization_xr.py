@@ -1,369 +1,780 @@
 import xarray as xr
+import calendar
+import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
+import matplotlib.dates as mdates
 
-# ---------------- Create test DataFrame ----------------
-'''
-np.random.seed(42)
 
-columns = ["col1", "col2", "col3", "col4"]
+### UTILITIES ###
+def subset_time(ds, start, end):
 
-# Create col1 explicitly
-col1 = np.arange(1, 21)  # 1, 2, ..., 20
+    if start is not None:
+        ds = ds.sel(time=slice(start, None))
 
-# Create DataFrame for the remaining columns (col2, col3, col4)
-df_test = pd.DataFrame(
-    np.random.rand(20, 3) * 20 + 10,  # values between 10 and 30
-    columns=columns[1:]
-)
+    if end is not None:
+        ds = ds.sel(time=slice(None, end))
 
-# Insert col1 as the first column
-df_test.insert(0, "col1", col1)
+    return ds
 
-print("Test DataFrame:")
-print(df_test.head())
-'''
+def ask_variable(ds: xr.Dataset, multiple: bool = False, prompt: str = None) -> list | str:
+    """
+    Permet de choisir une ou plusieurs variables/coords dans un Dataset xarray.
+    
+    Parameters:
+        ds       : xarray.Dataset
+        multiple : True pour choisir plusieurs variables
+        prompt   : message d'invite personnalisé
+    
+    Returns:
+        str si single choice, list[str] si multiple
+    """
+    # Liste de toutes les variables et coordonnées
+    choices = list(ds.data_vars) + list(ds.coords)
+    
+    # Message par défaut
+    message = prompt or ("Choisir la variable (ou les variables séparées par une virgule) :" if multiple 
+                        else "Choisir la variable :")
+    
+    # Affichage des options
+    print("\nVariables et coordonnées disponibles :")
+    for i, var in enumerate(choices):
+        print(f" [{i}] {var}")
+    
+    while True:
+        user_input = input(f"{message} ").strip()
+        try:
+            if multiple:
+                idx_list = sorted(set(int(i.strip()) for i in user_input.split(",")))
+                selected = [choices[i] for i in idx_list]
+            else:
+                idx = int(user_input)
+                selected = choices[idx]
+            
+            return selected
+        except (ValueError, IndexError):
+            print("Entrée invalide. Veuillez entrer les indices correspondants aux variables disponibles.")
 
-# ---------------- Bar Chart ---------------- #
+def ask_time_period(ds):
+    """
+    Ask the user for a start and end date within the dataset time range.
+    Returns (start_date, end_date) as pandas Timestamp or None.
+    """
+
+    time_values = pd.to_datetime(ds["time"].values)
+
+    min_date = time_values.min()
+    max_date = time_values.max()
+
+    print("\nPériode disponible :")
+    print(f" Du {min_date.date()} au {max_date.date()}")
+
+    print("\nDéfinition de la période (laisser vide pour tout afficher)")
+
+    while True:
+
+        start_input = input("Date de début (YYYY-MM-DD) : ").strip()
+        end_input = input("Date de fin (YYYY-MM-DD) : ").strip()
+
+        start_date = pd.to_datetime(start_input) if start_input else None
+        end_date = pd.to_datetime(end_input) if end_input else None
+
+        # --- vérifier cohérence ---
+        if start_date and end_date and start_date > end_date:
+            print("La date de début doit être antérieure à la date de fin.")
+            continue
+
+        # --- vérifier dans le domaine ---
+        if start_date and start_date < min_date:
+            print("La date de début est avant la période disponible.")
+            continue
+
+        if end_date and end_date > max_date:
+            print("La date de fin est après la période disponible.")
+            continue
+
+        break
+
+    return start_date, end_date
+
+def dataset_to_dataframe(ds):
+
+    return ds.to_dataframe().reset_index()
+
+def format_period_text(start_date, end_date):
+    """
+    Return a readable string describing the selected period.
+    """
+
+    if start_date and end_date:
+        return f" ({start_date.date()} → {end_date.date()})"
+
+    elif start_date:
+        return f" (from {start_date.date()})"
+
+    elif end_date:
+        return f" (until {end_date.date()})"
+
+    else:
+        return ""
+
+def configure_plot_labels_and_title(x_default: str, y_defaults: list[str] | str, multiple_y: bool = False):
+    """
+    Demande à l'utilisateur de personnaliser :
+    - titre du graphique
+    - labels axes X/Y avec unités
+    - légende si multiple Y
+
+    Args:
+        x_default: nom par défaut de la variable X
+        y_defaults: nom(s) par défaut des variables Y
+        multiple_y: True si plusieurs Y pour gérer la légende
+
+    Returns:
+        dict avec clés :
+        - x_label
+        - y_label
+        - legend_labels (liste)
+        - title
+    """
+    # --- Labels axes ---
+    x_label = input(f"Label for X-axis (leave empty for '{x_default}'): ").strip()
+    x_label = x_label if x_label != "" else x_default
+    x_unit = input("Unit for X-axis (leave empty for none): ").strip()
+    x_label = build_axis_label(x_label, x_unit)
+
+    if multiple_y:
+        y_label_input = input(f"Label for Y-axis (leave empty for 'Values'): ").strip()
+        y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+        y_label = build_axis_label(y_label_input if y_label_input != "" else "Values", y_unit)
+        legend_input = input(f"Legend names for each Y (comma-separated, leave empty for defaults: {', '.join(y_defaults)}): ").strip()
+        if legend_input == "":
+            legend_labels = y_defaults
+        else:
+            legend_labels = [l.strip() for l in legend_input.split(",")]
+            if len(legend_labels) != len(y_defaults):
+                raise ValueError("Number of legend labels must match number of Y variables")
+    else:
+        y_label_input = input(f"Label for Y-axis (leave empty for '{y_defaults}'): ").strip()
+        y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+        y_label = build_axis_label(y_label_input if y_label_input != "" else y_defaults, y_unit)
+        legend_labels = []
+
+    # --- Titre global ---
+    custom_title = input("Chart title (leave empty for automatic): ").strip()
+
+    return {
+        "x_label": x_label,
+        "y_label": y_label,
+        "legend_labels": legend_labels,
+        "title": custom_title
+    }
+
+def build_axis_label(label, unit):
+    """
+    Construit le label d'axe avec unité si elle existe.
+    Exemple :
+    label="Temperature", unit="°C" -> "Temperature (°C)"
+    """
+    unit = unit.strip()
+    if unit == "":
+        return label
+    return f"{label} ({unit})"
+
+
+# ---------------- Bar Chart ---------------- 
 
 def bar_chart(df):
-    print("\nColonnes disponibles :")
+    print("\nAvailable columns:")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-    # --- Choix de la colonne X ---
-    try:
-        x_idx = int(input("\nIndex de la colonne pour l'axe X (catégories) : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
-    
-    if x_idx < 0 or x_idx >= len(df.columns):
-        raise IndexError("Index de colonne X invalide")
-    
-    # --- Choix de la colonne Y ---
-    try:
-        y_idx = int(input("Index de la colonne pour l'axe Y (valeurs) : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne Y")
-    
-    if y_idx < 0 or y_idx >= len(df.columns):
-        raise IndexError("Index de colonne Y invalide")
-    
-    if y_idx == x_idx:
-        raise ValueError("La colonne Y ne peut pas être la même que la colonne X")
-    
+    # --- Choice of X column ---
+    while True:
+        try:
+            # Correction : Utilisation de int() au lieu de str() pour l'index
+            x_idx = int(input("\nIndex for X-axis column: "))
+            if x_idx < 0 or x_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Please enter a valid integer.")
+        except IndexError:
+            print("Invalid column index for X.")
+
+    # --- Choice of Y column ---
+    while True:
+        try:
+            y_idx = int(input("Index for Y-axis column: "))
+            if y_idx < 0 or y_idx >= len(df.columns):
+                raise IndexError
+            if y_idx == x_idx:
+                raise ValueError
+            break
+        except ValueError:
+            print("Y column must be different from X column.")
+        except IndexError:
+            print("Invalid column index for Y.")
+
     x_col = df.columns[x_idx]
     y_col = df.columns[y_idx]
 
-    # --- Création du graphique ---
-    x = df[x_col]
-    y = df[y_col]
+    # --- Date handling ---
+    # On suppose que la colonne 0 est la date pour le filtrage temporel
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
 
-    colors = cm.viridis(np.linspace(0, 1, len(x)))
-
-    fig, ax = plt.subplots(figsize=(8,5))
-    ax.bar(x, y, color=colors)
-
-    ax.set_title(f"Bar Chart: {y_col} vs {x_col}")
-    ax.set_xlabel(x_col)
-    ax.set_ylabel(y_col)
-    ax.grid(axis='y', linestyle='--', alpha=0.6)
-
-    # Affichage des valeurs au-dessus des barres
-    for i, v in enumerate(y):
-        ax.text(i, v + 0.05*np.max(y), f"{v:.2f}", ha='center', va='bottom')
-    
-    if len(y) < 30:
-        for i, v in enumerate(y):
-            ax.text(i, v + 0.01 * np.max(y), f"{v:.2f}", ha='center', va='bottom', fontsize=8)
+    df_valid = df[df[date_col].notna()]
+    if df_valid.empty:
+        # Si aucune date n'est trouvée (ex: on travaille sur un résumé de 12 lignes),
+        # on utilise le dataframe tel quel pour éviter l'erreur.
+        df_valid = df.copy()
+        print("\nNote: No valid dates found for filtering, using raw data.")
     else:
-        print(f"Trop de données ({len(y)} lignes) : les étiquettes de texte ont été désactivées pour la lisibilité.")
+        print("\nAvailable period:")
+        print(f" From {df_valid[date_col].min().date()} to {df_valid[date_col].max().date()}")
 
-    return fig  # retourne la figure pour pouvoir faire plt.savefig()
+    print("\nDefine the display period (leave empty to show all)")
+       
+    while True:
+        # Hypothèse: les fonctions ask_date_visualization et format_period_text existent ailleurs
+        start_date = ask_date_visualization("Start date (YYYY-MM-DD or DD/MM/YYYY): ")
+        end_date   = ask_date_visualization("End date (YYYY-MM-DD or DD/MM/YYYY): ")
+
+        if start_date and end_date and start_date > end_date:
+            print("Start date must be before end date.")
+            continue
+
+        df_period = df_valid.copy()
+
+        # On ne filtre par date que si des dates valides existent
+        if not df_valid[date_col].isna().all():
+            if start_date is not None:
+                df_period = df_period[df_period[date_col] >= start_date]
+            if end_date is not None:
+                df_period = df_period[df_period[date_col] <= end_date]
+
+        if df_period.empty:
+            print("No data for this period. Please enter other dates.")
+        else:
+            break
+
+    period_text = format_period_text(start_date, end_date)
+
+    # --- Custom Axis Labels ---
+    x_label = input(f"Label for X-axis (leave empty for '{x_col}'): ").strip()
+    y_label = input(f"Label for Y-axis (leave empty for '{y_col}'): ").strip()
+
+    x_label = x_label if x_label != "" else x_col
+    y_label = y_label if y_label != "" else y_col
+
+
+    # --- Units ---
+    x_unit = input("Unit for X-axis (leave empty for none): ").strip()
+    y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+
+    # Build final labels
+    x_label = build_axis_label(x_label, x_unit)
+    y_label = build_axis_label(y_label, y_unit)
 
 
 
-# ---------------- Line Chart ---------------- #    
+    # --- Global Title ---
+    custom_title = input("Chart title (leave empty for automatic title): ").strip()
+    
+    if custom_title == "":
+        custom_title = f"Bar chart: {y_label} vs {x_label}{period_text}"
 
+    # Sorting month and season 
+    
+    month_order = [calendar.month_name[i] for i in range(1, 13)] # from january to december
+    season_order = ['Spring', 'Summer', 'Autumn', 'Winter'] # to adjust if different season name (wet season, dry season eventually)
+    df_plot = df_period.copy()
+    sample_val = str(df_plot[x_col].iloc[0]) if not df_plot.empty else ""
+    
+    sort_key = None
+    if any(m in df_plot[x_col].values for m in month_order):
+        sort_key = month_order
+    elif any(s in df_plot[x_col].values for s in season_order):
+        sort_key = season_order
+
+    if sort_key:
+        df_plot[x_col] = pd.Categorical(df_plot[x_col], categories=sort_key, ordered=True)
+        df_plot = df_plot.sort_values(x_col)
+
+    # --- Graphique ---
+    fig, ax = plt.subplots(figsize=(8,5))
+    
+    # On utilise maintenant df_plot qui est trié
+    x_data = df_plot[x_col].astype(str)
+    y_data = df_plot[y_col]
+
+    colors = cm.viridis(np.linspace(0, 1, len(df_plot)))
+    ax.bar(x_data, y_data, color=colors)
+    # --- Plotting ---
+    fig, ax = plt.subplots(figsize=(8,5))
+    
+    # X est traité comme des chaînes de caractères 
+    x_data = df_period[x_col].astype(str)
+    y_data = df_period[y_col]
+
+    colors = cm.viridis(np.linspace(0, 1, len(df_period)))
+
+    ax.bar(x_data, y_data, color=colors)
+
+    ax.set_title(custom_title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.grid(axis='y', linestyle='--', alpha=0.6)
+    
+    # Rotation des labels X si ce sont des noms longs (mois, saisons)
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+
+    return fig
+
+# ---------------- Line Chart ---------------- 
 
 def line_chart(ds: xr.Dataset):
-    
+    """
+    Trace une série temporelle depuis un xarray.Dataset
+    avec gestion automatique des dimensions.
+    """
+
     if not isinstance(ds, xr.Dataset):
         raise TypeError("Attendu: xarray.Dataset")
 
-    # --- Liste des candidats X et Y ---
-    # X peut être une coordonnée (p.ex. 'time') OU une variable 1D.
-    coords_list = list(ds.coords)
-    data_vars_list = list(ds.data_vars)
+    # --- Choix des variables ---
+    x_col = ask_variable(ds, prompt="Choisir la variable pour l'axe X : ")
+    y_cols = ask_variable(
+        ds,
+        multiple=True,
+        prompt="Choisir une ou plusieurs variables pour l'axe Y (séparées par ',') : "
+    )
 
-    print("\nCoordonnées (candidates pour l'axe X) :")
-    for i, c in enumerate(coords_list):
-        dims = ", ".join(ds[c].dims)
-        print(f"  [C{i}] {c}  (dims: {dims}, size: {ds[c].sizes.get(ds[c].dims[0], 'n/a')})")
+    # --- Sélection période ---
+    start_date, end_date = ask_time_period(ds)
+    ds_period = subset_time(ds, start_date, end_date)
 
-    print("\nVariables (candidates pour l'axe X si 1D, et pour l'axe Y) :")
-    for i, v in enumerate(data_vars_list):
-        da = ds[v]
-        dims = ", ".join([f"{d}({da.sizes[d]})" for d in da.dims])
-        print(f"  [V{i}] {v:20s} dims: {dims or '—'}  dtype: {da.dtype}")
+    period_text = format_period_text(start_date, end_date)
 
-    # --- Choix X ---
-    print("\nChoix de l'axe X :")
-    print("  • Pour une coordonnée, tape 'C<index>' (ex: C0).")
-    print("  • Pour une variable 1D, tape 'V<index>' (ex: V2).")
+    # --- Préparation X ---
+    if x_col in ds_period.coords:
+        x_arr = ds_period.coords[x_col]
+    else:
+        x_arr = ds_period[x_col]
 
-    x_key = input("Votre choix pour X (ex: C0 ou V2) : ").strip()
-
-    if len(x_key) < 2 or x_key[0] not in ("C", "V") or not x_key[1:].isdigit():
-        raise ValueError("Format invalide pour le choix X. Exemple attendu: C0 ou V2.")
-
-    x_type, x_idx = x_key[0], int(x_key[1:])
-
-    if x_type == "C":
-        if x_idx < 0 or x_idx >= len(coords_list):
-            raise IndexError("Index de coordonnée X invalide")
-        x_name = coords_list[x_idx]
-        x_arr = ds[x_name]
-    else:  # "V"
-        if x_idx < 0 or x_idx >= len(data_vars_list):
-            raise IndexError("Index de variable X invalide")
-        x_name = data_vars_list[x_idx]
-        x_arr = ds[x_name]
-        if x_arr.ndim != 1:
-            raise ValueError(f"La variable '{x_name}' n'est pas 1D ; impossible de l'utiliser directement comme X.")
-
-    # On impose que X soit 1D
     if x_arr.ndim != 1:
-        raise ValueError(f"L'axe X choisi doit être 1D, trouvé dims {x_arr.dims}")
+        raise ValueError(f"La variable X '{x_col}' doit être 1D")
 
-    # Nom de la dimension sous-jacente à X (ex: 'time', 'lon', etc.)
     x_dim = x_arr.dims[0]
     x_values = x_arr.values
 
-    # --- Choix Y ---
-    print("\nChoisissez les variables pour l'axe Y parmi la liste des Variables (V#).")
-    y_input = input("Indices Y séparés par des virgules (ex: 1,2,5) : ").strip()
+    # --- Configuration titres / labels ---
+    labels = configure_plot_labels_and_title(
+        x_default=x_col,
+        y_defaults=y_cols,
+        multiple_y=True
+    )
 
-    try:
-        y_indices = sorted(set(int(tok.strip()) for tok in y_input.split(",")))
-    except Exception:
-        raise ValueError("Indices Y invalides. Donnez des entiers séparés par des virgules.")
-
-    for yi in y_indices:
-        if yi < 0 or yi >= len(data_vars_list):
-            raise IndexError(f"Index Y invalide : {yi}")
-
-    y_names = [data_vars_list[i] for i in y_indices]
+    x_label = labels["x_label"]
+    y_label = labels["y_label"]
+    legend_labels = labels["legend_labels"]
+    title = labels["title"] or f"Line chart: {', '.join(y_cols)} vs {x_label}{period_text}"
 
     # --- Création du graphique ---
     fig, ax = plt.subplots(figsize=(10, 6))
-    colors = cm.viridis(np.linspace(0, 1, len(y_names)))
+    colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
 
-    for i, var in enumerate(y_names):
-        da = ds[var]
+    for i, var in enumerate(y_cols):
 
-        # Si la variable Y possède la dimension x_dim (par ex. 'time'), on s'aligne dessus.
+        da = ds_period[var]
+
+        # --- Cas 1 : la variable dépend de X ---
         if x_dim in da.dims:
-            # On souhaite une série 1D alignée sur x_dim ; si da a d'autres dims, on les moyenne.
+
             other_dims = tuple(d for d in da.dims if d != x_dim)
+
             if other_dims:
                 da1d = da.mean(dim=other_dims, skipna=True)
             else:
                 da1d = da
 
-            # S'assurer même taille sur x_dim (parfois X est subset/coordonée indépendante)
-            if da1d.sizes.get(x_dim, None) != x_values.shape[0]:
-                # Essayer de reindexer si c'est la même coordonnée (nom et valeurs)
-                if x_name in ds and np.array_equal(ds[x_name].values, x_values):
-                    da1d = da1d.reindex({x_dim: ds[x_name]})
-                # Sinon, on tente un alignement par interpolation (optionnel)
-                # da1d = da1d.interp({x_dim: x_values})
+            # Alignement éventuel
+            if da1d.sizes.get(x_dim, None) != len(x_values):
+
+                if x_col in ds_period and np.array_equal(ds_period[x_col].values, x_values):
+                    da1d = da1d.reindex({x_dim: ds_period[x_col]})
+
             y_vals = da1d.values
 
+        # --- Cas 2 : la variable ne dépend pas de X ---
         else:
-            # Si la variable ne possède pas x_dim : on la réduit complètement à un scalaire,
-            # puis on "broadcast" ce scalaire sur la longueur de X pour tracer une ligne plate.
-            y_scalar = da.mean().item()  # moyenne globale
+
+            y_scalar = da.mean().item()
             y_vals = np.full_like(x_values, fill_value=y_scalar, dtype=float)
 
-        # Conversion en float (si object/str)
+        # --- Conversion numérique si nécessaire ---
         if not np.issubdtype(np.array(y_vals).dtype, np.number):
-            # tentative de conversion "européenne" si besoin
             try:
                 y_vals = y_vals.astype(str)
                 y_vals = np.char.replace(y_vals, ",", ".").astype(float)
             except Exception:
                 raise ValueError(f"Impossible de convertir '{var}' en float pour le tracé.")
 
-        ax.plot(x_values, y_vals, marker='o', label=var, color=colors[i])
+        ax.plot(
+            x_values,
+            y_vals,
+            marker='o',
+            markersize=3,
+            linewidth=1,
+            label=legend_labels[i],
+            color=colors[i]
+        )
 
-    ax.set_title(f"Line Chart: {', '.join(y_names)} vs {x_name}")
-    ax.set_xlabel(x_name)
-    ax.set_ylabel("Values")
+    ax.set_title(title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
     ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
     ax.legend()
 
     return fig
 
-##-------------- Scatter Plot --------------- a été modifié, il faut reprendre nonobstant pour que ce soit plus beau
+# -------------- Scatter Plot ---------------
+
 def scatter_chart(df):
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
+
     # --- Choix de la colonne X ---
-    try:
-        x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne X")
-    
-    if x_idx < 0 or x_idx >= len(df.columns):
-        raise IndexError("Index de colonne X invalide")
-    
+    while True:
+        try:
+            x_idx = int(input("\nIndex de la colonne pour l'axe X : "))
+            if x_idx < 0 or x_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne X invalide.")
+
     # --- Choix des colonnes Y ---
-    y_idx_input = input("Index des colonnes pour l'axe Y (séparés par une virgule, ex: 1,2) : ")
-    
-    try:
-        y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
-    except ValueError:
-        raise ValueError("Les index doivent être des nombres entiers")
-    
-    if x_idx in y_idx:
-        raise ValueError("La colonne X ne peut pas être dans les colonnes Y")
-    
-    for i in y_idx:
-        if i < 0 or i >= len(df.columns):
-            raise IndexError(f"Index Y invalide : {i}")
+    while True:
+        try:
+            y_idx_input = input("Index des colonnes pour l'axe Y (ex: 1,2) : ")
+            y_idx = sorted(set(int(i.strip()) for i in y_idx_input.split(",")))
+
+            if x_idx in y_idx:
+                raise ValueError
+
+            for i in y_idx:
+                if i < 0 or i >= len(df.columns):
+                    raise IndexError
+
+            break
+
+        except ValueError:
+            print("Les colonnes Y doivent être des entiers et différentes de X.")
+        except IndexError:
+            print("Un index Y est invalide.")
+
     
     x_col = df.columns[x_idx]
     y_cols = [df.columns[i] for i in y_idx]
 
-    # --- Création du graphique ---
+    
+
+    # --- Période d'affichage ---
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+
+    df_valid = df[df[date_col].notna()]
+    if df_valid.empty:
+        raise ValueError("Aucune date valide trouvée")
+    
+    print("\nPériode disponible :")
+    print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
+
+    print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
+    while True:
+
+        start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date_visualization("Date de fin (YYYY-MM-DD ou DD/MM/YYYY) : ")
+
+        if start_date and end_date and start_date > end_date:
+            print("La date de début doit être antérieure à la date de fin.")
+            continue
+
+        df_period = df_valid.copy()
+
+        if start_date is not None:
+            df_period = df_period[df_period[date_col] >= start_date]
+        if end_date is not None:
+            df_period = df_period[df_period[date_col] <= end_date]
+
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
+
+    
+    period_text = format_period_text(start_date, end_date)
+    
+
+    # --- Titres des axes ---
+
+    x_label = input(f"Label for X-axis (leave empty for '{x_col}'): ").strip()
+    y_label = input(f"Label for Y-axis (leave empty for 'Values'): ").strip()
+
+    x_label = x_label if x_label != "" else x_col
+    y_label = y_label if y_label != "" else "Values"
+
+    # --- Units ---
+    x_unit = input("Unit for X-axis (leave empty for none): ").strip()
+    y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+
+    # Build final labels
+    x_label = build_axis_label(x_label, x_unit)
+    y_label = build_axis_label(y_label, y_unit)
+
+
+    # --- Titre global ---
+    custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
+
+    if custom_title == "":
+        custom_title = f"Scatter chart: {', '.join(y_cols)} en fonction de {x_label}{period_text}"
+
+    # --- Légende personnalisée ---
+    legend_input = input("Noms pour la légende (séparés par une virgule (ex: Variable A,Variable B), laisser vide pour noms par défaut) : ").strip()
+
+    if legend_input == "":
+        legend_labels = y_cols
+    else:
+        legend_labels = [name.strip() for name in legend_input.split(",")]
+
+        if len(legend_labels) != len(y_cols):
+            raise ValueError("Le nombre de noms de légende doit correspondre au nombre de colonnes Y")
+
+    # --- Graphique ---
     fig, ax = plt.subplots(figsize=(10,6))
     colors = cm.viridis(np.linspace(0, 1, len(y_cols)))
 
-    for i, col in enumerate(y_cols):
-        y = df[col].astype(float)
-        ax.scatter(df[x_col], y, label=col, color=colors[i], s=50)
+    #for i, col in enumerate(y_cols):
+        #ax.scatter(df_period[x_col],df_period[col],label=legend_labels[i],color=colors[i],s=50)
 
-    ax.set_title(f"Scatter Plot: {', '.join(y_cols)} vs {x_col}")
-    ax.set_xlabel(x_col)
-    ax.set_ylabel("Values")
-    ax.set_xlim(left=0)
-    ax.set_ylim(bottom=0)
-    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
+    for i, col in enumerate(y_cols):
+
+        x = pd.to_numeric(df_period[x_col], errors="coerce")
+        y = pd.to_numeric(df_period[col], errors="coerce")
+
+        data = pd.DataFrame({x_col: x, col: y}).dropna()
+
+        ax.scatter(data[x_col],data[col],label=legend_labels[i],color=colors[i],s=50)
+
+    ax.set_title(custom_title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.grid(True, linestyle='--', alpha=0.5)
     ax.legend()
 
-    return fig  # retourne la figure pour pouvoir sauvegarder
+    return fig
 
-
-# ---------------- Radar Chart ---------------- a été modifié pour correspondre à nouvelle structure
+# ---------------- Radar Chart ----------------
 
 def radar_chart(df):
+
     print("\nColonnes disponibles :")
     for i, col in enumerate(df.columns):
         print(f" [{i}] {col}")
 
-    # --- Choix de la colonne catégorie ---
-    try:
-        cat_idx = int(input("\nIndex de la colonne catégories (axes du radar) : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier")
 
-    if cat_idx < 0 or cat_idx >= len(df.columns):
-        raise IndexError("Index de colonne catégorie invalide")
+    # --- Choix de la colonne catégorie ---
+    while True:
+        try:
+            cat_idx = int(input("\nIndex de la colonne catégories (axes du radar) : "))
+            if cat_idx < 0 or cat_idx >= len(df.columns):
+                raise IndexError
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier.")
+        except IndexError:
+            print("Index de colonne invalide.")
 
     category_col = df.columns[cat_idx]
 
+
+
     # --- Choix des colonnes de valeurs ---
-    value_idx_input = input(
-        "Index des colonnes de valeurs (séparés par une virgule, ex: 1,2) : "
-    )
+    while True:
+        try:
+            value_idx_input = input("Index des colonnes de valeurs (séparés par une virgule, ex: 1,2) : ")
+            value_idx = sorted(set(int(i.strip()) for i in value_idx_input.split(",")))
 
-    try:
-        value_idx = sorted(
-            set(int(i.strip()) for i in value_idx_input.split(","))
-        )
-    except ValueError:
-        raise ValueError("Les index doivent être des nombres entiers")
+            if cat_idx in value_idx:
+                raise ValueError
 
-    if cat_idx in value_idx:
-        raise ValueError("La colonne catégorie ne peut pas être une colonne de valeurs")
+            for i in value_idx:
+                if i < 0 or i >= len(df.columns):
+                    raise IndexError
 
-    for i in value_idx:
-        if i < 0 or i >= len(df.columns):
-            raise IndexError(f"Index invalide : {i}")
+            break
 
+        except ValueError:
+            print("Les colonnes doivent être des entiers et différentes de la colonne catégorie.")
+        except IndexError:
+            print("Un index est invalide.")
+
+  
     value_cols = [df.columns[i] for i in value_idx]
+    
 
-    # --- Préparation du radar ---
-    categories = df[category_col].astype(str).values
+            
+    # --- Date ---
+    date_col = df.columns[0]
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+
+    df_valid = df[df[date_col].notna()]
+    if df_valid.empty:
+        raise ValueError("Aucune date valide trouvée")
+
+    print("\nPériode disponible :")
+    print(f" Du {df_valid[date_col].min().date()} au {df_valid[date_col].max().date()}")
+
+    print("\nDéfinition de la période d'affichage des données (laisser vide pour tout afficher)")
+
+
+    while True:
+
+        start_date = ask_date_visualization("Date de début (YYYY-MM-DD ou DD/MM/YYYY) : ")
+        end_date   = ask_date_visualization("Date de fin  (YYYY-MM-DD ou DD/MM/YYYY) : ")
+
+        if start_date and end_date and start_date > end_date:
+            print("La date de début doit être antérieure à la date de fin.")
+            continue
+
+        df_period = df_valid.copy()
+
+        df_period = df_period[df_period[date_col] >= start_date] if start_date is not None else df_period
+        df_period = df_period[df_period[date_col] <= end_date]   if end_date   is not None else df_period
+    
+        if df_period.empty:
+            print("Aucune donnée sur cette période. Veuillez entrer d'autres dates.")
+        else:
+            break
+    
+    
+    period_text = format_period_text(start_date, end_date)
+
+    # Supprimer les lignes sans valeurs pour le radar
+    df_period = df_period.dropna(subset=value_cols, how="all")
+
+    if df_period.empty:
+        raise ValueError("Aucune valeur disponible pour les colonnes sélectionnées sur cette période")
+    
+    period_text = format_period_text(start_date, end_date)
+    
+    # --- Titre global ---
+    custom_title = input("Titre du graphique (laisser vide pour titre automatique) : ").strip()
+
+    # --- Units for radar values ---
+    units_input = input("Unités des variables radar (ex: kW, %, ms) - laisser vide si aucune : ").strip()
+
+    if units_input != "":
+        units_text = f" ({units_input})"
+    else:
+        units_text = ""
+
+    if custom_title == "":
+        custom_title = f"Radar chart: {', '.join(value_cols)}{units_text}{period_text}"
+    else:
+        custom_title = f"{custom_title}{units_text}"
+
+
+    # --- Légende personnalisée ---
+    legend_input = input("Noms pour la légende (séparés par une virgule, laisser vide pour noms par défaut) : ").strip()
+
+    if legend_input == "":
+        legend_labels = value_cols
+    else:
+        legend_labels = [name.strip() for name in legend_input.split(",")]
+
+        if len(legend_labels) != len(value_cols):
+            raise ValueError("Le nombre de noms doit correspondre au nombre de colonnes de valeurs")
+
+    # --- Radar ---
+    #categories = df_period[category_col].astype(str).values
+    categories = df_period[category_col].dropna().astype(str).values
+    #categories = df_period[date_col].dt.strftime('%Y-%m-%d').values
     N = len(categories)
+    if N < 3:
+        raise ValueError("Un radar nécessite au moins 3 catégories")
 
-    angles = np.linspace(0, 2 * np.pi, N, endpoint=False).tolist()
+    angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
     angles += angles[:1]
 
     fig, ax = plt.subplots(figsize=(7,7), subplot_kw=dict(polar=True))
+
+    # Sens horaire
+    ax.set_theta_direction(-1)          # Inverse le sens de rotation
+    ax.set_theta_offset(np.pi / 2)      # Commence en haut (12h)
+
     colors = cm.viridis(np.linspace(0, 1, len(value_cols)))
 
+    # --- Ajustement de l'échelle radiale ---
+    val_min = df_period[value_cols].min().min()
+    val_max = df_period[value_cols].max().max()
+    margin = 0.05 * (val_max - val_min)  # 5% de marge
+    ax.set_ylim(val_min - margin, val_max + margin)
+
     for i, col in enumerate(value_cols):
-        values = df[col].astype(float).values.tolist()
+        values = df_period[col].astype(float).values.tolist()
         values += values[:1]
 
-        ax.plot(angles, values, linewidth=2, label=col, color=colors[i])
-        ax.fill(angles, values, alpha=0.25, color=colors[i])
+        ax.plot(angles, values, label=legend_labels[i], color=colors[i])
+        #ax.fill(angles, values, alpha=0.25, color=colors[i])
 
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(categories)
-    ax.set_title("Radar Chart", y=1.08)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1))
-    ax.grid(True)
 
-    plt.show()# a voir si on laisse cette ligne
+    ax.set_title(custom_title)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
 
+    return fig
 
-# ---------------- Histogram Chart ---------------- a été modifié pour correspondre à nouvelle structure
+# ---------------- Histogram Chart ----------------
 
-def histogram_chart(df):
-    print("\nColonnes disponibles :")
-    for i, col in enumerate(df.columns):
-        print(f" [{i}] {col}")
+def histogram_chart(ds: xr.Dataset):
+    """
+    Trace un histogramme depuis un xarray.Dataset.
+    """
+    col_name = ask_variable(ds, prompt="Choisir la variable à représenter : ")
+    bins = int(input("Nombre de bins pour l'histogramme : ").strip())
 
-    # --- Choix de la colonne ---
-    try:
-        col_idx = int(input("\nIndex de la colonne à afficher en histogramme : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour la colonne")
-    
-    if col_idx < 0 or col_idx >= len(df.columns):
-        raise IndexError("Index de colonne invalide")
-    
-    col_name = df.columns[col_idx]
+    # --- Sélection période ---
+    start_date, end_date = ask_time_period(ds)
+    ds_period = subset_time(ds, start_date, end_date)
+    period_text = format_period_text(start_date, end_date)
 
-    # --- Choix du nombre de bins ---
-    try:
-        bins = int(input("Nombre de bins pour l'histogramme : "))
-    except ValueError:
-        raise ValueError("Veuillez entrer un nombre entier pour le nombre de bins")
-    
-    if bins <= 0:
-        raise ValueError("Le nombre de bins doit être supérieur à 0")
+    # --- Configuration titres / labels ---
+    labels = configure_plot_labels_and_title(x_default=col_name, y_defaults=col_name, multiple_y=False)
+    x_label = labels["x_label"]
+    y_label = labels["y_label"]
+    title = labels["title"] or f"Histogramme de {x_label}{period_text}"
 
-    # --- Création de l'histogramme ---
-    fig, ax = plt.subplots(figsize=(8,5))
-    values = df[col_name].astype(float)
-    
-    ax.hist(values, bins=bins, color='skyblue', edgecolor='black')
-    ax.set_title(f"Histogram of {col_name}")
-    ax.set_xlabel(col_name)
-    ax.set_ylabel("Count")
-    ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.5)
+    # --- Création du graphique ---
+    fig, ax = plt.subplots(figsize=(8, 5))
+    data = ds_period[col_name].values.astype(float)
+    ax.hist(data, bins=bins, color='skyblue', edgecolor='black')
 
-    return fig  # retourne la figure pour sauvegarder
-
-
+    ax.set_title(title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.grid(True, linestyle='--', alpha=0.5)
+    return fig
 
 # ----------------- Test -----------------
 
