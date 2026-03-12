@@ -119,6 +119,152 @@ def format_period_text(start_date, end_date):
     else:
         return ""
 
+def configure_plot(
+        x_default: str = None,
+        y_defaults: list[str] | str = None,
+        period_text: str = "",
+        x_limits: list[float] = None,
+        y_limits: list[float] = None,
+        multiple_y: bool = False
+        ):
+    """
+    Configuration générique d'un graphique.
+
+    Args:
+        x_default: label X par défaut
+        y_default: label Y par défaut
+        legend_defaults: liste de labels de légende
+        period_text: texte de période
+        allow_x_limits: autoriser réglage échelle X
+        allow_y_limits: autoriser réglage échelle Y
+
+    Returns:
+        dict contenant labels, titre et limites
+    """
+
+    # ----------------------
+    # X label
+    # ----------------------
+
+    if x_default is not None:
+
+        x_label = input(
+            f"Label for X-axis (leave empty for '{x_default}'): "
+        ).strip()
+
+        x_label = x_label if x_label else x_default
+
+        x_unit = input("Unit for X-axis (leave empty for none): ").strip()
+
+        x_label = build_axis_label(x_label, x_unit)
+
+    else:
+        x_label = None
+
+    # ----------------------
+    # Y label & legend
+    # ----------------------
+
+    if multiple_y:
+
+        y_label_input = input(
+            f"Label for Y-axis (leave empty for 'Values'): "
+        ).strip()
+
+        y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+
+        y_label = build_axis_label(
+            y_label_input if y_label_input != "" else "Values",
+            y_unit
+        )
+
+        legend_input = input(
+            f"Legend names for each Y (comma-separated, leave empty for defaults: {', '.join(y_defaults)}): "
+        ).strip()
+
+        if legend_input == "":
+            legend_labels = y_defaults
+        else:
+            legend_labels = [l.strip() for l in legend_input.split(",")]
+
+            if len(legend_labels) != len(y_defaults):
+                raise ValueError("Number of legend labels must match number of Y variables")
+
+    else:
+
+        y_label_input = input(
+            f"Label for Y-axis (leave empty for '{y_defaults}'): "
+        ).strip()
+
+        y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
+
+        y_label = build_axis_label(
+            y_label_input if y_label_input != "" else y_defaults,
+            y_unit
+        )
+
+        legend_labels = []
+
+    # ----------------------
+    # axis limits
+    # ----------------------
+
+    if x_limits is not None:
+        
+        choice = input("Custom X axis limits? (y/n): ").lower()
+
+        if choice == "y":
+            
+            [x_min, x_max] = x_limits
+
+            print(f"\nLes valeurs de X vont de {x_min:.3f} à {x_max:.3f}")
+
+            x_min_user = input(f"Y min (leave empty for {x_min:.3f}) : ").strip()
+            x_max_user = input(f"Y max (leave empty for {x_max:.3f}) : ").strip()
+
+            x_min_final = float(x_min_user) if x_min_user != "" else x_min
+            x_max_final = float(x_max_user) if x_max_user != "" else x_max
+
+            x_limits = (x_min_final, x_max_final)
+
+    if y_limits is not None:
+
+        choice = input("Custom Y axis limits? (y/n): ").lower()
+
+        if choice == "y":
+            
+            [y_min, y_max] = y_limits
+                
+            y_min_user = input(f"Y min (leave empty for {y_min:.3f}) : ").strip()
+            y_max_user = input(f"Y max (leave empty for {y_max:.3f}) : ").strip()
+
+            y_min_final = float(y_min_user) if y_min_user != "" else y_min
+            y_max_final = float(y_max_user) if y_max_user != "" else y_max
+
+            y_limits = (y_min_final, y_max_final)
+
+    # ----------------------
+    # Title
+    # ----------------------
+
+    default_title = f"{x_default} vs {y_defaults}{period_text}" if x_default and y_defaults else ""
+
+    title = input(
+        f"Chart title (leave empty for '{default_title}'): "
+    ).strip()
+
+    title = title if title else default_title
+
+    return {
+        "x_label": x_label,
+        "y_label": y_label,
+        "legend_labels": legend_labels,
+        "title": title,
+        "x_limits": x_limits,
+        "y_limits": y_limits
+    }
+
+'''
 def configure_plot_labels_and_title(
     x_default: str,
     y_defaults: list[str] | str,
@@ -247,7 +393,7 @@ def configure_plot_labels_and_title(
         "title": title,
         "y_limits": y_limits
     }
-
+'''
 def build_axis_label(label, unit):
     """
     Construit le label d'axe avec unité si elle existe.
@@ -546,17 +692,23 @@ def line_chart(ds: xr.Dataset):
     period_text = format_period_text(start_date, end_date)
 
     # ----------------------
+    # figure
+    # ----------------------
+
+    fig, ax = plt.subplots(figsize=(10,6))
+
+    # ----------------------
     # configuration labels
     # ----------------------
     y_min = float(ds[y_names].to_array().min().values)
     y_max = float(ds[y_names].to_array().max().values)
 
-    labels = configure_plot_labels_and_title(
+    labels = configure_plot(
             x_default=x_name,
             y_defaults=y_names,
-            y_min=y_min,
-            y_max=y_max,
             period_text=period_text,
+            x_limits=None,
+            y_limits=[y_min,y_max],
             multiple_y=True
         )
     
@@ -578,12 +730,6 @@ def line_chart(ds: xr.Dataset):
 
     x_dim = x_arr.dims[0]
     x_vals = x_arr.values
-
-    # ----------------------
-    # figure
-    # ----------------------
-
-    fig, ax = plt.subplots(figsize=(10,6))
 
     # ----------------------
     # boucle Y
@@ -1023,17 +1169,142 @@ def histogram_chart(ds: xr.Dataset):
     ds_period = subset_time(ds, start_date, end_date)
     period_text = format_period_text(start_date, end_date)
 
+    # ----------------------
+    # figure
+    # ----------------------
+
+    fig, ax = plt.subplots(figsize=(10,6))
+
     # --- Configuration titres / labels ---
-    labels = configure_plot_labels_and_title(x_default=col_name, y_defaults=col_name, multiple_y=False)
+    data = ds_period[col_name].values.astype(float)
+    data = data[np.isfinite(data)]
+
+    counts, _ = np.histogram(data, bins=bins)
+
+    y_min = 0
+    y_max = counts.max()
+
+    labels = configure_plot(
+            x_default=col_name,
+            y_defaults="Frequency",
+            period_text=period_text,
+            x_limits=None,
+            y_limits=[y_min, y_max],
+            multiple_y=False
+        )
+    
     x_label = labels["x_label"]
     y_label = labels["y_label"]
-    title = labels["title"] or f"Histogramme de {x_label}{period_text}"
+    legend_labels = labels["legend_labels"]
+    title = labels["title"] or f"Histogram of {col_name}{period_text}"
+    if labels["y_limits"] is not None:
+        ax.set_ylim(labels["y_limits"])
+
+    # ----------------------
+    # boucle sur la variable choisie
+    # ----------------------
+
+    da = ds[col_name]
+
+    # dimensions restantes
+    dims = [d for d in da.dims if d!="time"]
+
+    selections = {}
+
+    for dim in dims:
+
+        coords = da.coords[dim].values
+        n = len(coords)
+
+        # ----------------------
+        # CAS DIMENSION TRES GRANDE
+        # ----------------------
+
+        if n > 30:
+
+            print(f"\nLa dimension '{dim}' contient {n} valeurs.")
+
+            choice = input(
+                f"Voulez-vous moyenner sur '{dim}' ? (y/n) : "
+            ).strip().lower()
+
+            if choice == "y":
+
+                da = da.mean(dim=dim, skipna=True)
+
+                print(f"→ moyenne appliquée sur '{dim}'")
+
+                continue
+
+        # ----------------------
+        # CAS UNE SEULE VALEUR
+        # ----------------------
+
+        if n == 1:
+            selections[dim] = coords
+            continue
+
+        # ----------------------
+        # SELECTION UTILISATEUR
+        # ----------------------
+
+        print(f"\nDimension '{dim}' :")
+
+        for i, v in enumerate(coords):
+            print(f"[{i}] {v}")
+
+        choice = input(
+            f"indices pour {dim} (ex 0,1 ou all) : "
+        ).strip()
+
+        if choice == "all":
+            selections[dim] = coords
+        else:
+            idx = [int(i) for i in choice.split(",")]
+            selections[dim] = coords[idx]
+            
+    # ----------------------
+    # combinaisons
+    # ----------------------
+
+    import itertools
+
+    combos = list(
+        itertools.product(*selections.values())
+    )
+
+    dims_names = list(selections.keys())
+
+    colors = cm.viridis(
+        np.linspace(0,1,len(combos))
+    )
+
+    for i,combo in enumerate(combos):
+
+        sel = dict(zip(dims_names,combo))
+
+        da_sel = da.sel(**sel)
+
+        data = da_sel.values
+
+        label = legend_labels
+
+        if sel:
+            label += " | " + ", ".join(
+                f"{k}={v}" for k,v in sel.items()
+            )
+
+        ax.hist(
+            data,
+            bins=bins,
+            label=label,
+            linewidth=1,
+            color=colors[i],
+            edgecolor='black'
+        )
 
     # --- Création du graphique ---
-    fig, ax = plt.subplots(figsize=(8, 5))
-    data = ds_period[col_name].values.astype(float)
-    ax.hist(data, bins=bins, color='skyblue', edgecolor='black')
-
+    
     ax.set_title(title)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
