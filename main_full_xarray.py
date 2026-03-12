@@ -64,13 +64,16 @@ menu_visu = {
     5: visu_xr.histogram_chart
 }
 
-dict_stats={"mean":1,"max":2,"min":3, "percentile":4, "nombre d'occurences au dessus d'un seuil":5}
-menu_stats = {
+dict_stats={"Temporal mean":1,"Flexible mean":2,"Flexible maximum":3, "Flexible minimum":4, "Flexible percentile":5, "Temporal rolling mean":6, "Monthly Interannual average":7}
+menu_stats_xr = {
     1: stat_xr.mean_value_time,
-    #2: stat_xr.maximum_value,     #Fonction à écrire après
-    #3: stat_xr.minimum_value,
-    #4: stat_xr.percentile,
-    #5: stat_xr.nombre_ocurrences_au_dessus_seuil
+    2: stat_xr.mean_value_flexible,
+    3: stat_xr.maximum_value_flexible,     
+    4: stat_xr.minimum_value_flexible,
+    5: stat_xr.percentile_value_flexible,
+    6: stat_xr.rolling_mean_value,
+    7:stat_xr.monthly_interannual_average_xr,
+    #7: stat_xr.nombre_ocurrences_au_dessus_seuil
 }
 
 # Indicator selection dictionaries
@@ -143,7 +146,7 @@ while True:
                 if stat_choice == 0:
                     break
             
-                if stat_choice not in menu_stats:
+                if stat_choice not in menu_stats_xr:
                     print("Choix invalide, réessayez.")
                     continue
             
@@ -154,12 +157,12 @@ while True:
         if stat_choice == 0:
             break  # sortir de la boucle
 
-        #if stat_choice not in menu_stats:
+        #if stat_choice not in menu_stats_xr:
             #print("Choix invalide, réessayez.")
             #continue
 
         # Appel de la fonction choisie
-        ds = menu_stats[stat_choice](ds)
+        ds = menu_stats_xr[stat_choice](ds)
 
     # Demande de la visualisation
     print("\nVisualisations disponibles :")
