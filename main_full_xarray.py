@@ -146,7 +146,7 @@ while True:
                 if stat_choice == 0:
                     break
             
-                if stat_choice not in menu_stats:
+                if stat_choice not in menu_stats_xr:
                     print("Choix invalide, réessayez.")
                     continue
             
@@ -157,12 +157,12 @@ while True:
         if stat_choice == 0:
             break  # sortir de la boucle
 
-        #if stat_choice not in menu_stats:
+        #if stat_choice not in menu_stats_xr:
             #print("Choix invalide, réessayez.")
             #continue
 
         # Appel de la fonction choisie
-        ds = menu_stats[stat_choice](ds)
+        ds = menu_stats_xr[stat_choice](ds)
 
     # Demande de la visualisation
     print("\nVisualisations disponibles :")
