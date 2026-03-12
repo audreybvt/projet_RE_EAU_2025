@@ -20,8 +20,8 @@ ds.dims       # dimensions
 ds.coords     # coordonnées
 ds.attrs      # attributs globaux
 
+print(ds)
 print(ds["niveau"])
-print(ds["niveau"].values)
 data = ds["niveau"].values.ravel()
 data = data[np.isfinite(data)]
 print(data)

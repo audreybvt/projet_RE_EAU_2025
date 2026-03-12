@@ -7,7 +7,6 @@ import matplotlib.cm as cm
 import os
 import matplotlib.dates as mdates
 
-
 ### UTILITIES ###
 def subset_time(ds, start, end):
 
@@ -120,56 +119,133 @@ def format_period_text(start_date, end_date):
     else:
         return ""
 
-def configure_plot_labels_and_title(x_default: str, y_defaults: list[str] | str, multiple_y: bool = False):
+def configure_plot_labels_and_title(
+    x_default: str,
+    y_defaults: list[str] | str,
+    y_min: float,
+    y_max: float,
+    period_text: str = "",
+    multiple_y: bool = False
+):
     """
     Demande à l'utilisateur de personnaliser :
     - titre du graphique
     - labels axes X/Y avec unités
     - légende si multiple Y
+    - échelle de l'axe Y
 
     Args:
         x_default: nom par défaut de la variable X
         y_defaults: nom(s) par défaut des variables Y
-        multiple_y: True si plusieurs Y pour gérer la légende
+        y_min, y_max: min et max des données Y
+        period_text: texte de période (ex: " (2000–2050)")
+        multiple_y: True si plusieurs Y
 
     Returns:
         dict avec clés :
         - x_label
         - y_label
-        - legend_labels (liste)
+        - legend_labels
         - title
+        - y_limits
     """
-    # --- Labels axes ---
+
+    # ----------------------
+    # Label X
+    # ----------------------
+
     x_label = input(f"Label for X-axis (leave empty for '{x_default}'): ").strip()
     x_label = x_label if x_label != "" else x_default
+
     x_unit = input("Unit for X-axis (leave empty for none): ").strip()
     x_label = build_axis_label(x_label, x_unit)
 
+    # ----------------------
+    # Label Y
+    # ----------------------
+
     if multiple_y:
-        y_label_input = input(f"Label for Y-axis (leave empty for 'Values'): ").strip()
+
+        y_label_input = input(
+            f"Label for Y-axis (leave empty for 'Values'): "
+        ).strip()
+
         y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
-        y_label = build_axis_label(y_label_input if y_label_input != "" else "Values", y_unit)
-        legend_input = input(f"Legend names for each Y (comma-separated, leave empty for defaults: {', '.join(y_defaults)}): ").strip()
+
+        y_label = build_axis_label(
+            y_label_input if y_label_input != "" else "Values",
+            y_unit
+        )
+
+        legend_input = input(
+            f"Legend names for each Y (comma-separated, leave empty for defaults: {', '.join(y_defaults)}): "
+        ).strip()
+
         if legend_input == "":
             legend_labels = y_defaults
         else:
             legend_labels = [l.strip() for l in legend_input.split(",")]
+
             if len(legend_labels) != len(y_defaults):
                 raise ValueError("Number of legend labels must match number of Y variables")
+
     else:
-        y_label_input = input(f"Label for Y-axis (leave empty for '{y_defaults}'): ").strip()
+
+        y_label_input = input(
+            f"Label for Y-axis (leave empty for '{y_defaults}'): "
+        ).strip()
+
         y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
-        y_label = build_axis_label(y_label_input if y_label_input != "" else y_defaults, y_unit)
+
+        y_label = build_axis_label(
+            y_label_input if y_label_input != "" else y_defaults,
+            y_unit
+        )
+
         legend_labels = []
 
-    # --- Titre global ---
-    custom_title = input("Chart title (leave empty for automatic): ").strip()
+    # ----------------------
+    # Échelle axe Y
+    # ----------------------
+
+    print(f"\nLes valeurs de Y vont de {y_min:.3f} à {y_max:.3f}")
+
+    y_scale_choice = input(
+        "Voulez-vous définir une échelle personnalisée ? (y/n) : "
+    ).strip().lower()
+
+    if y_scale_choice == "y":
+
+        y_min_user = input(f"Y min (leave empty for {y_min:.3f}) : ").strip()
+        y_max_user = input(f"Y max (leave empty for {y_max:.3f}) : ").strip()
+
+        y_min_final = float(y_min_user) if y_min_user != "" else y_min
+        y_max_final = float(y_max_user) if y_max_user != "" else y_max
+
+        y_limits = (y_min_final, y_max_final)
+
+    else:
+
+        y_limits = None
+
+    # ----------------------
+    # Titre
+    # ----------------------
+
+    default_title = f"{', '.join(y_defaults) if isinstance(y_defaults,list) else y_defaults} vs {x_default}{period_text}"
+
+    custom_title = input(
+        f"Chart title (leave empty for '{default_title}') : "
+    ).strip()
+
+    title = custom_title if custom_title != "" else default_title
 
     return {
         "x_label": x_label,
         "y_label": y_label,
         "legend_labels": legend_labels,
-        "title": custom_title
+        "title": title,
+        "y_limits": y_limits
     }
 
 def build_axis_label(label, unit):
@@ -467,6 +543,30 @@ def line_chart(ds: xr.Dataset):
     start_date, end_date = ask_time_period(ds)
     ds = subset_time(ds, start_date, end_date)
 
+    period_text = format_period_text(start_date, end_date)
+
+    # ----------------------
+    # configuration labels
+    # ----------------------
+    y_min = float(ds[y_names].to_array().min().values)
+    y_max = float(ds[y_names].to_array().max().values)
+
+    labels = configure_plot_labels_and_title(
+            x_default=x_name,
+            y_defaults=y_names,
+            y_min=y_min,
+            y_max=y_max,
+            period_text=period_text,
+            multiple_y=True
+        )
+    
+    x_label = labels["x_label"]
+    y_label = labels["y_label"]
+    legend_labels = labels["legend_labels"]
+    title = labels["title"] or f"Line chart: {', '.join(y_names)} vs {x_label}{period_text}"
+    if labels["y_limits"] is not None:
+        ax.set_ylim(labels["y_limits"])
+
     # ----------------------
     # X
     # ----------------------
@@ -489,7 +589,7 @@ def line_chart(ds: xr.Dataset):
     # boucle Y
     # ----------------------
 
-    for y_name in y_names:
+    for y_i, y_name in enumerate(y_names):
 
         da = ds[y_name]
 
@@ -505,14 +605,43 @@ def line_chart(ds: xr.Dataset):
         for dim in dims:
 
             coords = da.coords[dim].values
+            n = len(coords)
 
-            if len(coords) == 1:
+            # ----------------------
+            # CAS DIMENSION TRES GRANDE
+            # ----------------------
+
+            if n > 30:
+
+                print(f"\nLa dimension '{dim}' contient {n} valeurs.")
+
+                choice = input(
+                    f"Voulez-vous moyenner sur '{dim}' ? (y/n) : "
+                ).strip().lower()
+
+                if choice == "y":
+
+                    da = da.mean(dim=dim, skipna=True)
+
+                    print(f"→ moyenne appliquée sur '{dim}'")
+
+                    continue
+
+            # ----------------------
+            # CAS UNE SEULE VALEUR
+            # ----------------------
+
+            if n == 1:
                 selections[dim] = coords
                 continue
 
+            # ----------------------
+            # SELECTION UTILISATEUR
+            # ----------------------
+
             print(f"\nDimension '{dim}' :")
 
-            for i,v in enumerate(coords):
+            for i, v in enumerate(coords):
                 print(f"[{i}] {v}")
 
             choice = input(
@@ -524,7 +653,7 @@ def line_chart(ds: xr.Dataset):
             else:
                 idx = [int(i) for i in choice.split(",")]
                 selections[dim] = coords[idx]
-
+                
         # ----------------------
         # combinaisons
         # ----------------------
@@ -549,7 +678,7 @@ def line_chart(ds: xr.Dataset):
 
             y_vals = da_sel.values
 
-            label = y_name
+            label = legend_labels[y_i]
 
             if sel:
                 label += " | " + ", ".join(
@@ -568,9 +697,10 @@ def line_chart(ds: xr.Dataset):
     # style
     # ----------------------
 
-    ax.set_xlabel(x_name)
-    ax.set_ylabel("Value")
-    ax.set_title("Line chart")
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    ax.set_title(title)
+
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend()
 
