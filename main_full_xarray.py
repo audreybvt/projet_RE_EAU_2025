@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import statistics_xr as stat_xr
 import visualization_xr as visu_xr
 import data_formatting as dt_form
-import indicators as indic
+import indicators_xr as indic_xr
 from pathlib import Path
 from os import makedirs
 
@@ -75,6 +75,7 @@ menu_stats_xr = {
 }
 
 # Indicator selection dictionaries
+
 dict_indicateurs = {
     "IPS": 1,
     "Qmean": 2,
@@ -86,14 +87,15 @@ dict_indicateurs = {
 }
 
 menu_indicateurs = {
-    1: indic.IPS,
-    2: indic.Qmean,
-    3: indic.Q90_95,
-    4: indic.Q10_05,
-    5: indic.VCN10,
-    6: indic.VCX3,
-    7: indic.over_threshold
+    1:indic_xr.IPS,
+    2:indic_xr.Qmean,
+    #3:indic_xr.Q90_95,
+    #4:indic_xr.Q10_05,
+    #5:indic_xr.VCN10,
+    #6:indic_xr.VCX3,
+    #7:indic_xr.over_threshold
 }
+
 
 while True: 
 # Demande des indicateurs
