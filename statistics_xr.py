@@ -1,4 +1,8 @@
 
+
+
+
+'''
 #Set of statistics functions to treat variables from netCDF files
 #Called in the "# netCDF case" part of the main file
 
@@ -488,6 +492,422 @@ def median_value_flexible(ds):
         print(f"Result shape: {median_val.shape}")
 
     return ds
+'''
+
+
+
+
+#Set of statistics functions to treat variables from netCDF files
+#Called in the "# netCDF case" part of the main file
+
+import xarray as xr
+import pandas as pd
+import numpy as np
+import calendar
+
+
+# functiun to ask for a date with error handling and support for multiple formats
+def ask_date(ds):
+    """
+    Ask the user for a start and end date within the dataset time range.
+    Returns (start_date, end_date) as pandas Timestamp or None.
+    """
+
+
+    # --- récupérer les dates disponibles correctement ---
+    time_values = xr.coding.times.decode_cf_datetime(
+        ds["time"], 
+        ds["time"].attrs["units"], 
+        calendar=ds["time"].attrs.get("calendar", "standard")
+    )
+
+    # convertir en pandas Timestamp si nécessaire
+    time_values = pd.to_datetime(time_values)
+
+    min_date = time_values.min()
+    max_date = time_values.max()
+
+    print("\nPériode disponible :")
+    print(f" Du {min_date.date()} au {max_date.date()}")
+
+    print("\nDéfinition de la période (laisser vide pour tout afficher)")
+
+    while True:
+
+        start_input = input("Date de début (YYYY-MM-DD) : ").strip()
+        end_input = input("Date de fin (YYYY-MM-DD) : ").strip()
+
+        try:
+            start_date = pd.to_datetime(start_input) if start_input else None
+        except:
+            print("Invalid date format.")
+            continue
+
+        try:
+            end_date = pd.to_datetime(end_input) if end_input else None
+        except:
+            print("Invalid date format.")
+            continue
+
+        
+
+        # --- vérifier cohérence ---
+        if start_date and end_date and start_date > end_date:
+            print("La date de début doit être antérieure à la date de fin.")
+            continue
+
+        # --- vérifier dans le domaine ---
+        if start_date and start_date < min_date:
+            print("La date de début est avant la période disponible.")
+            continue
+
+        if end_date and end_date > max_date:
+            print("La date de fin est après la période disponible.")
+            continue
+
+        break
+
+    return start_date, end_date
+
+
+
+
+
+
+
+
+
+
+
+
+### Mean value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
+
+
+def mean_value_flexible(ds):
+    # Variable selection
+    vars_list = list(ds.data_vars)
+    print("\nAvailable variables:")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+
+    while True:
+        try:
+            var_idx = int(input("\nIndex of the variable to process: "))
+            var_name = vars_list[var_idx]
+            break
+        except (ValueError, IndexError):
+            print("Invalid index. Please try again.")
+
+    active_da = ds[var_name]
+
+    # Identification of available dimensions
+    available_dims = list(active_da.dims)
+    dims_to_reduce = []
+    
+    print("\nWhich dimensions do you want to average across?")
+    print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
+    for i, d in enumerate(available_dims):
+        print(f" [{i}] {d}")
+
+    
+    while True:
+
+        choice_dims = input("Your choice: ").strip()
+
+        if choice_dims == "":
+            dims_to_reduce = available_dims
+            break
+
+        try:
+            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+            dims_to_reduce = [available_dims[i] for i in indices]
+            break
+
+        except (ValueError, IndexError):
+            print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions.")
+
+
+        
+    # Handling of time period if 'time' is selected 
+    period_label = "" 
+
+    if "time" in dims_to_reduce:
+
+        print("\n--- Time Mean Configuration ---")
+
+        while True:
+
+            start_date, end_date = ask_date(ds)
+
+            if start_date or end_date:
+                temp_da = active_da.sel(time=slice(start_date, end_date))
+            else:
+                temp_da = active_da
+
+            # vérifier s'il y a des données
+            if temp_da.time.size == 0:
+                print("No data available in this time range. Please choose another period.")
+                continue
+
+            # si la sélection est valide
+            active_da = temp_da
+
+            if start_date or end_date:
+                s = start_date.date() if start_date else "start"
+                e = end_date.date() if end_date else "end"
+                period_label = f"_{s}_{e}"
+
+            break
+
+
+    # Mean calculation
+    print(f"\nCalculating mean across: {dims_to_reduce}...")
+    mean_val = active_da.mean(dim=dims_to_reduce, skipna=True)
+
+    # Variable naming
+    # Create a suffix based on the reduced dimensions
+    dims_suffix = "_mean_on_" + "_".join(dims_to_reduce)
+    new_var_name = f"{var_name}{dims_suffix}{period_label}"
+
+    # Add to Dataset
+    # Inject the mean value. Xarray will automatically align/broadcast it across the remaining dimensions.
+    ds[new_var_name] = xr.where(ds[var_name].isnull(), np.nan, mean_val)
+
+    # Display results
+    print(f"\n Variable added: {new_var_name}")
+    if mean_val.size == 1:
+        print(f"Unique mean value: {float(mean_val.values):.2f}")
+    else:
+        print(f"Remaining dimensions after mean: {list(mean_val.dims)}")
+        print(f"Result shape: {mean_val.shape}")
+
+    return ds
+
+
+
+
+
+
+### Maximum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
+
+def maximum_value_flexible(ds):
+    # Variable selection
+    vars_list = list(ds.data_vars)
+    print("\nAvailable variables:")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+
+    while True:
+        try:
+            var_idx = int(input("\nIndex of the variable to find the maximum: "))
+            var_name = vars_list[var_idx]
+            break
+        except (ValueError, IndexError):
+            print("Invalid index. Please try again.")
+
+    active_da = ds[var_name]
+
+    # Identification of available dimensions
+    available_dims = list(active_da.dims)
+    dims_to_reduce = []
+    
+    print("\nAcross which dimensions do you want to find the maximum?")
+    print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
+    for i, d in enumerate(available_dims):
+        print(f" [{i}] {d}")
+
+    
+    while True:
+
+        choice_dims = input("Your choice: ").strip()
+
+        if choice_dims == "":
+            dims_to_reduce = available_dims
+            break
+
+        try:
+            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+            dims_to_reduce = [available_dims[i] for i in indices]
+            break
+
+        except (ValueError, IndexError):
+            print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
+
+
+
+    # Handling of time period if 'time' is selected 
+    period_label = "" 
+
+    if "time" in dims_to_reduce:
+
+        print("\n--- Time Mean Configuration ---")
+
+        while True:
+
+            start_date, end_date = ask_date(ds)
+
+            if start_date or end_date:
+                temp_da = active_da.sel(time=slice(start_date, end_date))
+            else:
+                temp_da = active_da
+
+            # vérifier s'il y a des données
+            if temp_da.time.size == 0:
+                print("No data available in this time range. Please choose another period.")
+                continue
+
+            # si la sélection est valide
+            active_da = temp_da
+
+            if start_date or end_date:
+                s = start_date.date() if start_date else "start"
+                e = end_date.date() if end_date else "end"
+                period_label = f"_{s}_{e}"
+
+            break
+
+
+
+    # Maximum calculation
+    print(f"\nCalculating maximum across: {dims_to_reduce}...")
+    max_val = active_da.max(dim=dims_to_reduce, skipna=True)
+
+    # Variable naming
+    dims_suffix = "_max_on_" + "_".join(dims_to_reduce)
+    new_var_name = f"max_{var_name}{dims_suffix}{period_label}"
+
+    # Add to Dataset
+    # Broadcast the max result back to the original dataset shape for compatibility
+    ds[new_var_name] = xr.where(ds[var_name].isnull(), np.nan, max_val)
+
+    # 7. Display results
+    print(f"\n Variable added: {new_var_name}")
+    if max_val.size == 1:
+        print(f"Unique maximum value: {float(max_val.values):.2f}")
+    else:
+        print(f"Remaining dimensions after calculation: {list(max_val.dims)}")
+        print(f"Result shape: {max_val.shape}")
+
+    return ds
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Minimum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
+
+def minimum_value_flexible(ds):
+    # Variable selection
+    vars_list = list(ds.data_vars)
+    print("\nAvailable variables:")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+
+    while True:
+        try:
+            var_idx = int(input("\nIndex of the variable to find the minimum: "))
+            var_name = vars_list[var_idx]
+            break
+        except (ValueError, IndexError):
+            print("Invalid index. Please try again.")
+
+    active_da = ds[var_name]
+
+    # Identification of available dimensions
+    available_dims = list(active_da.dims)
+    dims_to_reduce = []
+          
+
+    print("\nAcross which dimensions do you want to find the minimum?")
+    print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
+    for i, d in enumerate(available_dims):
+        print(f" [{i}] {d}")
+
+    
+    while True:
+
+        choice_dims = input("Your choice: ").strip()
+
+        if choice_dims == "":
+            dims_to_reduce = available_dims
+            break
+
+        try:
+            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+            dims_to_reduce = [available_dims[i] for i in indices]
+            break
+
+        except (ValueError, IndexError):
+            print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
+
+    
+
+    # Handling of time period if 'time' is selected 
+    period_label = "" 
+
+    if "time" in dims_to_reduce:
+
+        print("\n--- Time Mean Configuration ---")
+
+        while True:
+
+            start_date, end_date = ask_date(ds)
+
+            if start_date or end_date:
+                temp_da = active_da.sel(time=slice(start_date, end_date))
+            else:
+                temp_da = active_da
+
+            # vérifier s'il y a des données
+            if temp_da.time.size == 0:
+                print("No data available in this time range. Please choose another period.")
+                continue
+
+            # si la sélection est valide
+            active_da = temp_da
+
+            if start_date or end_date:
+                s = start_date.date() if start_date else "start"
+                e = end_date.date() if end_date else "end"
+                period_label = f"_{s}_{e}"
+
+            break
+
+    # Minimum calculation
+    print(f"\nCalculating minimum across: {dims_to_reduce}...")
+    min_val = active_da.min(dim=dims_to_reduce, skipna=True)
+
+    # Variable naming
+    dims_suffix = "_min_on_" + "_".join(dims_to_reduce)
+    new_var_name = f"min_{var_name}{dims_suffix}{period_label}"
+
+    # Add to Dataset
+    # Broadcast the min result back to the original dataset shape for compatibility
+    ds[new_var_name] = xr.where(ds[var_name].isnull(), np.nan, min_val)
+
+    # Display results
+    print(f"\n Variable added: {new_var_name}")
+    if min_val.size == 1:
+        print(f"Unique minimum value: {float(min_val.values):.2f}")
+    else:
+        print(f"Remaining dimensions after calculation: {list(min_val.dims)}")
+        print(f"Result shape: {min_val.shape}")
+
+    return ds
+
+
 
 ### Percentile value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 

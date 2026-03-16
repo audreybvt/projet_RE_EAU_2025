@@ -64,16 +64,14 @@ menu_visu = {
     5: visu_xr.histogram_chart
 }
 
-dict_stats={"Temporal mean":1,"Flexible mean":2,"Flexible maximum":3, "Flexible minimum":4, "Flexible percentile":5, "Temporal rolling mean":6, "Monthly Interannual average":7}
+dict_stats={"Flexible mean":1,"Flexible maximum":2, "Flexible minimum":3, "Flexible percentile":4, "Temporal rolling mean":5, "Monthly Interannual average":6}
 menu_stats_xr = {
-    1: stat_xr.mean_value_time,
-    2: stat_xr.mean_value_flexible,
-    3: stat_xr.maximum_value_flexible,     
-    4: stat_xr.minimum_value_flexible,
-    5: stat_xr.percentile_value_flexible,
-    6: stat_xr.rolling_mean_value,
-    7:stat_xr.monthly_interannual_average_xr,
-    #7: stat_xr.nombre_ocurrences_au_dessus_seuil
+    1: stat_xr.mean_value_flexible,
+    2: stat_xr.maximum_value_flexible,     
+    3: stat_xr.minimum_value_flexible,
+    4: stat_xr.percentile_value_flexible,
+    5: stat_xr.rolling_mean_value,
+    6: stat_xr.monthly_interannual_average_xr
 }
 
 # Indicator selection dictionaries
