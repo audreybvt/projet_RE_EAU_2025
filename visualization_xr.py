@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os
 import matplotlib.dates as mdates
+import itertools
 
 ### UTILITIES ###
 def subset_time(ds, start, end):
@@ -264,136 +265,6 @@ def configure_plot(
         "y_limits": y_limits
     }
 
-'''
-def configure_plot_labels_and_title(
-    x_default: str,
-    y_defaults: list[str] | str,
-    y_min: float,
-    y_max: float,
-    period_text: str = "",
-    multiple_y: bool = False
-):
-    """
-    Demande à l'utilisateur de personnaliser :
-    - titre du graphique
-    - labels axes X/Y avec unités
-    - légende si multiple Y
-    - échelle de l'axe Y
-
-    Args:
-        x_default: nom par défaut de la variable X
-        y_defaults: nom(s) par défaut des variables Y
-        y_min, y_max: min et max des données Y
-        period_text: texte de période (ex: " (2000–2050)")
-        multiple_y: True si plusieurs Y
-
-    Returns:
-        dict avec clés :
-        - x_label
-        - y_label
-        - legend_labels
-        - title
-        - y_limits
-    """
-
-    # ----------------------
-    # Label X
-    # ----------------------
-
-    x_label = input(f"Label for X-axis (leave empty for '{x_default}'): ").strip()
-    x_label = x_label if x_label != "" else x_default
-
-    x_unit = input("Unit for X-axis (leave empty for none): ").strip()
-    x_label = build_axis_label(x_label, x_unit)
-
-    # ----------------------
-    # Label Y
-    # ----------------------
-
-    if multiple_y:
-
-        y_label_input = input(
-            f"Label for Y-axis (leave empty for 'Values'): "
-        ).strip()
-
-        y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
-
-        y_label = build_axis_label(
-            y_label_input if y_label_input != "" else "Values",
-            y_unit
-        )
-
-        legend_input = input(
-            f"Legend names for each Y (comma-separated, leave empty for defaults: {', '.join(y_defaults)}): "
-        ).strip()
-
-        if legend_input == "":
-            legend_labels = y_defaults
-        else:
-            legend_labels = [l.strip() for l in legend_input.split(",")]
-
-            if len(legend_labels) != len(y_defaults):
-                raise ValueError("Number of legend labels must match number of Y variables")
-
-    else:
-
-        y_label_input = input(
-            f"Label for Y-axis (leave empty for '{y_defaults}'): "
-        ).strip()
-
-        y_unit = input("Unit for Y-axis (leave empty for none): ").strip()
-
-        y_label = build_axis_label(
-            y_label_input if y_label_input != "" else y_defaults,
-            y_unit
-        )
-
-        legend_labels = []
-
-    # ----------------------
-    # Échelle axe Y
-    # ----------------------
-
-    print(f"\nLes valeurs de Y vont de {y_min:.3f} à {y_max:.3f}")
-
-    y_scale_choice = input(
-        "Voulez-vous définir une échelle personnalisée ? (y/n) : "
-    ).strip().lower()
-
-    if y_scale_choice == "y":
-
-        y_min_user = input(f"Y min (leave empty for {y_min:.3f}) : ").strip()
-        y_max_user = input(f"Y max (leave empty for {y_max:.3f}) : ").strip()
-
-        y_min_final = float(y_min_user) if y_min_user != "" else y_min
-        y_max_final = float(y_max_user) if y_max_user != "" else y_max
-
-        y_limits = (y_min_final, y_max_final)
-
-    else:
-
-        y_limits = None
-
-    # ----------------------
-    # Titre
-    # ----------------------
-
-    default_title = f"{', '.join(y_defaults) if isinstance(y_defaults,list) else y_defaults} vs {x_default}{period_text}"
-
-    custom_title = input(
-        f"Chart title (leave empty for '{default_title}') : "
-    ).strip()
-
-    title = custom_title if custom_title != "" else default_title
-
-    return {
-        "x_label": x_label,
-        "y_label": y_label,
-        "legend_labels": legend_labels,
-        "title": title,
-        "y_limits": y_limits
-    }
-'''
 def build_axis_label(label, unit):
     """
     Construit le label d'axe avec unité si elle existe.
@@ -405,6 +276,90 @@ def build_axis_label(label, unit):
         return label
     return f"{label} ({unit})"
 
+def handle_xarray_dimensions(
+    da: xr.DataArray,
+    main_dims: list[str]
+):
+    """
+    Handle extra dimensions in an xarray DataArray.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        Variable to process
+    main_dims : list[str]
+        Dimensions that must remain (ex: ["time"])
+
+    Returns
+    -------
+    list of tuples:
+        (selection_dict, data_values)
+    """
+
+    dims = [d for d in da.dims if d not in main_dims]
+
+    selections = {}
+
+    for dim in dims:
+
+        coords = da.coords[dim].values
+        n = len(coords)
+
+        # ---- If dimension very large → propose mean
+        if n > 30:
+
+            print(f"\nDimension '{dim}' has {n} values.")
+
+            choice = input(
+                f"Average over '{dim}' ? (y/n): "
+            ).strip().lower()
+
+            if choice == "y":
+                da = da.mean(dim=dim, skipna=True)
+                print(f"→ Averaged over {dim}")
+                continue
+
+        # ---- If single value
+        if n == 1:
+            selections[dim] = coords
+            continue
+
+        # ---- Ask user selection
+        print(f"\nDimension '{dim}' values:")
+
+        for i, v in enumerate(coords):
+            print(f"[{i}] {v}")
+
+        choice = input(
+            f"indices for {dim} (ex: 0,1 or all): "
+        ).strip()
+
+        if choice == "all":
+            selections[dim] = coords
+        else:
+            idx = [int(i) for i in choice.split(",")]
+            selections[dim] = coords[idx]
+
+    # ---- Generate combinations
+
+    if len(selections) == 0:
+
+        return [({}, da.values)]
+
+    combos = list(itertools.product(*selections.values()))
+    dims_names = list(selections.keys())
+
+    outputs = []
+
+    for combo in combos:
+
+        sel = dict(zip(dims_names, combo))
+
+        da_sel = da.sel(**sel)
+
+        outputs.append((sel, da_sel.values))
+
+    return outputs
 
 # ---------------- Bar Chart ---------------- 
 
@@ -734,111 +689,33 @@ def line_chart(ds: xr.Dataset):
     # ----------------------
     # boucle Y
     # ----------------------
-
-    for y_i, y_name in enumerate(y_names):
+    for y_name in y_names:
 
         da = ds[y_name]
 
         if x_dim not in da.dims:
-            print(f"{y_name} ignoré (pas de dimension {x_dim})")
             continue
 
-        # dimensions restantes
-        dims = [d for d in da.dims if d != x_dim]
-
-        selections = {}
-
-        for dim in dims:
-
-            coords = da.coords[dim].values
-            n = len(coords)
-
-            # ----------------------
-            # CAS DIMENSION TRES GRANDE
-            # ----------------------
-
-            if n > 30:
-
-                print(f"\nLa dimension '{dim}' contient {n} valeurs.")
-
-                choice = input(
-                    f"Voulez-vous moyenner sur '{dim}' ? (y/n) : "
-                ).strip().lower()
-
-                if choice == "y":
-
-                    da = da.mean(dim=dim, skipna=True)
-
-                    print(f"→ moyenne appliquée sur '{dim}'")
-
-                    continue
-
-            # ----------------------
-            # CAS UNE SEULE VALEUR
-            # ----------------------
-
-            if n == 1:
-                selections[dim] = coords
-                continue
-
-            # ----------------------
-            # SELECTION UTILISATEUR
-            # ----------------------
-
-            print(f"\nDimension '{dim}' :")
-
-            for i, v in enumerate(coords):
-                print(f"[{i}] {v}")
-
-            choice = input(
-                f"indices pour {dim} (ex 0,1 ou all) : "
-            ).strip()
-
-            if choice == "all":
-                selections[dim] = coords
-            else:
-                idx = [int(i) for i in choice.split(",")]
-                selections[dim] = coords[idx]
-                
-        # ----------------------
-        # combinaisons
-        # ----------------------
-
-        import itertools
-
-        combos = list(
-            itertools.product(*selections.values())
+        results = handle_xarray_dimensions(
+            da,
+            main_dims=[x_dim]
         )
 
-        dims_names = list(selections.keys())
+        for sel, y_vals in results:
 
-        colors = cm.viridis(
-            np.linspace(0,1,len(combos))
-        )
-
-        for i,combo in enumerate(combos):
-
-            sel = dict(zip(dims_names,combo))
-
-            da_sel = da.sel(**sel)
-
-            y_vals = da_sel.values
-
-            label = legend_labels[y_i]
+            label = y_name
 
             if sel:
                 label += " | " + ", ".join(
-                    f"{k}={v}" for k,v in sel.items()
+                    f"{k}={v}" for k, v in sel.items()
                 )
 
             ax.plot(
                 x_vals,
                 y_vals,
-                label=label,
-                linewidth=1,
-                color=colors[i]
+                label=label
             )
-
+    
     # ----------------------
     # style
     # ----------------------
