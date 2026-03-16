@@ -126,6 +126,7 @@ def csv_to_xarray(filepath):
     # Si colonne date trouvée → index temporel
     if date_col:
         df = df.set_index(date_col)
+        df.index.name = "time"
 
     # Cas long (au moins une colonne catégorielle)
     if object_cols:
