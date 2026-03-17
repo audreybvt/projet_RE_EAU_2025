@@ -41,39 +41,59 @@ def categorical_filter(ds, standard_dims):
             for i, dim in enumerate(selectable_dims):
                 print(f" [{i}] {dim} ({ds.dims[dim]} values)")
             
-            choice = input("\nDo you want to filter a specific category? (y/n): ").lower().strip()
+
+            while True:
+                choice = input("\nDo you want to filter a specific category? (y/n): ").lower().strip()
+                if choice in ["y", "n"]:
+                    break
+                print("Please enter 'y' or 'n'.")
             if choice != 'y':
                 print("-> Indicator will be applied to all remaining categories.")
                 break
             
-            try:
-                # Ask for category index
-                dim_idx_input = input(f"Which category? Index (0-{len(selectable_dims)-1}): ")
+        
+            # Sélection dimension
+            while True:
+                dim_idx_input = input(f"Which category? Index (0-{len(selectable_dims)-1}): ").strip()
+                if not dim_idx_input.isdigit(): 
+                    print("Please enter a valid integer.")
+                    continue
                 dim_idx = int(dim_idx_input)
+                if dim_idx < 0 or dim_idx >= len(selectable_dims):
+                    print(f"Index out of range. Choose between 0 and {len(selectable_dims)-1}.")
+                    continue
                 dim_name = selectable_dims[dim_idx]
-                
-                # Show available values for that category
-                vals = ds[dim_name].values
-                print(f"\nValues in '{dim_name}':")
-                for j, v in enumerate(vals): 
-                    print(f"  [{j}] {v}")
-                
-                # Ask for value index
-                val_idx_input = input(f"Select value index for {dim_name}: ")
-                val_idx = int(val_idx_input)
-                
-                # Apply selection
-                active_ds = active_ds.sel({dim_name: vals[val_idx]})
-                selections_made.append(f"{dim_name}: {vals[val_idx]}")
-                
-                # Remove from list so it's not offered again
-                selectable_dims.pop(dim_idx)
-                print(f"-> Filter applied: {dim_name} = {vals[val_idx]}")
+                break
 
-            except (ValueError, IndexError):
-                print("\n[Error] Invalid input. Please enter a valid index number.")
+            # Sélection valeur
+            vals = ds[dim_name].values
+            print(f"\nValues in '{dim_name}':")
+            for j, v in enumerate(vals):
+                print(f"  [{j}] {v}")
+
+            while True:
+                val_idx_input = input(f"Select value index for {dim_name}: ").strip()
+                if not val_idx_input.isdigit():
+                    print("Please enter a valid integer.")
+                    continue
+                val_idx = int(val_idx_input)
+                if val_idx < 0 or val_idx >= len(vals):
+                    print(f"Index out of range. Choose between 0 and {len(vals)-1}.")
+                    continue
+                break
+
+            # Apply selection
+            active_ds = active_ds.sel({dim_name: vals[val_idx]})
+            selections_made.append(f"{dim_name}: {vals[val_idx]}")
+            # Remove from list so it's not offered again
+            selectable_dims.pop(dim_idx)
+            print(f"-> Filter applied: {dim_name} = {vals[val_idx]}")
+
                 
     return active_ds, selections_made
+
+
+
 
 def get_time_freq():
     """
@@ -105,6 +125,9 @@ def get_time_freq():
             return f"{nb}{freq_map[unite]}", unite, nb, label
         except ValueError:
             print("Please enter a valid integer.")
+
+
+
 
 # IPS (Soil Water Balance Index)
 def IPS(ds):
