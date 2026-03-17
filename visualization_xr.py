@@ -46,6 +46,9 @@ def ask_variable(ds: xr.Dataset, multiple: bool = False, prompt: str = None) -> 
     while True:
         user_input = input(f"{message} ").strip()
         try:
+            if multiple and user_input == "":
+                print("Please select at least one variable.")
+                continue
             if multiple:
                 idx_list = sorted(set(int(i.strip()) for i in user_input.split(",")))
                 selected = [choices[i] for i in idx_list]
@@ -56,6 +59,9 @@ def ask_variable(ds: xr.Dataset, multiple: bool = False, prompt: str = None) -> 
             return selected
         except (ValueError, IndexError):
             print("Entrée invalide. Veuillez entrer les indices correspondants aux variables disponibles.")
+
+
+
 
 def ask_time_period(ds):
     """
@@ -78,8 +84,18 @@ def ask_time_period(ds):
         start_input = input("Date de début (YYYY-MM-DD) : ").strip()
         end_input = input("Date de fin (YYYY-MM-DD) : ").strip()
 
-        start_date = pd.to_datetime(start_input) if start_input else None
-        end_date = pd.to_datetime(end_input) if end_input else None
+        # --- parsing sécurisé ---
+        try:
+            start_date = pd.to_datetime(start_input) if start_input else None
+        except Exception:
+            print("Format invalide pour la date de début.")
+            continue
+
+        try:
+            end_date = pd.to_datetime(end_input) if end_input else None
+        except Exception:
+            print("Format invalide pour la date de fin.")
+            continue
 
         # --- vérifier cohérence ---
         if start_date and end_date and start_date > end_date:
@@ -99,9 +115,15 @@ def ask_time_period(ds):
 
     return start_date, end_date
 
+
+
+
 def dataset_to_dataframe(ds):
 
     return ds.to_dataframe().reset_index()
+
+
+
 
 def format_period_text(start_date, end_date):
     """
@@ -119,6 +141,9 @@ def format_period_text(start_date, end_date):
 
     else:
         return ""
+    
+
+
 
 def configure_plot(
         x_default: str = None,
@@ -212,7 +237,12 @@ def configure_plot(
 
     if x_limits is not None:
         
-        choice = input("Custom X axis limits? (y/n): ").lower()
+
+        while True:
+            choice = input("Custom X axis limits? (y/n): ").strip().lower()
+            if choice in ["y", "n"]:
+                break
+            print("Please enter 'y' or 'n'.")
 
         if choice == "y":
             
@@ -220,28 +250,46 @@ def configure_plot(
 
             print(f"\nLes valeurs de X vont de {x_min:.3f} à {x_max:.3f}")
 
-            x_min_user = input(f"Y min (leave empty for {x_min:.3f}) : ").strip()
-            x_max_user = input(f"Y max (leave empty for {x_max:.3f}) : ").strip()
+            while True:
+                x_min_user = input(f"X min (leave empty for {x_min:.3f}) : ").strip()
+                x_max_user = input(f"X max (leave empty for {x_max:.3f}) : ").strip()
 
-            x_min_final = float(x_min_user) if x_min_user != "" else x_min
-            x_max_final = float(x_max_user) if x_max_user != "" else x_max
+                try:
+                    x_min_final = float(x_min_user) if x_min_user != "" else x_min
+                    x_max_final = float(x_max_user) if x_max_user != "" else x_max
+                    break
+
+                except ValueError:
+                    print("Invalid numeric value. Please try again.")
 
             x_limits = (x_min_final, x_max_final)
 
     if y_limits is not None:
 
-        choice = input("Custom Y axis limits? (y/n): ").lower()
+        while True:
+            choice = input("Custom Y axis limits? (y/n): ").strip().lower()
+            if choice in ["y", "n"]:
+                break
+            print("Please enter 'y' or 'n'.")
 
         if choice == "y":
             
             [y_min, y_max] = y_limits
+
+            print(f"\nLes valeurs de Y vont de {y_min:.3f} à {y_max:.3f}")
+
+            while True:
+                y_min_user = input(f"Y min (leave empty for {y_min:.3f}) : ").strip()
+                y_max_user = input(f"Y max (leave empty for {y_max:.3f}) : ").strip()
+
+                try:
+                    y_min_final = float(y_min_user) if y_min_user != "" else y_min
+                    y_max_final = float(y_max_user) if y_max_user != "" else y_max
+                    break
+
+                except ValueError:
+                    print("Invalid numeric value. Please try again.")
                 
-            y_min_user = input(f"Y min (leave empty for {y_min:.3f}) : ").strip()
-            y_max_user = input(f"Y max (leave empty for {y_max:.3f}) : ").strip()
-
-            y_min_final = float(y_min_user) if y_min_user != "" else y_min
-            y_max_final = float(y_max_user) if y_max_user != "" else y_max
-
             y_limits = (y_min_final, y_max_final)
 
     # ----------------------
@@ -265,6 +313,10 @@ def configure_plot(
         "y_limits": y_limits
     }
 
+
+
+
+
 def build_axis_label(label, unit):
     """
     Construit le label d'axe avec unité si elle existe.
@@ -275,6 +327,10 @@ def build_axis_label(label, unit):
     if unit == "":
         return label
     return f"{label} ({unit})"
+
+
+
+
 
 def handle_xarray_dimensions(
     da: xr.DataArray,
@@ -310,10 +366,13 @@ def handle_xarray_dimensions(
 
             print(f"\nDimension '{dim}' has {n} values.")
 
-            choice = input(
-                f"Average over '{dim}' ? (y/n): "
-            ).strip().lower()
-
+            while True:
+                choice = input(f"Average over '{dim}' ? (y/n): ").strip().lower()
+                if choice in ["y", "n"]:
+                    break
+                print("Please enter 'y' or 'n'.")
+                        
+            
             if choice == "y":
                 da = da.mean(dim=dim, skipna=True)
                 print(f"→ Averaged over {dim}")
@@ -330,15 +389,27 @@ def handle_xarray_dimensions(
         for i, v in enumerate(coords):
             print(f"[{i}] {v}")
 
-        choice = input(
-            f"indices for {dim} (ex: 0,1 or all): "
-        ).strip()
 
-        if choice == "all":
-            selections[dim] = coords
-        else:
-            idx = [int(i) for i in choice.split(",")]
-            selections[dim] = coords[idx]
+        while True:
+            choice = input(f"indices for {dim} (ex: 0,1 or leave empty for all): ").strip()
+
+            if choice == "" or choice.lower() == "all":
+                selections[dim] = list(coords)
+                break
+
+            try:
+             
+                idx = [int(i.strip()) for i in choice.split(",")]
+
+                if any(i < 0 or i >= n for i in idx):
+                    raise IndexError
+
+                selections[dim] = [coords[i] for i in idx]
+                break
+
+            except (ValueError, IndexError):
+                print("Invalid indices. Please try again.")
+
 
     # ---- Generate combinations
 
@@ -360,6 +431,12 @@ def handle_xarray_dimensions(
         outputs.append((sel, da_sel.values))
 
     return outputs
+
+
+
+
+
+
 
 # ---------------- Bar Chart ---------------- 
 
@@ -417,8 +494,8 @@ def bar_chart(df):
        
     while True:
         # Hypothèse: les fonctions ask_date_visualization et format_period_text existent ailleurs
-        start_date = ask_date_visualization("Start date (YYYY-MM-DD or DD/MM/YYYY): ")
-        end_date   = ask_date_visualization("End date (YYYY-MM-DD or DD/MM/YYYY): ")
+        start_date = ask_time_period("Start date (YYYY-MM-DD or DD/MM/YYYY): ")
+        end_date   = ask_time_period("End date (YYYY-MM-DD or DD/MM/YYYY): ")
 
         if start_date and end_date and start_date > end_date:
             print("Start date must be before end date.")
@@ -729,6 +806,12 @@ def line_chart(ds: xr.Dataset):
 
     return fig
 
+
+
+
+
+
+
 # -------------- Scatter Plot ---------------
 
 def scatter_chart(df):
@@ -869,6 +952,12 @@ def scatter_chart(df):
     ax.legend()
 
     return fig
+
+
+
+
+
+
 
 # ---------------- Radar Chart ----------------
 
@@ -1032,6 +1121,12 @@ def radar_chart(df):
 
     return fig
 
+
+
+
+
+
+
 # ---------------- Histogram Chart ----------------
 
 def histogram_chart(ds: xr.Dataset):
@@ -1187,6 +1282,11 @@ def histogram_chart(ds: xr.Dataset):
     ax.set_ylabel(y_label)
     ax.grid(True, linestyle='--', alpha=0.5)
     return fig
+
+
+
+
+
 
 # ----------------- Test -----------------
 
