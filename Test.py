@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
 import xarray as xr
-
+from statistics_xr import minimum_value_flexible
 # --------------------------
 # 1️⃣ Ouvrir le fichier NetCDF
 # --------------------------
@@ -14,19 +14,28 @@ nc_file_2 = "C:/Users/User/OneDrive - CentraleSupelec/Documents/Etudes/CS/3A/Men
 ds = xr.open_dataset(nc_file, decode_cf=False)
 ds2 = xr.open_dataset(nc_file_2, decode_cf=False)
 
+
+minimum_value_flexible(ds)
+print(ds.data_vars)
+y_names = ["niveau", "min_niveau_min_on_time"]
+
+y_min = float(ds[y_names].to_array().min().values)
+y_max = float(ds[y_names].to_array().max().values)
+print(y_min, y_max)
 ds            # résumé complet
 ds.data_vars  # variables disponibles
 ds.dims       # dimensions
 ds.coords     # coordonnées
 ds.attrs      # attributs globaux
 
+'''
 print(ds)
 print(ds["niveau"])
 data = ds["niveau"].values.ravel()
 data = data[np.isfinite(data)]
 print(data)
 
-'''
+
 print(ds["time"])
 
 
