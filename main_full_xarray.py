@@ -89,11 +89,11 @@ dict_indicateurs = {
 menu_indicateurs = {
     1:indic_xr.IPS,
     2:indic_xr.Qmean,
-    #3:indic_xr.Q90_95,
-    #4:indic_xr.Q10_05,
-    #5:indic_xr.VCN10,
-    #6:indic_xr.VCX3,
-    #7:indic_xr.over_threshold
+    3:indic_xr.Q90_95,
+    4:indic_xr.Q10_05,
+    5:indic_xr.VCN10,
+    6:indic_xr.VCX3,
+    7:indic_xr.over_threshold
 }
 
 

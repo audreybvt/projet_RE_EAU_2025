@@ -621,6 +621,7 @@ def rolling_mean_value(ds):
 
 ### Interannual grouping by month of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
+import calendar
 
 def monthly_interannual_average_xr(ds):
     # Variable selection
@@ -639,52 +640,57 @@ def monthly_interannual_average_xr(ds):
 
     active_da = ds[var_name]
 
-    # Check for time dimension
-    if 'time' not in active_da.dims:
-        print("Error: This variable does not have a 'time' dimension.")
-        return ds
+    # list of dimensions to identify the time dimension 
+    dims_list = list(active_da.dims)
+    print(f"\nDimensions for '{var_name}':")
+    for i, d in enumerate(dims_list):
+        print(f" [{i}] {d}")
+
+    while True:
+        try:
+            dim_idx = int(input("Index of the time dimension: "))
+            time_dim = dims_list[dim_idx]
+            break
+        except (ValueError, IndexError):
+            print("Invalid index. Please choose an existing dimension.")
 
     # Calculation of monthly means (1 to 12)
     print(f"\nCalculating interannual monthly averages for '{var_name}'...")
     
-    # Note: Even with decode_cf=False, we try to use the time components 
-    # If time is raw integers, we convert to datetime objects first for grouping
     try:
-        # We group by month and calculate the mean along the 'time' dimension
-        # this reduces the 'time' dimension to a 'month' dimension (size 12)
-        monthly_stats = active_da.groupby("time.month").mean(dim="time", skipna=True)
-    except AttributeError:
+        # FIX: Instead of "time.month", use the variable time_dim selected by the user
+        # This allows the function to work if the dimension is named 'date', 'T', etc.
+        monthly_stats = active_da.groupby(f"{time_dim}.month").mean(dim=time_dim, skipna=True)
+    except (AttributeError, KeyError):
         # If decode_cf=False prevents time.month access, we provide a warning
-        print("Error: Time is not decoded. Cannot extract months from raw integers.")
-        print("Please ensure 'decode_cf=True' was used during loading for this specific tool.")
+        print(f"\nError: Could not extract months from '{time_dim}'.")
+        print("Ensure 'decode_cf=True' was used during loading and that the dimension is a datetime type.")
         return ds
 
     # Preparing the Coordinate (Month names)
+    # We rename the 'month' coordinate to match the string names
     month_names = [calendar.month_name[i] for i in range(1, 13)]
     monthly_stats = monthly_stats.assign_coords(month=month_names)
 
     # Variable naming
-    # We find how many interannual variables already exist to avoid overwriting
     base_name = f"interannual_month_{var_name}"
     occurrence = sum(1 for v in ds.data_vars if v.startswith(base_name)) + 1
     new_var_name = f"{base_name}_{occurrence}"
 
     # Add to Dataset
-    # IMPORTANT: Unlike mean/max, we do NOT use xr.where here. 
-    # Interannual stats have a different shape (12 months) than the daily series.
-    # We add it as a new variable with its own dimension 'month'.
     ds[new_var_name] = monthly_stats
 
     # Display results
     print(f"\nVariable added: {new_var_name}")
     print(f"Resulting Shape: {monthly_stats.shape} (Dimensions: {list(monthly_stats.dims)})")
     
-    # Preview of the first few stations if applicable
+    # Preview
     print("\nPreview of January averages:")
     try:
+        # Since we assigned coords, we select by the new 'month' coordinate
         jan_preview = monthly_stats.sel(month="January")
         print(jan_preview.head())
-    except:
+    except Exception:
         pass
 
     return ds

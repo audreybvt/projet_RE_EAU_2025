@@ -354,3 +354,509 @@ def Qmean(ds):
     print(ds[new_time_dim].values[:5])
     
     return ds
+
+## Q90/Q95 High-flow Indicators (flow exceeded only 10% or 5% of the time)
+
+def Q90_95(ds):
+    """
+    Return the flow rates exceeded 90% and 95% of the time for a chosen period (xarray version).
+
+    Args:
+        ds: Input xarray Dataset.
+    Returns:
+        ds: Original dataset with added resampled time coordinate and Q90/Q95 variables.
+    """
+
+    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
+    
+    # Categorical Filtering (reusing your existing helper)
+    active_ds, selections_made = categorical_filter(ds, standard_dims)
+
+    # Time coordinate selection
+    coords_list = list(ds.coords)
+    print("\nAvailable coordinates for time:")
+    for i, coord in enumerate(coords_list):
+        print(f" [{i}] {coord}")
+    
+    while True:
+        try:
+            idx_t = int(input("Index of Date/Time coordinate: "))
+            time_coord = coords_list[idx_t]
+            break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
+
+    # Discharge variable selection
+    vars_list = list(active_ds.data_vars)
+    print("\nAvailable variables (for Discharge):")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+    
+    while True:
+        try:
+            idx_q = int(input("Index of Discharge variable (Q): "))
+            var_q = vars_list[idx_q]
+            break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
+
+    # Time config (reusing your get_time_freq function)
+    frequence, unite, nb, label_unite = get_time_freq()
+
+    # Naming configuration
+    new_time_dim = f"{time_coord}_Group_{nb}{unite}"
+    new_var_q90 = f"Q90_{nb}{unite}_{var_q}"
+    new_var_q95 = f"Q95_{nb}{unite}_{var_q}"
+
+    try:
+        print("Calculation Phase (Quantiles)")
+        # Note: Q90 is the 0.10 quantile (flow exceeded 90% of the time)
+        # Note: Q95 is the 0.05 quantile (flow exceeded 95% of the time)
+        
+        resampled_group = active_ds[var_q].resample({time_coord: frequence})
+        
+        # Calculate Q90
+        # We use .drop_vars because xarray adds a 'quantile' coordinate by default
+        da_q90 = resampled_group.quantile(0.10, skipna=True).drop_vars('quantile')
+        da_q90 = da_q90.rename({time_coord: new_time_dim})
+        
+        # Calculate Q95
+        da_q95 = resampled_group.quantile(0.05, skipna=True).drop_vars('quantile')
+        da_q95 = da_q95.rename({time_coord: new_time_dim})
+
+        # Add to main dataset
+        ds[new_var_q90] = da_q90
+        ds[new_var_q90].attrs['description'] = f"Q90 (exceeded 90% of time) over {nb} {label_unite} for {var_q}"
+        
+        ds[new_var_q95] = da_q95
+        ds[new_var_q95].attrs['description'] = f"Q95 (exceeded 95% of time) over {nb} {label_unite} for {var_q}"
+
+    except Exception as e:
+        print(f"Calculation Error: {e}")
+        return ds
+
+    # Summary
+    print("\nQ90/95 calculation summary:")
+    if selections_made:
+        print("Selection:")
+        for item in selections_made: print(f" - {item}")
+    else:
+        print("Selection: none (calculated across all categories).")
+
+    print(f"New Temporal Coordinate added: '{new_time_dim}'")
+    print(f"New Variables added: '{new_var_q90}' and '{new_var_q95}'")
+    print(f"Dimensions: {ds[new_var_q90].dims}")
+    print(f"Shape: {ds[new_var_q90].shape}")
+    
+    # Previews
+    print(f"\nQ90 Preview (First 5 values):")
+    print(ds[new_var_q90].values[:5])
+    
+    print("Date Preview (First 5 dates):")
+    print(ds[new_time_dim].values[:5])
+    
+    return ds
+
+# VCN10 (Minimum 10-day consecutive mean flow)
+
+def VCN10(ds):
+    """
+    Return the minimum 10-day consecutive mean flow (VCN10) for a chosen period (xarray version).
+
+    Args:
+        ds: Input xarray Dataset.
+    Returns:
+        ds: Original dataset with added resampled time coordinate and VCN10 variable.
+    """
+
+    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
+    
+    # Categorical Filtering (reusing your existing helper)
+    active_ds, selections_made = categorical_filter(ds, standard_dims)
+
+    # Time coordinate selection
+    coords_list = list(ds.coords)
+    print("\nAvailable coordinates for time:")
+    for i, coord in enumerate(coords_list):
+        print(f" [{i}] {coord}")
+    
+    while True:
+        try:
+            idx_t = int(input("Index of Date/Time coordinate: "))
+            time_coord = coords_list[idx_t]
+            break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
+
+    # Discharge variable selection
+    vars_list = list(active_ds.data_vars)
+    print("\nAvailable variables (for Discharge):")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+    
+    while True:
+        try:
+            idx_q = int(input("Index of Discharge variable (Q): "))
+            var_q = vars_list[idx_q]
+            break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
+
+    # Time config (reusing your get_time_freq function)
+    frequence, unite, nb, label_unite = get_time_freq()
+
+    # Naming configuration
+    new_time_dim = f"{time_coord}_Group_{nb}{unite}"
+    new_var_name = f"VCN10_{nb}{unite}_{var_q}"
+
+    try:
+        print(f"Calculation Phase: Finding 10-day minimum mean within every {nb} {label_unite}...")
+        
+        # 1. Calculate the 10-day rolling mean
+        # We assume the time step of the data is daily for VCN10 to make sense
+        rolling_10d = active_ds[var_q].rolling({time_coord: 10}, center=False).mean()
+
+        # 2. Resample to find the minimum of those 10-day means over the period
+        resampled_vcn = rolling_10d.resample({time_coord: frequence}).min(skipna=True)
+        
+        # 3. Rename the time dimension to the grouped version
+        resampled_vcn = resampled_vcn.rename({time_coord: new_time_dim})
+
+        # Add to main dataset
+        ds[new_var_name] = resampled_vcn
+        ds[new_var_name].attrs['description'] = f"VCN10 (Min 10-day consecutive mean) over {nb} {label_unite} for {var_q}"
+
+    except Exception as e:
+        print(f"Calculation Error: {e}")
+        return ds
+
+    # Summary
+    print("\nVCN10 calculation summary:")
+    if selections_made:
+        print("Selection:")
+        for item in selections_made: print(f" - {item}")
+    else:
+        print("Selection: none (calculated across all categories).")
+
+    print(f"New Temporal Coordinate added: '{new_time_dim}'")
+    print(f"New Variable added: '{new_var_name}'")
+    print(f"Dimensions: {ds[new_var_name].dims}")
+    print(f"Shape: {ds[new_var_name].shape}")
+    
+    # Previews
+    print(f"\nVCN10 Preview (First 5 values):")
+    print(ds[new_var_name].values[:5])
+    
+    print("Date Preview (First 5 dates):")
+    print(ds[new_time_dim].values[:5])
+    
+    return ds
+
+## Q10/Q05 (flow exceeded only 10% or 5% of the time): low flow indicators
+
+def Q10_05(ds):
+    """
+    Return the flow rates exceeded 10% and 5% of the time for a chosen period (xarray version).
+
+    Args:
+        ds: Input xarray Dataset.
+    Returns:
+        ds: Original dataset with added resampled time coordinate and Q10/Q05 variables.
+    """
+
+    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
+    
+    # Categorical Filtering
+    active_ds, selections_made = categorical_filter(ds, standard_dims)
+
+    # Time coordinate selection
+    coords_list = list(ds.coords)
+    print("\nAvailable coordinates for time:")
+    for i, coord in enumerate(coords_list):
+        print(f" [{i}] {coord}")
+    
+    while True:
+        try:
+            idx_t = int(input("Index of Date/Time coordinate: "))
+            time_coord = coords_list[idx_t]
+            break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
+
+    # Discharge variable selection
+    vars_list = list(active_ds.data_vars)
+    print("\nAvailable variables (for Discharge):")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+    
+    while True:
+        try:
+            idx_q = int(input("Index of Discharge variable (Q): "))
+            var_q = vars_list[idx_q]
+            break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
+
+    # Time config
+    frequence, unite, nb, label_unite = get_time_freq()
+
+    # Naming configuration
+    new_time_dim = f"{time_coord}_Group_{nb}{unite}"
+    new_var_q10 = f"Q10_{nb}{unite}_{var_q}"
+    new_var_q05 = f"Q05_{nb}{unite}_{var_q}"
+
+    try:
+        print("Calculation Phase (High-flow Quantiles)")
+        # Note: Q10 is the 0.90 quantile (flow exceeded 10% of the time)
+        # Note: Q05 is the 0.95 quantile (flow exceeded 5% of the time)
+        
+        resampled_group = active_ds[var_q].resample({time_coord: frequence})
+        
+        # Calculate Q10 (0.90 quantile)
+        da_q10 = resampled_group.quantile(0.90, skipna=True).drop_vars('quantile')
+        da_q10 = da_q10.rename({time_coord: new_time_dim})
+        
+        # Calculate Q05 (0.95 quantile)
+        da_q05 = resampled_group.quantile(0.95, skipna=True).drop_vars('quantile')
+        da_q05 = da_q05.rename({time_coord: new_time_dim})
+
+        # Add to Dataset
+        ds[new_var_q10] = da_q10
+        ds[new_var_q10].attrs['description'] = f"Q10 (flow exceeded 10% of time) over {nb} {label_unite} for {var_q}"
+        
+        ds[new_var_q05] = da_q05
+        ds[new_var_q05].attrs['description'] = f"Q05 (flow exceeded 5% of time) over {nb} {label_unite} for {var_q}"
+
+    except Exception as e:
+        print(f"Calculation Error: {e}")
+        return ds
+
+    # Summary
+    print("\nQ10/Q05 calculation summary:")
+    if selections_made:
+        print("Selection:")
+        for item in selections_made: print(f" - {item}")
+    else:
+        print("Selection: none (calculated across all categories).")
+
+    print(f"New Temporal Coordinate added: '{new_time_dim}'")
+    print(f"New Variables added: '{new_var_q10}' and '{new_var_q05}'")
+    print(f"Dimensions: {ds[new_var_q10].dims}")
+    print(f"Shape: {ds[new_var_q10].shape}")
+    
+    # Preview Q10
+    print(f"\nQ10 Preview (First 5 values):")
+    print(ds[new_var_q10].values[:5])
+    
+    print("Date Preview (First 5 dates):")
+    print(ds[new_time_dim].values[:5])
+    
+    return ds
+
+
+## VCX3 (Maximum 3-day consecutive mean flow)
+
+def VCX3(ds):
+    """
+    Return the maximum 3-day consecutive mean flow (VCX3) for a chosen period (xarray version).
+
+    Args:
+        ds: Input xarray Dataset.
+    Returns:
+        ds: Original dataset with added resampled time coordinate and VCX3 variable.
+    """
+
+    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
+    
+    # Categorical Filtering
+    active_ds, selections_made = categorical_filter(ds, standard_dims)
+
+    # Time coordinate selection
+    coords_list = list(ds.coords)
+    print("\nAvailable coordinates for time:")
+    for i, coord in enumerate(coords_list):
+        print(f" [{i}] {coord}")
+    
+    while True:
+        try:
+            idx_t = int(input("Index of Date/Time coordinate: "))
+            time_coord = coords_list[idx_t]
+            break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
+
+    # Discharge variable selection
+    vars_list = list(active_ds.data_vars)
+    print("\nAvailable variables (for Discharge):")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+    
+    while True:
+        try:
+            idx_q = int(input("Index of Discharge variable (Q): "))
+            var_q = vars_list[idx_q]
+            break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
+
+    # Time config
+    frequence, unite, nb, label_unite = get_time_freq()
+
+    # Naming configuration
+    new_time_dim = f"{time_coord}_Group_{nb}{unite}"
+    new_var_name = f"VCX3_{nb}{unite}_{var_q}"
+
+    try:
+        print(f"Calculation Phase: Finding 3-day maximum mean within every {nb} {label_unite}...")
+        
+        # 1. Calculate the 3-day rolling mean
+        # We assume daily data. center=False ensures we look at the previous 3 days.
+        rolling_3d = active_ds[var_q].rolling({time_coord: 3}, center=False).mean()
+
+        # 2. Resample to find the MAXIMUM of those 3-day means over the period
+        resampled_vcx = rolling_3d.resample({time_coord: frequence}).max(skipna=True)
+        
+        # 3. Rename the time dimension to the grouped version
+        resampled_vcx = resampled_vcx.rename({time_coord: new_time_dim})
+
+        # Add to main dataset
+        ds[new_var_name] = resampled_vcx
+        ds[new_var_name].attrs['description'] = f"VCX3 (Max 3-day consecutive mean) over {nb} {label_unite} for {var_q}"
+
+    except Exception as e:
+        print(f"Calculation Error: {e}")
+        return ds
+
+    # Summary
+    print("\nVCX3 calculation summary:")
+    if selections_made:
+        print("Selection:")
+        for item in selections_made: print(f" - {item}")
+    else:
+        print("Selection: none (calculated across all categories).")
+
+    print(f"New Temporal Coordinate added: '{new_time_dim}'")
+    print(f"New Variable added: '{new_var_name}'")
+    print(f"Dimensions: {ds[new_var_name].dims}")
+    print(f"Shape: {ds[new_var_name].shape}")
+    
+    # Previews
+    print(f"\nVCX3 Preview (First 5 values):")
+    print(ds[new_var_name].values[:5])
+    
+    print("Date Preview (First 5 dates):")
+    print(ds[new_time_dim].values[:5])
+    
+    return ds
+
+## Over-threshold indicator (count of occurrences above a threshold with tolerance, and episode statistics)
+
+def over_threshold(ds):
+    """
+    Identify and count exceedance episodes above a threshold with tolerance.
+    Computes episode statistics (duration and Peak Over Threshold (POT)).
+
+    Inputs:
+- ds: xarray Dataset containing the variable to analyze.
+outputs: 
+- ds: dataset + column of the variable minus the threshold (for visualization)
+    """
+
+    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
+    
+    # Categorical Filtering
+    active_ds, selections_made = categorical_filter(ds, standard_dims)
+
+    # Variable selection
+    vars_list = list(active_ds.data_vars)
+    print("Over-threshold indicator: available variables")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+
+    while True:
+        try:
+            idx = int(input("Index of the variable to analyze: "))
+            var_name = vars_list[idx]
+            break
+        except (ValueError, IndexError):
+            print("Invalid index.")
+
+    # Threshold and Tolerance inputs
+    while True:
+        try:
+            seuil = float(input("Enter threshold value: "))
+            break
+        except ValueError:
+            print("Threshold must be a number.")
+
+    while True:
+        try:
+            tol = float(input("Tolerance percentage (%) around threshold: "))
+            if tol < 0:
+                print("Tolerance must be positive.")
+                continue
+            break
+        except ValueError:
+            print("Tolerance must be a number.")
+
+    seuil_effectif = seuil * (1 + tol / 100)
+    print(f"Effective threshold used: {seuil_effectif:.3f}")
+
+    # Add Visualization Variable (Magnitude)
+    # This creates a new variable: Value - Threshold
+    new_var_magnitude = f"POT_magnitude_{var_name}"
+    ds[new_var_magnitude] = ds[var_name] - seuil_effectif
+    ds[new_var_magnitude].attrs['description'] = f"Exceedance magnitude above {seuil_effectif} for {var_name}"
+    
+    # Episode Detection Logic
+    da = active_ds[var_name]
+    exceed = da > seuil_effectif
+    
+    # Global counts
+    total_obs = da.size
+    total_exceed = int(exceed.sum())
+    
+    print(f"Global Results:")
+    print(f"Total occurrences above threshold: {total_exceed}")
+    print(f"Total observations: {total_obs}")
+    print(f"Global percentage of exceedance: {100 * total_exceed / total_obs:.2f}%")
+
+    # Detect episodes using flattened values for statistics
+    values = da.values.flatten()
+    exceed_flat = exceed.values.flatten()
+
+    episodes = []
+    pot_values = []
+    current_duration = 0
+    current_peak = None
+
+    for val, exc in zip(values, exceed_flat):
+        if exc and np.isfinite(val):
+            current_duration += 1
+            if current_peak is None:
+                current_peak = val
+            else:
+                current_peak = max(current_peak, val)
+        else:
+            if current_duration > 0:
+                episodes.append(current_duration)
+                pot_values.append(current_peak)
+            current_duration = 0
+            current_peak = None
+
+    if current_duration > 0:
+        episodes.append(current_duration)
+        pot_values.append(current_peak)
+
+    # Summary Statistics Output
+    if len(episodes) > 0:
+        print("Episode Statistics: ")
+        print(f"Number of independent episodes: {len(episodes)}")
+        print(f"Mean episode duration: {np.mean(episodes):.2f} time steps")
+        print(f"Highest Peak Over Threshold (POT): {np.max(pot_values):.3f}")
+    else:
+        print("No exceedance episodes detected.")
+
+    print(f"New visualization variable added: '{new_var_magnitude}'")
+    
+    return ds

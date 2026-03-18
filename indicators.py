@@ -158,97 +158,107 @@ def Qmean(df):
     return df
 
 
-
-
-
-
-
 # Q90/95 Drought Indicators (flow exceeded 90% or 95% of the time)
 
-def Q90_95(df):
+def Q90_95_xr(ds):
     """
-    Return the flow rates exceeded 90% and 95% of the time for a chosen period.
+    Return the flow rates exceeded 90% and 95% of the time for a chosen period (xarray version).
 
     Args:
-        df: Input data with date and discharge columns.
+        ds: Input xarray Dataset.
     Returns:
-        df: Original dataframe with added new-date, Q90 and Q95 stats columns.
+        ds: Original dataset with added resampled time coordinate and Q90/Q95 variables.
     """
-    for i, col in enumerate(df.columns):
-        print(f" [{i}] {col}")
 
+    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
     
+    # Categorical Filtering (reusing your existing helper)
+    active_ds, selections_made = categorical_filter(ds, standard_dims)
+
+    # Time coordinate selection
+    coords_list = list(ds.coords)
+    print("\nAvailable coordinates for time:")
+    for i, coord in enumerate(coords_list):
+        print(f" [{i}] {coord}")
     
     while True:
         try:
-            idx_t = int(input("\nIndex Date: "))
-            if not 0 <= idx_t < len(df.columns):
-                print("Date index out of range.")
-                continue
-
-            idx_q = int(input("Index Discharge (Q): "))
-            if not 0 <= idx_q < len(df.columns):
-                print("Discharge index out of range.")
-                continue
-
-            col_t, col_q = df.columns[idx_t], df.columns[idx_q]
+            idx_t = int(input("Index of Date/Time coordinate: "))
+            time_coord = coords_list[idx_t]
             break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
-        except ValueError:
-            print("Please enter integer indices.")
-
-
-        
-
+    # Discharge variable selection
+    vars_list = list(active_ds.data_vars)
+    print("\nAvailable variables (for Discharge):")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+    
     while True:
         try:
-            unite = input("Unit (d: days, m: months, y: years): ").lower().strip()
-
-            if unite not in freq_map:
-                print("Unit must be d, m, or y.")
-                continue
-
-            label_unite = {"d": "days", "m": "months", "y": "years"}[unite]
-
-            nb = int(input(f"Enter time step (e.g., '3' for quantiles over 3 {label_unite}): "))
-            if nb <= 0:
-                print("Time step must be positive.")
-                continue
-
-            frequence = f"{nb}{freq_map[unite]}"
+            idx_q = int(input("Index of Discharge variable (Q): "))
+            var_q = vars_list[idx_q]
             break
+        except (ValueError, IndexError):
+            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
-        except ValueError:
-            print("Please enter a valid integer.")
+    # Time config (reusing your get_time_freq function)
+    frequence, unite, nb, label_unite = get_time_freq()
 
+    # Naming configuration
+    new_time_dim = f"{time_coord}_Group_{nb}{unite}"
+    new_var_q90 = f"Q90_{nb}{unite}_{var_q}"
+    new_var_q95 = f"Q95_{nb}{unite}_{var_q}"
 
-
-    df[col_t] = pd.to_datetime(df[col_t])
-    
-    # Calculation of Q90 (0.10 quantile) and Q95 (0.05 quantile)
     try:
-        stats = df.set_index(col_t)[col_q].astype(float).resample(frequence, label='left').agg(
-            Q90=lambda x: x.quantile(0.10),
-            Q95=lambda x: x.quantile(0.05)
-        ).reset_index()
+        print("Calculation Phase (Quantiles)")
+        # Note: Q90 is the 0.10 quantile (flow exceeded 90% of the time)
+        # Note: Q95 is the 0.05 quantile (flow exceeded 95% of the time)
+        
+        resampled_group = active_ds[var_q].resample({time_coord: frequence})
+        
+        # Calculate Q90
+        # We use .drop_vars because xarray adds a 'quantile' coordinate by default
+        da_q90 = resampled_group.quantile(0.10, skipna=True).drop_vars('quantile')
+        da_q90 = da_q90.rename({time_coord: new_time_dim})
+        
+        # Calculate Q95
+        da_q95 = resampled_group.quantile(0.05, skipna=True).drop_vars('quantile')
+        da_q95 = da_q95.rename({time_coord: new_time_dim})
 
-        suffixe = f"_{nb}{unite}"
-        stats.columns = [f"Date{suffixe}", f"Q90{suffixe}", f"Q95{suffixe}"]
+        # Add to main dataset
+        ds[new_var_q90] = da_q90
+        ds[new_var_q90].attrs['description'] = f"Q90 (exceeded 90% of time) over {nb} {label_unite} for {var_q}"
         
-        df = pd.concat([df, stats], axis=1)
-        
-        print(f"\n Columns 'Q90{suffixe}' and 'Q95{suffixe}' added.")
-        print(stats.dropna().head())
-        
+        ds[new_var_q95] = da_q95
+        ds[new_var_q95].attrs['description'] = f"Q95 (exceeded 95% of time) over {nb} {label_unite} for {var_q}"
+
     except Exception as e:
-        raise ValueError(f"Calculation error: {e}")
+        print(f"Calculation Error: {e}")
+        return ds
+
+    # Summary
+    print("\nQ90/95 calculation summary:")
+    if selections_made:
+        print("Selection:")
+        for item in selections_made: print(f" - {item}")
+    else:
+        print("Selection: none (calculated across all categories).")
+
+    print(f"New Temporal Coordinate added: '{new_time_dim}'")
+    print(f"New Variables added: '{new_var_q90}' and '{new_var_q95}'")
+    print(f"Dimensions: {ds[new_var_q90].dims}")
+    print(f"Shape: {ds[new_var_q90].shape}")
     
-    return df
-
-
-
-
-
+    # Previews
+    print(f"\nQ90 Preview (First 5 values):")
+    print(ds[new_var_q90].values[:5])
+    
+    print("Date Preview (First 5 dates):")
+    print(ds[new_time_dim].values[:5])
+    
+    return ds
 
 
 # VCN10 drought index (minimum 10-day consecutive mean flow) 

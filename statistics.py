@@ -506,54 +506,74 @@ def rolling_mean_value(df):
 
 # Interannual monthly average 
 
-def Qmonth_interannual(df):
-    """
-    Calculates the interannual monthly average (12 values) 
-    and concatenates them to the original DataFrame with different naming.
-    """
-    print("Interannual Monthly Average: available columns")
-    for i, col in enumerate(df.columns):
-        print(f" [{i}] {col}")
+def monthly_interannual_average_xr(ds):
+    # Variable selection
+    vars_list = list(ds.data_vars)
+    print("\nAvailable variables:")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
 
-    # Column Selection
     while True:
         try:
-            idx_t = int(input("Index of the Date column: "))
-            idx_q = int(input("Index of the Discharge (Q) column: "))
-            col_t, col_q = df.columns[idx_t], df.columns[idx_q]
+            var_idx = int(input("\nIndex of the variable to process: "))
+            var_name = vars_list[var_idx]
             break
         except (ValueError, IndexError):
-            print("Invalid input.")
+            print("Invalid index. Please try again.")
 
-    # Convert to datetime
-    df[col_t] = pd.to_datetime(df[col_t])
+    active_da = ds[var_name]
 
+    # list of dimensions to identify the time dimension 
+    dims_list = list(active_da.dims)
+    print(f"\nDimensions for '{var_name}':")
+    for i, d in enumerate(dims_list):
+        print(f" [{i}] {d}")
+
+    while True:
+        try:
+            dim_idx = int(input("Index of the time dimension: "))
+            time_dim = dims_list[dim_idx]
+            break
+        except (ValueError, IndexError):
+            print("Invalid index. Please choose an existing dimension.")
+
+    # Calculation of monthly means (1 to 12)
+    print(f"\nCalculating interannual monthly averages for '{var_name}'...")
+    
     try:
-        # Calculate monthly averages (grouped by month 1-12)
-        monthly_stats = df.groupby(df[col_t].dt.month)[col_q].mean().reset_index()
-        monthly_stats[col_t] = monthly_stats[col_t].apply(lambda x: calendar.month_name[x]) #convert month number to name
+        # FIX: Instead of "time.month", use the variable time_dim selected by the user
+        # This allows the function to work if the dimension is named 'date', 'T', etc.
+        monthly_stats = active_da.groupby(f"{time_dim}.month").mean(dim=time_dim, skipna=True)
+    except (AttributeError, KeyError):
+        # If decode_cf=False prevents time.month access, we provide a warning
+        print(f"\nError: Could not extract months from '{time_dim}'.")
+        print("Ensure 'decode_cf=True' was used during loading and that the dimension is a datetime type.")
+        return ds
 
-        # Column Naming
-        # Format: NewName_OldName_index (ex:Interannual_month_col-name_1, Month_col-name_1)
+    # Preparing the Coordinate (Month names)
+    # We rename the 'month' coordinate to match the string names
+    month_names = [calendar.month_name[i] for i in range(1, 13)]
+    monthly_stats = monthly_stats.assign_coords(month=month_names)
 
-        base_val_name = f"Interannual_month_{col_q}"
-        base_idx_name = f"Month_{col_q}"
-        
-        # Check for existing columns to increment the counter (it counts how many columns already start with our new base name)
-        occurrence = sum(1 for c in df.columns if str(c).startswith(base_val_name)) + 1
-        
-        final_col_q = f"{base_val_name}_{occurrence}"
-        final_col_t = f"{base_idx_name}_{occurrence}"
-        
-        monthly_stats.columns = [final_col_t, final_col_q]
-        
-        # Concatenation 
-        df = pd.concat([df, monthly_stats], axis=1)
+    # Variable naming
+    base_name = f"interannual_month_{var_name}"
+    occurrence = sum(1 for v in ds.data_vars if v.startswith(base_name)) + 1
+    new_var_name = f"{base_name}_{occurrence}"
 
-        print(f"\n Column '{final_col_q}' concatenated successfully.")
-        print(monthly_stats)
+    # Add to Dataset
+    ds[new_var_name] = monthly_stats
 
-    except Exception as e:
-        print(f"Calculation Error: {e}")
+    # Display results
+    print(f"\nVariable added: {new_var_name}")
+    print(f"Resulting Shape: {monthly_stats.shape} (Dimensions: {list(monthly_stats.dims)})")
+    
+    # Preview
+    print("\nPreview of January averages:")
+    try:
+        # Since we assigned coords, we select by the new 'month' coordinate
+        jan_preview = monthly_stats.sel(month="January")
+        print(jan_preview.head())
+    except Exception:
+        pass
 
-    return df
+    return ds
