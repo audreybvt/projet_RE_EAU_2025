@@ -1109,7 +1109,7 @@ def radar_chart(ds: xr.Dataset):
         if cat_dim not in da.dims:
             continue
 
-        # ✅ FIX PRINCIPAL
+        #  FIX PRINCIPAL
         other_dims = [d for d in da.dims if d != cat_dim]
         if other_dims:
             da = da.mean(dim=other_dims, skipna=True)
@@ -1128,14 +1128,14 @@ def radar_chart(ds: xr.Dataset):
         label = legend_labels[i] if i < len(legend_labels) else val_name
         
         ax.plot(angles, values_list, label=label, color=colors[i])
-        ax.fill(angles, values_list, alpha=0.1, color=colors[i])
+        # ax.fill(angles, values_list, alpha=0.1, color=colors[i])
     
     # -------- Styling --------
     
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(categories)
     ax.set_title(custom_title)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.4, 1))
+    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
     
     return fig
 
