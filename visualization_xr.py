@@ -289,7 +289,7 @@ def configure_plot(
     # Title
     # ----------------------
 
-    default_title = f"{x_default} vs {y_defaults}{period_text}" if x_default and y_defaults else ""
+    default_title = f"{y_defaults} vs {x_default}{period_text}" if x_default and y_defaults else ""
 
     title = input(
         f"Chart title (leave empty for '{default_title}'): "
