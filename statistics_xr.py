@@ -613,6 +613,10 @@ def monthly_interannual_average_xr(ds):
         # Since we assigned coords, we select by the new 'month' coordinate
         jan_preview = monthly_stats.sel(month="January")
         print(jan_preview.head())
+        fev_preview = monthly_stats.sel(month="February")
+        print(fev_preview.head())
+        mar_preview = monthly_stats.sel(month="March")
+        print(mar_preview.head())
     except Exception:
         pass
 
