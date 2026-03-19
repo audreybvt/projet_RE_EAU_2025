@@ -668,13 +668,22 @@ def line_chart(ds: xr.Dataset):
 
     # -------- Check for model dimension and envelope option --------
     plot_envelope = False
+    envelope_type = "average"  # "average" or "individual"
     if any('model' in ds[y_name].dims for y_name in y_names):
         while True:
-            choice = input("Model dimension detected. Plot envelopes (min-max) and averages? (y/n): ").strip().lower()
+            choice = input("Model dimension detected. Plot envelopes (min-max)? (y/n): ").strip().lower()
             if choice in ["y", "n"]:
                 plot_envelope = (choice == "y")
                 break
             print("Please enter 'y' or 'n'.")
+
+        if plot_envelope:
+            while True:
+                choice = input("Show average across models or individual model lines? (avg/individual): ").strip().lower()
+                if choice in ["avg", "average", "individual", "ind"]:
+                    envelope_type = "average" if choice in ["avg", "average"] else "individual"
+                    break
+                print("Please enter 'avg'/'average' or 'individual'/'ind'.")
 
     # -------- X --------
 
@@ -707,7 +716,6 @@ def line_chart(ds: xr.Dataset):
                 # Calculate envelope statistics across models (axis=0)
                 y_min = np.nanmin(y_vals, axis=0)
                 y_max = np.nanmax(y_vals, axis=0)
-                y_mean = np.nanmean(y_vals, axis=0)
 
                 # Create label
                 label = y_name
@@ -717,8 +725,15 @@ def line_chart(ds: xr.Dataset):
                 # Plot envelope (min-max range)
                 ax.fill_between(x_vals, y_min, y_max, alpha=0.3, label=f"{label} (min-max)")
 
-                # Plot mean line
-                ax.plot(x_vals, y_mean, label=f"{label} (mean)", linewidth=2)
+                # Plot based on envelope type choice
+                if envelope_type == "average":
+                    y_mean = np.nanmean(y_vals, axis=0)
+                    ax.plot(x_vals, y_mean, label=f"{label} (mean)", linewidth=2)
+                else:  # individual
+                    # Plot individual model lines
+                    for i in range(y_vals.shape[0]):
+                        model_label = f"{label} (model {i+1})"
+                        ax.plot(x_vals, y_vals[i], label=model_label, alpha=0.7)
         else:
             # Normal plotting without envelope
             results = handle_xarray_dimensions(
@@ -741,7 +756,7 @@ def line_chart(ds: xr.Dataset):
     ax.set_title(title)
 
     ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
+    ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
 
     return fig
 
@@ -864,7 +879,7 @@ def scatter_chart(ds: xr.Dataset):
     ax.set_ylabel(y_label)
     ax.set_title(title)
     ax.grid(True, linestyle='--', alpha=0.5)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
+    ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
     
     return fig
 
@@ -1014,7 +1029,7 @@ def radar_chart(ds: xr.Dataset):
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(categories)
     ax.set_title(custom_title)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
+    ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
     
     return fig
 '''
@@ -1165,7 +1180,7 @@ def radar_chart(ds: xr.Dataset):
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(categories)
     ax.set_title(custom_title)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
+    ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
     
     return fig
 
