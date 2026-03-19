@@ -666,6 +666,16 @@ def line_chart(ds: xr.Dataset):
     if labels["y_limits"] is not None:
         ax.set_ylim(labels["y_limits"])
 
+    # -------- Check for model dimension and envelope option --------
+    plot_envelope = False
+    if any('model' in ds[y_name].dims for y_name in y_names):
+        while True:
+            choice = input("Model dimension detected. Plot envelopes (min-max) and averages? (y/n): ").strip().lower()
+            if choice in ["y", "n"]:
+                plot_envelope = (choice == "y")
+                break
+            print("Please enter 'y' or 'n'.")
+
     # -------- X --------
 
     x_arr = ds[x_name] if x_name in ds else ds.coords[x_name]
@@ -684,34 +694,54 @@ def line_chart(ds: xr.Dataset):
         if x_dim not in da.dims:
             continue
 
-        results = handle_xarray_dimensions(
-            da,
-            main_dims=[x_dim]
-        )
-
-        for sel, y_vals in results:
-
-            label = y_name
-
-            if sel:
-                label += " | " + ", ".join(
-                    f"{k}={v}" for k, v in sel.items()
-                )
-
-            ax.plot(
-                x_vals,
-                y_vals,
-                label=label
+        # Check if we should plot envelope for this variable
+        if plot_envelope and 'model' in da.dims:
+            # For envelope plotting, handle extra dimensions interactively
+            results = handle_xarray_dimensions(
+                da,
+                main_dims=[x_dim, 'model']  # Keep both time and model dimensions
             )
-    
-    # -------- Styling --------
 
+            for sel, y_vals in results:
+                # y_vals now has shape (n_models, n_time_points)
+                # Calculate envelope statistics across models (axis=0)
+                y_min = np.nanmin(y_vals, axis=0)
+                y_max = np.nanmax(y_vals, axis=0)
+                y_mean = np.nanmean(y_vals, axis=0)
+
+                # Create label
+                label = y_name
+                if sel:
+                    label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
+
+                # Plot envelope (min-max range)
+                ax.fill_between(x_vals, y_min, y_max, alpha=0.3, label=f"{label} (min-max)")
+
+                # Plot mean line
+                ax.plot(x_vals, y_mean, label=f"{label} (mean)", linewidth=2)
+        else:
+            # Normal plotting without envelope
+            results = handle_xarray_dimensions(
+                da,
+                main_dims=[x_dim]
+            )
+
+            for sel, y_vals in results:
+
+                label = y_name
+
+                if sel:
+                    label += " | " + ", ".join(
+                        f"{k}={v}" for k, v in sel.items()
+                    )
+
+    # Plot individual line
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title)
 
     ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend()
+    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
 
     return fig
 
@@ -834,7 +864,7 @@ def scatter_chart(ds: xr.Dataset):
     ax.set_ylabel(y_label)
     ax.set_title(title)
     ax.grid(True, linestyle='--', alpha=0.5)
-    ax.legend()
+    ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
     
     return fig
 
@@ -1139,7 +1169,6 @@ def radar_chart(ds: xr.Dataset):
     
     return fig
 
-
 # ---------------- Histogram Chart ----------------
 
 def histogram_chart(ds: xr.Dataset):
@@ -1217,31 +1246,3 @@ def histogram_chart(ds: xr.Dataset):
     ax.set_ylabel(y_label)
     ax.grid(True, linestyle='--', alpha=0.5)
     return fig
-
-# --------- Test ---------
-
-'''
-# Create folder BEFORE
-os.makedirs("output", exist_ok=True)
-
-# Bar chart 
-bar_chart(df_test, "col1", "col2", title="Bar Chart")
-
-# Save current figure
-plt.savefig("output/bar_chart.png")
-plt.close()
-
-# Radar chart
-
-radar_chart(df_test)
-
-plt.savefig("output/radar_chart.png", bbox_inches="tight")
-plt.close()
-
-# Line chart
-line_chart(df_test, "col1", columns=[ "col2", "col3", "col4"], title="Line Chart Test")
-
-
-# Scatter plot
-#scatter_chart(df_test, "col1", columns=[ "col2", "col3", "col4"])
-'''

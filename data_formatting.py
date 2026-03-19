@@ -41,17 +41,15 @@ def load_multiple_datasets(paths):
         # Étendre le dataset avec les deux nouvelles dimensions
         ds = ds.expand_dims({
             "scenario": [scenario],
-            "model_chain": [model_chain]
+            "model": [model_chain]
         })
 
         datasets.append(ds)
 
     # combinaison
-    combined = xr.combine_by_coords(datasets, combine_attrs='drop')
+    combined = xr.combine_by_coords(datasets, combine_attrs='drop', join='outer', data_vars='all')
 
     return combined
-
-import pandas as pd
 
 def clean_dataframe(df):
     """
