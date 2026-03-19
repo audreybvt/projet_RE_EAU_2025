@@ -64,12 +64,53 @@ def ask_date(ds):
     return start_date, end_date
 
 
+#function to apply to check if a time dimension is selected and allow user to select a specific period for the calculation.
+# This function is called in the mean, max, min and percentile functions to avoid code repetition.
 
+def apply_time_selection(ds, active_da, dims_to_reduce):
+    """
+    Detects a time-related dimension, prompts the user for a period,
+    and slices the DataArray accordingly.
+    
+    Returns:
+        updated_da (xr.DataArray): The sliced data.
+        period_label (str): A string suffix for the variable name (e.g., '_2023-01-01_2023-02-01').
+    """
+    period_label = ""
+    # Find any dimension that contains the string "time"
+    time_dims = [d for d in dims_to_reduce if "time" in d]
 
+    if time_dims:
+        # We target the first time-like dimension found
+        t_dim = time_dims[0]
+        print(f"\n--- Period configuration (detected dimension: {t_dim}) ---")
 
+    while True:
+        # This calls your existing ask_date function
+        start_date, end_date = ask_date(ds)
 
+        if start_date or end_date:
+            # Dynamic slicing using a dictionary for the dimension name
+            temp_da = active_da.sel({t_dim: slice(start_date, end_date)})
+        else:
+            # If no dates entered, use the full range
+            temp_da = active_da
 
+        # Safety check: ensure the selection isn't empty
+        if temp_da[t_dim].size == 0:
+            print(f"No data available in this range for '{t_dim}'. Please try again.")
+            continue
 
+        # Update the DataArray and create the label
+        active_da = temp_da
+        if start_date or end_date:
+            s = start_date.date() if start_date else "start"
+            e = end_date.date() if end_date else "end"
+            period_label = f"_{s}_{e}"
+        
+        break
+
+    return active_da, period_label
 
 
 
@@ -122,37 +163,9 @@ def mean_value_flexible(ds):
 
 
         
-    # Handling of time period if 'time' is selected 
-    period_label = "" 
+    # Handling of time period if 'time' is contained in the selected dimensions
 
-    if "time" in dims_to_reduce:
-
-        print("\n--- Period configuration for the mean ---")
-
-        while True:
-
-            start_date, end_date = ask_date(ds)
-
-            if start_date or end_date:
-                temp_da = active_da.sel(time=slice(start_date, end_date))
-            else:
-                temp_da = active_da
-
-            # vérifier s'il y a des données
-            if temp_da.time.size == 0:
-                print("No data available in this time range. Please choose another period.")
-                continue
-
-            # si la sélection est valide
-            active_da = temp_da
-
-            if start_date or end_date:
-                s = start_date.date() if start_date else "start"
-                e = end_date.date() if end_date else "end"
-                period_label = f"_{s}_{e}"
-
-            break
-
+    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce)
 
     # Mean calculation
     print(f"\nCalculating mean across: {dims_to_reduce}...")
@@ -176,7 +189,6 @@ def mean_value_flexible(ds):
         print(f"Result shape: {mean_val.shape}")
 
     return ds
-
 
 
 
@@ -228,39 +240,9 @@ def maximum_value_flexible(ds):
             print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
 
 
+    # Handling of time period if 'time' is contained in the selected dimensions
 
-    # Handling of time period if 'time' is selected 
-    period_label = "" 
-
-    if "time" in dims_to_reduce:
-
-        print("\n--- Period configuration for the maximum ---")
-
-        while True:
-
-            start_date, end_date = ask_date(ds)
-
-            if start_date or end_date:
-                temp_da = active_da.sel(time=slice(start_date, end_date))
-            else:
-                temp_da = active_da
-
-            # vérifier s'il y a des données
-            if temp_da.time.size == 0:
-                print("No data available in this time range. Please choose another period.")
-                continue
-
-            # si la sélection est valide
-            active_da = temp_da
-
-            if start_date or end_date:
-                s = start_date.date() if start_date else "start"
-                e = end_date.date() if end_date else "end"
-                period_label = f"_{s}_{e}"
-
-            break
-
-
+    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce)
 
     # Maximum calculation
     print(f"\nCalculating maximum across: {dims_to_reduce}...")
@@ -347,37 +329,8 @@ def minimum_value_flexible(ds):
             print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
 
     
-
-    # Handling of time period if 'time' is selected 
-    period_label = "" 
-
-    if "time" in dims_to_reduce:
-
-        print("\n--- Period configuration for the minimum ---")
-
-        while True:
-
-            start_date, end_date = ask_date(ds)
-
-            if start_date or end_date:
-                temp_da = active_da.sel(time=slice(start_date, end_date))
-            else:
-                temp_da = active_da
-
-            # vérifier s'il y a des données
-            if temp_da.time.size == 0:
-                print("No data available in this time range. Please choose another period.")
-                continue
-
-            # si la sélection est valide
-            active_da = temp_da
-
-            if start_date or end_date:
-                s = start_date.date() if start_date else "start"
-                e = end_date.date() if end_date else "end"
-                period_label = f"_{s}_{e}"
-
-            break
+    # Handling of time period if 'time' is contained in the selected dimensions
+    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce)
 
     # Minimum calculation
     print(f"\nCalculating minimum across: {dims_to_reduce}...")
@@ -462,37 +415,8 @@ def percentile_value_flexible(ds):
             print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
 
     
-    
-    # Handling of time period if 'time' is involved
-    period_label = "" 
-
-    if "time" in dims_to_reduce:
-
-        print("\n--- Period configuration for the percentile ---")
-
-        while True:
-
-            start_date, end_date = ask_date(ds)
-
-            if start_date or end_date:
-                temp_da = active_da.sel(time=slice(start_date, end_date))
-            else:
-                temp_da = active_da
-
-            # vérifier s'il y a des données
-            if temp_da.time.size == 0:
-                print("No data available in this time range. Please choose another period.")
-                continue
-
-            # si la sélection est valide
-            active_da = temp_da
-
-            if start_date or end_date:
-                s = start_date.date() if start_date else "start"
-                e = end_date.date() if end_date else "end"
-                period_label = f"_{s}_{e}"
-
-            break
+    # Handling of time period if 'time' is contained in the selected dimensions
+    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce)
 
     # Percentile calculation
     print(f"\nCalculating {int(q*100)}th percentile across: {dims_to_reduce}...")
@@ -621,7 +545,6 @@ def rolling_mean_value(ds):
 
 ### Interannual grouping by month of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
-import calendar
 
 def monthly_interannual_average_xr(ds):
     # Variable selection
@@ -648,7 +571,7 @@ def monthly_interannual_average_xr(ds):
 
     while True:
         try:
-            dim_idx = int(input("Index of the time dimension: "))
+            dim_idx = int(input("Which time dimension do you want to use for grouping ? "))
             time_dim = dims_list[dim_idx]
             break
         except (ValueError, IndexError):
