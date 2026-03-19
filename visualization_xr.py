@@ -839,7 +839,7 @@ def scatter_chart(ds: xr.Dataset):
     return fig
 
 # ---------------- Radar Chart ----------------
-
+'''
 def radar_chart(ds: xr.Dataset):
     """
     Create a radar chart from an xarray Dataset.
@@ -987,6 +987,158 @@ def radar_chart(ds: xr.Dataset):
     ax.legend(loc="upper right", bbox_to_anchor=(1.6, 1))
     
     return fig
+'''
+
+def radar_chart(ds: xr.Dataset):
+    """
+    Create a radar chart from an xarray Dataset.
+    """
+
+    if not isinstance(ds, xr.Dataset):
+        raise TypeError("Expected: xarray.Dataset")
+    
+    # -------- Variable selection --------
+    
+    cat_name = ask_variable(ds, prompt="Variable for category axis (radar axes): ")
+    
+    value_names = ask_variable(
+        ds,
+        multiple=True,
+        prompt="Variables for radar values (comma-separated): "
+    )
+    
+    # -------- Period selection --------
+    
+    start_date, end_date = ask_time_period(ds)
+    ds_period = subset_time(ds, start_date, end_date)
+    
+    period_text = format_period_text(start_date, end_date)
+    
+    # -------- Get category data --------
+    
+    cat_arr = ds_period[cat_name] if cat_name in ds_period else ds_period.coords[cat_name]
+    
+    if cat_arr.ndim != 1:
+        raise ValueError("Category variable must be 1D")
+    
+    cat_dim = cat_arr.dims[0]
+
+    # Format categories (important if datetime)
+    if np.issubdtype(cat_arr.dtype, np.datetime64):
+        categories = pd.to_datetime(cat_arr.values).strftime("%Y-%m-%d").tolist()
+    else:
+        categories = [str(v) for v in cat_arr.values]
+    
+    N = len(categories)
+    if N < 3:
+        raise ValueError("A radar chart requires at least 3 categories")
+    
+    # -------- Units --------
+    
+    units_input = input("Units for radar variables (leave empty if none): ").strip()
+    units_text = f" ({units_input})" if units_input else ""
+    
+    # -------- Title --------
+    
+    custom_title = input("Chart title (leave empty for automatic): ").strip()
+    
+    if custom_title == "":
+        custom_title = f"Radar chart: {', '.join(value_names)}{units_text}{period_text}"
+    else:
+        custom_title = f"{custom_title}{units_text}"
+    
+    # -------- Legend --------
+    
+    legend_input = input("Legend names (comma-separated, leave empty for defaults): ").strip()
+    
+    if legend_input == "":
+        legend_labels = value_names
+    else:
+        legend_labels = [name.strip() for name in legend_input.split(",")]
+        if len(legend_labels) != len(value_names):
+            raise ValueError("Number of legend names must match number of value variables")
+    
+    # -------- Angles --------
+    
+    angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
+    angles += angles[:1]
+    
+    # -------- Figure --------
+    
+    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
+    
+    ax.set_theta_direction(-1)
+    ax.set_theta_offset(np.pi / 2)
+    
+    # -------- Radial limits --------
+    
+    all_values = []
+    for val_name in value_names:
+        da = ds_period[val_name]
+
+        if cat_dim not in da.dims:
+            continue
+
+        # ✅ FIX : moyenne sur dimensions supplémentaires
+        other_dims = [d for d in da.dims if d != cat_dim]
+        if other_dims:
+            da = da.mean(dim=other_dims, skipna=True)
+
+        all_values.extend(da.values.flatten())
+
+    all_values = np.array([v for v in all_values if np.isfinite(v)])
+    
+    if len(all_values) == 0:
+        raise ValueError("No valid numeric values found")
+    
+    val_min = all_values.min()
+    val_max = all_values.max()
+    margin = 0.05 * (val_max - val_min) if val_max != val_min else val_max * 0.1
+    ax.set_ylim(val_min - margin, val_max + margin)
+    
+    # -------- Colors --------
+    
+    colors = cm.viridis(np.linspace(0, 1, len(value_names)))
+    
+    # -------- Plot --------
+    
+    for i, val_name in enumerate(value_names):
+        
+        da = ds_period[val_name]
+
+        if cat_dim not in da.dims:
+            continue
+
+        # ✅ FIX PRINCIPAL
+        other_dims = [d for d in da.dims if d != cat_dim]
+        if other_dims:
+            da = da.mean(dim=other_dims, skipna=True)
+
+        vals = da.values
+
+        # Conversion propre
+        vals_numeric = pd.to_numeric(vals, errors='coerce')
+
+        if len(vals_numeric) != N:
+            raise ValueError(f"{val_name}: mismatch between values and categories")
+
+        values_list = vals_numeric.tolist()
+        values_list += values_list[:1]  # close radar
+        
+        label = legend_labels[i] if i < len(legend_labels) else val_name
+        
+        ax.plot(angles, values_list, label=label, color=colors[i])
+        ax.fill(angles, values_list, alpha=0.1, color=colors[i])
+    
+    # -------- Styling --------
+    
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(categories)
+    ax.set_title(custom_title)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.4, 1))
+    
+    return fig
+
 
 # ---------------- Histogram Chart ----------------
 

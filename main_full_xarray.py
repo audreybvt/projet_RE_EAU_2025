@@ -19,6 +19,7 @@ supported_file_format = {
         2: "CSV"
     }
 
+
 while True:
     
     print("\nSupported file formats:")
@@ -27,13 +28,22 @@ while True:
     
     print("\nNote: Multiple files are supported only for NetCDF files.")
 
-    file_format = int(input("\nSelect the format of your file: "))
+    user_input = input("\nSelect the format of your file: ").strip()
 
-    if file_format not in supported_file_format:
-        print("Invalid choice, please try again")
+    # Vérifier que c'est un entier
+    try:
+        file_format = int(user_input)
+    except ValueError:
+        print("Invalid input. Please enter a number.")
         continue
-    else:
-        break
+
+    # Vérifier que c'est un choix valide
+    if file_format not in supported_file_format:
+        print("Invalid choice, please try again.")
+        continue
+
+    break
+
 
 
 #Opening CSV file
@@ -192,8 +202,18 @@ while True:
 
     print(f"{menu_visu[visualization].__name__}.png saved in output/")
 
-    #choix de continuer
-    continuer = input("\nVoulez-vous effectuer une autre analyse/visualisation sur ce fichier ? (o/n) : ").lower()
-    if continuer != 'o':
+    
+    # choix de continuer
+    while True:
+        continuer = input(
+            "\nVoulez-vous effectuer une autre analyse/visualisation sur ce fichier ? (o/n) : "
+        ).strip().lower()
+
+        if continuer in ["o", "n"]:
+            break
+
+        print("Entrée invalide. Veuillez répondre par 'o' ou 'n'.")
+
+    if continuer != "o":
         print("Fin du programme. Au revoir !")
         break
