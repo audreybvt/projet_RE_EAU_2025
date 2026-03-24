@@ -66,7 +66,7 @@ def ask_date(ds):
 
 #function to apply to check if a time dimension is selected and allow user to select a specific period for the calculation.
 # This function is called in the mean, max, min and percentile functions to avoid code repetition.
-
+'''
 def apply_time_selection(ds, active_da, dims_to_reduce):
     """
     Detects a time-related dimension, prompts the user for a period,
@@ -111,13 +111,62 @@ def apply_time_selection(ds, active_da, dims_to_reduce):
         break
 
     return active_da, period_label
+'''
+def apply_time_selection(ds, active_da, dims_to_reduce):
+    """
+    Detects a time-related dimension, prompts the user for a period,
+    and slices the DataArray accordingly.
+    """
 
+    period_label = ""
 
+    # Detect time dimension
+    time_dims = [d for d in dims_to_reduce if "time" in d]
+
+    # Si aucune dimension temporelle → rien à faire
+    if not time_dims:
+        return active_da, ""
+
+    t_dim = time_dims[0]
+
+    print(f"\n--- Period configuration (detected dimension: {t_dim}) ---")
+
+    while True:
+
+        start_date, end_date = ask_date(ds)
+
+        # Apply slicing
+        if start_date or end_date:
+            temp_da = active_da.sel({t_dim: slice(start_date, end_date)})
+        else:
+            temp_da = active_da
+
+        # Sécurité 1 : dimension toujours présente ?
+        if t_dim not in temp_da.dims:
+            print("Time dimension disappeared after operation. Please try again.")
+            continue
+
+        # Sécurité 2 : données non vides ?
+        if temp_da.sizes.get(t_dim, 0) == 0:
+            print("No data available in this period. Please try again.")
+            continue
+
+        # OK
+        active_da = temp_da
+
+        if start_date or end_date:
+            s = start_date.date() if start_date else "start"
+            e = end_date.date() if end_date else "end"
+            period_label = f"_{s}_{e}"
+
+        break
+
+    return active_da, period_label
 
 
 ### Mean value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
-
+'''
 def mean_value_flexible(ds):
     # Variable selection
     vars_list = list(ds.data_vars)
@@ -189,7 +238,88 @@ def mean_value_flexible(ds):
         print(f"Result shape: {mean_val.shape}")
 
     return ds
+'''
 
+def mean_value_flexible(ds):
+
+    # -------- Variable selection --------
+    vars_list = list(ds.data_vars)
+
+    print("\nAvailable variables:")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+
+    while True:
+        try:
+            var_idx = int(input("\nIndex of the variable to process: "))
+            var_name = vars_list[var_idx]
+            break
+        except (ValueError, IndexError):
+            print("Invalid index. Please try again.")
+
+    active_da = ds[var_name]
+
+    # -------- Dimensions --------
+    available_dims = list(active_da.dims)
+
+    print("\nWhich dimensions do you want to average across?")
+    print("Enter indices separated by commas (e.g., 0,2). Leave blank to select all EXCEPT time.")
+
+    for i, d in enumerate(available_dims):
+        print(f" [{i}] {d}")
+
+    while True:
+
+        choice_dims = input("Your choice: ").strip()
+
+        if choice_dims == "":
+            # IMPORTANT : on garde time pour pouvoir filtrer après
+            dims_to_reduce = [d for d in available_dims if "time" not in d]
+            break
+
+        try:
+            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+            dims_to_reduce = [available_dims[i] for i in indices]
+
+            # Sécurité : empêcher réduction sur time
+            if any("time" in d for d in dims_to_reduce):
+                print("You cannot average over time before selecting a period.")
+                continue
+
+            break
+
+        except (ValueError, IndexError):
+            print("Invalid input. Please try again.")
+
+    # -------- Time selection --------
+    active_da, period_label = apply_time_selection(ds, active_da, available_dims)
+
+    # -------- Mean --------
+    print(f"\nCalculating mean across: {dims_to_reduce}...")
+
+    try:
+        mean_val = active_da.mean(dim=dims_to_reduce, skipna=True)
+    except Exception as e:
+        print(f"Error during mean calculation: {e}")
+        return ds
+
+    # -------- Naming --------
+    dims_suffix = "_mean_on_" + "_".join(dims_to_reduce) if dims_to_reduce else ""
+    new_var_name = f"{var_name}{dims_suffix}{period_label}"
+
+    # -------- Add to dataset --------
+    ds[new_var_name] = mean_val
+
+    # -------- Display --------
+    print(f"\nVariable added: {new_var_name}")
+
+    if mean_val.size == 1:
+        print(f"Mean value: {float(mean_val.values):.2f}")
+    else:
+        print(f"Remaining dims: {list(mean_val.dims)}")
+        print(f"Shape: {mean_val.shape}")
+
+    return ds
 
 
 
