@@ -166,7 +166,7 @@ def apply_time_selection(ds, active_da, dims_to_reduce):
 
 ### Mean value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
-'''
+
 def mean_value_flexible(ds):
     # Variable selection
     vars_list = list(ds.data_vars)
@@ -238,89 +238,6 @@ def mean_value_flexible(ds):
         print(f"Result shape: {mean_val.shape}")
 
     return ds
-'''
-
-def mean_value_flexible(ds):
-
-    # -------- Variable selection --------
-    vars_list = list(ds.data_vars)
-
-    print("\nAvailable variables:")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
-
-    while True:
-        try:
-            var_idx = int(input("\nIndex of the variable to process: "))
-            var_name = vars_list[var_idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index. Please try again.")
-
-    active_da = ds[var_name]
-
-    # -------- Dimensions --------
-    available_dims = list(active_da.dims)
-
-    print("\nWhich dimensions do you want to average across?")
-    print("Enter indices separated by commas (e.g., 0,2). Leave blank to select all EXCEPT time.")
-
-    for i, d in enumerate(available_dims):
-        print(f" [{i}] {d}")
-
-    while True:
-
-        choice_dims = input("Your choice: ").strip()
-
-        if choice_dims == "":
-            # IMPORTANT : on garde time pour pouvoir filtrer après
-            dims_to_reduce = [d for d in available_dims if "time" not in d]
-            break
-
-        try:
-            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
-            dims_to_reduce = [available_dims[i] for i in indices]
-
-            # Sécurité : empêcher réduction sur time
-            if any("time" in d for d in dims_to_reduce):
-                print("You cannot average over time before selecting a period.")
-                continue
-
-            break
-
-        except (ValueError, IndexError):
-            print("Invalid input. Please try again.")
-
-    # -------- Time selection --------
-    active_da, period_label = apply_time_selection(ds, active_da, available_dims)
-
-    # -------- Mean --------
-    print(f"\nCalculating mean across: {dims_to_reduce}...")
-
-    try:
-        mean_val = active_da.mean(dim=dims_to_reduce, skipna=True)
-    except Exception as e:
-        print(f"Error during mean calculation: {e}")
-        return ds
-
-    # -------- Naming --------
-    dims_suffix = "_mean_on_" + "_".join(dims_to_reduce) if dims_to_reduce else ""
-    new_var_name = f"{var_name}{dims_suffix}{period_label}"
-
-    # -------- Add to dataset --------
-    ds[new_var_name] = mean_val
-
-    # -------- Display --------
-    print(f"\nVariable added: {new_var_name}")
-
-    if mean_val.size == 1:
-        print(f"Mean value: {float(mean_val.values):.2f}")
-    else:
-        print(f"Remaining dims: {list(mean_val.dims)}")
-        print(f"Shape: {mean_val.shape}")
-
-    return ds
-
 
 
 
@@ -395,19 +312,6 @@ def maximum_value_flexible(ds):
         print(f"Result shape: {max_val.shape}")
 
     return ds
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
