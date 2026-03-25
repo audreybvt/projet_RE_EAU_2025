@@ -368,30 +368,33 @@ def clean_dataframe(df):
     df_clean = df.copy()
     date_col = None
 
-    # ✅ 1) Priorité aux noms évidents
-    for candidate in ["Date", "date", "DATE", "time", "Time", "Dates", "dates", "DATES", "times", "Times", "TIME", "TIMES"]:
+    # 1) Priority to obvious names
+    for candidate in [
+        "Date", "date", "DATE",
+        "time", "Time", "TIME",
+        "Dates", "dates", "DATES",
+        "Times", "times", "TIMES"
+    ]:
         if candidate in df_clean.columns:
             df_clean[candidate] = pd.to_datetime(
                 df_clean[candidate],
                 errors="coerce"
             )
             date_col = candidate
-            print(f" Colonne date détectée par nom : {candidate}")
+            print(f" Date column detected by name: {candidate}")
             break
 
-    # ✅ 2) Sinon détection automatique
+    # 2) Automatic detection otherwise
     if date_col is None:
 
         for col in df_clean.columns:
 
-            # Ignorer colonnes numériques → évite faux positifs
             if pd.api.types.is_numeric_dtype(df_clean[col]):
                 continue
 
-            # Déjà datetime
             if pd.api.types.is_datetime64_any_dtype(df_clean[col]):
                 date_col = col
-                print(f" Colonne date détectée (déjà datetime) : {col}")
+                print(f" Date column detected (already datetime): {col}")
                 break
 
             converted = pd.to_datetime(
@@ -405,86 +408,95 @@ def clean_dataframe(df):
             if valid_ratio > 0.8:
                 df_clean[col] = converted
                 date_col = col
-                print(f" Colonne date détectée : {col} ({valid_ratio:.0%} valide)")
+                print(f" Date column detected: {col} ({valid_ratio:.0%} valid)")
                 break
 
-    # ✅ Vérification finale
+    # Final check
     if date_col is None:
-        print(" Aucune colonne de date détectée.")
+        print(" No date column detected.")
     else:
-        print(f" Utilisation de '{date_col}' comme index temporel.")
-
-    # --- Conversion des colonnes object en float ---
-    for col in df_clean.select_dtypes(include="object"):
-        df_clean[col] = pd.to_numeric(
-            df_clean[col].str.replace(",", ".", regex=False),
-            errors="coerce"
-        )
+        print(f" Using '{date_col}' as time index.")
 
     return df_clean, date_col
 
 def csv_to_xarray(filepath):
     """
-    Conversion générique CSV -> xarray.Dataset
+    Generic CSV -> xarray.Dataset converter
+    Compatible with multidimensional NetCDF workflows
     """
 
-    # prévisualisation
-    print("\nAperçu des 5 premières lignes du fichier brut :")
+    # Preview
+    print("\nPreview of the first 5 lines:")
     with open(filepath, 'r', encoding='utf-8-sig', errors='replace') as f:
         for i in range(5):
             line = f.readline()
             clean_line = line.replace(";;", ";").strip(";")
-            print(f"Ligne {i} | {clean_line[:100]}...")
+            print(f"Line {i} | {clean_line[:100]}...")
     print("____________________")
 
-    # On demande à l'utilisateur combien de lignes de métadonnées il souhaite ignorer
+    # Ask metadata lines to skip
     while True:
         try:
-            skip_n = int(input("Combien de lignes de métadonnées (en-têtes sans compter le nom des colonnes) y a-t-il? "))
+            skip_n = int(input("How many metadata lines (before column names)? "))
             if skip_n < 0:
-                print("Veuillez entrer un nombre positif.")
+                print("Enter a positive number.")
                 continue
             break
         except ValueError:
-            print("Veuillez entrer un nombre entier valide.")
+            print("Enter a valid integer.")
 
     df = pd.read_csv(filepath, sep=";", skiprows=skip_n)
-    # Nettoyage = supprimer les colonnes ou lignes entièrement vides
+
+    # Remove empty rows/columns
     df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
 
-    # --- Nettoyage du DataFrame et détection de la date ---
+    # Clean + detect date
     df, date_col = clean_dataframe(df)
 
-    # Identifier types de colonnes
-    numeric_cols = df.select_dtypes(include="number").columns.tolist()
-    object_cols = df.select_dtypes(include="object").columns.tolist()
-
-    # --- Index temporel ---
+    # --- Time index ---
     if date_col:
         df = df.set_index(date_col)
-        df.index.name = "time"  # renommer pour xarray
+        df.index.name = "time"
     else:
-        raise ValueError("⚠️ Aucune colonne de date détectée")
+        raise ValueError("No date column detected")
 
-    # --- Conserver les colonnes catégorielles comme coordonnées ---
-    # On exclut 'model' de la conversion en float pour la garder comme coordonnée
-    cat_cols = [col for col in object_cols if col != "model"]
+    # --- Detect potential dimension columns ---
+    possible_dims = [
+        "model", "scenario",
+        "station", "stations",
+        "site", "sites",
+        "piezometre",
+        "location", "locations",
+        "latitude", "longitude",
+        "lat", "lon",
+        "x", "y"
+    ]
 
-    for col in cat_cols:
-        # conversion en float si possible
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+    dims_to_use = [col for col in possible_dims if col in df.columns]
 
-    # Si colonne 'model' existe, la mettre comme coordonnée
-    if "model" in object_cols:
-        df = df.set_index("model", append=True)
+    # Convert dimensions to string (categorical coords)
+    for col in dims_to_use:
+        df[col] = df[col].astype(str)
 
-    # Conversion en xarray
+    # Add to MultiIndex
+    if dims_to_use:
+        df = df.set_index(dims_to_use, append=True)
+
+    df = df.sort_index()
+
+    # --- Ensure index uniqueness (required by xarray) ---
+    if not df.index.is_unique:
+        raise ValueError(
+            "Index is not unique. Missing a dimension column "
+            "to uniquely identify observations."
+        )
+
+    # --- Convert to xarray ---
     ds = df.to_xarray()
 
-    # Corriger type de time
     ds["time"] = pd.to_datetime(ds["time"])
 
-    print(" Dataset xarray généré :")
+    print("Generated xarray Dataset:")
     print(ds)
 
     return ds
