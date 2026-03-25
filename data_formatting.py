@@ -423,6 +423,72 @@ def clean_dataframe(df):
 
     return df_clean, date_col
 
+def csv_to_xarray(filepath):
+    """
+    Conversion générique CSV -> xarray.Dataset
+    """
+
+    # prévisualisation
+    print("\nAperçu des 5 premières lignes du fichier brut :")
+    with open(filepath, 'r', encoding='utf-8-sig', errors='replace') as f:
+        for i in range(5):
+            line = f.readline()
+            clean_line = line.replace(";;", ";").strip(";")
+            print(f"Ligne {i} | {clean_line[:100]}...")
+    print("____________________")
+
+    # On demande à l'utilisateur combien de lignes de métadonnées il souhaite ignorer
+    while True:
+        try:
+            skip_n = int(input("Combien de lignes de métadonnées (en-têtes sans compter le nom des colonnes) y a-t-il? "))
+            if skip_n < 0:
+                print("Veuillez entrer un nombre positif.")
+                continue
+            break
+        except ValueError:
+            print("Veuillez entrer un nombre entier valide.")
+
+    df = pd.read_csv(filepath, sep=";", skiprows=skip_n)
+    # Nettoyage = supprimer les colonnes ou lignes entièrement vides
+    df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
+
+    # --- Nettoyage du DataFrame et détection de la date ---
+    df, date_col = clean_dataframe(df)
+
+    # Identifier types de colonnes
+    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+    object_cols = df.select_dtypes(include="object").columns.tolist()
+
+    # --- Index temporel ---
+    if date_col:
+        df = df.set_index(date_col)
+        df.index.name = "time"  # renommer pour xarray
+    else:
+        raise ValueError("⚠️ Aucune colonne de date détectée")
+
+    # --- Conserver les colonnes catégorielles comme coordonnées ---
+    # On exclut 'model' de la conversion en float pour la garder comme coordonnée
+    cat_cols = [col for col in object_cols if col != "model"]
+
+    for col in cat_cols:
+        # conversion en float si possible
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Si colonne 'model' existe, la mettre comme coordonnée
+    if "model" in object_cols:
+        df = df.set_index("model", append=True)
+
+    # Conversion en xarray
+    ds = df.to_xarray()
+
+    # Corriger type de time
+    ds["time"] = pd.to_datetime(ds["time"])
+
+    print(" Dataset xarray généré :")
+    print(ds)
+
+    return ds
+
 ############# OLD clean_dataframe and OLD CSV_TO_XARRAY ###############
 #######################################################################
 #######################################################################
