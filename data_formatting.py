@@ -362,6 +362,67 @@ def load_multiple_datasets(paths):
 
     return combined
 
+
+def clean_dataframe(df):
+
+    df_clean = df.copy()
+    date_col = None
+
+    # ✅ 1) Priorité aux noms évidents
+    for candidate in ["Date", "date", "DATE", "time", "Time", "Dates", "dates", "DATES", "times", "Times", "TIME", "TIMES"]:
+        if candidate in df_clean.columns:
+            df_clean[candidate] = pd.to_datetime(
+                df_clean[candidate],
+                errors="coerce"
+            )
+            date_col = candidate
+            print(f" Colonne date détectée par nom : {candidate}")
+            break
+
+    # ✅ 2) Sinon détection automatique
+    if date_col is None:
+
+        for col in df_clean.columns:
+
+            # Ignorer colonnes numériques → évite faux positifs
+            if pd.api.types.is_numeric_dtype(df_clean[col]):
+                continue
+
+            # Déjà datetime
+            if pd.api.types.is_datetime64_any_dtype(df_clean[col]):
+                date_col = col
+                print(f" Colonne date détectée (déjà datetime) : {col}")
+                break
+
+            converted = pd.to_datetime(
+                df_clean[col],
+                dayfirst=True,
+                errors="coerce"
+            )
+
+            valid_ratio = converted.notna().mean()
+
+            if valid_ratio > 0.8:
+                df_clean[col] = converted
+                date_col = col
+                print(f" Colonne date détectée : {col} ({valid_ratio:.0%} valide)")
+                break
+
+    # ✅ Vérification finale
+    if date_col is None:
+        print(" Aucune colonne de date détectée.")
+    else:
+        print(f" Utilisation de '{date_col}' comme index temporel.")
+
+    # --- Conversion des colonnes object en float ---
+    for col in df_clean.select_dtypes(include="object"):
+        df_clean[col] = pd.to_numeric(
+            df_clean[col].str.replace(",", ".", regex=False),
+            errors="coerce"
+        )
+
+    return df_clean, date_col
+
 ############# OLD clean_dataframe and OLD CSV_TO_XARRAY ###############
 #######################################################################
 #######################################################################
