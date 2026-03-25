@@ -362,6 +362,12 @@ def load_multiple_datasets(paths):
 
     return combined
 
+############# OLD clean_dataframe and OLD CSV_TO_XARRAY ###############
+#######################################################################
+#######################################################################
+
+
+'''
 def clean_dataframe(df):
     """
     Nettoie un DataFrame avant visualisation :
@@ -445,3 +451,4 @@ def csv_to_xarray(filepath):
     ds = df.to_xarray()
 
     return ds
+'''
