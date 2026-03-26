@@ -183,13 +183,25 @@ def mean_value_flexible(ds):
     # xr.where would cause undesired broadcasting and restore reduced dimensions.
     ds[new_var_name] = mean_val
 
-    # Display results
-    print(f"\n Variable added: {new_var_name}")
-    if mean_val.size == 1:
-        print(f"Unique mean value: {float(mean_val.values):.2f}")
+    # Summary
+    print("\nMean calculation summary:")
+    print(f"Dimensions reduced: {dims_to_reduce}")
+    if period_label:
+        print(f"Time period: {period_label.lstrip('_')}")
     else:
-        print(f"Remaining dimensions after mean: {list(mean_val.dims)}")
-        print(f"Result shape: {mean_val.shape}")
+        print("Time period: full range")
+
+    print(f"New Variable added: '{new_var_name}'")
+    print(f"Dimensions: {list(ds[new_var_name].dims)}")
+    print(f"Shape: {ds[new_var_name].shape}")
+    
+    # Preview
+    print(f"\nMean Preview (First 5 values):")
+    if ds[new_var_name].size == 1:
+        print(f"{float(ds[new_var_name].values):.2f}")
+    else:
+        # Use flatten to handle multi-dimensional results in preview
+        print(ds[new_var_name].values.flatten()[:5])
 
     return ds
 
@@ -256,13 +268,24 @@ def maximum_value_flexible(ds):
     # Add to Dataset
     ds[new_var_name] = max_val
 
-    # 7. Display results
-    print(f"\n Variable added: {new_var_name}")
-    if max_val.size == 1:
-        print(f"Unique maximum value: {float(max_val.values):.2f}")
+    # Summary
+    print("\nMaximum calculation summary:")
+    print(f"Dimensions reduced: {dims_to_reduce}")
+    if period_label:
+        print(f"Time period: {period_label.lstrip('_')}")
     else:
-        print(f"Remaining dimensions after calculation: {list(max_val.dims)}")
-        print(f"Result shape: {max_val.shape}")
+        print("Time period: full range")
+
+    print(f"New Variable added: '{new_var_name}'")
+    print(f"Dimensions: {list(ds[new_var_name].dims)}")
+    print(f"Shape: {ds[new_var_name].shape}")
+    
+    # Preview
+    print(f"\nMaximum Preview (First 5 values):")
+    if ds[new_var_name].size == 1:
+        print(f"{float(ds[new_var_name].values):.2f}")
+    else:
+        print(ds[new_var_name].values.flatten()[:5])
 
     return ds
 
@@ -329,86 +352,29 @@ def minimum_value_flexible(ds):
     # Add to Dataset
     ds[new_var_name] = min_val
 
-    # Display results
-    print(f"\n Variable added: {new_var_name}")
-    if min_val.size == 1:
-        print(f"Unique minimum value: {float(min_val.values):.2f}")
+    # Summary
+    print("\nMinimum calculation summary:")
+    print(f"Dimensions reduced: {dims_to_reduce}")
+    if period_label:
+        print(f"Time period: {period_label.lstrip('_')}")
     else:
-        print(f"Remaining dimensions after calculation: {list(min_val.dims)}")
-        print(f"Result shape: {min_val.shape}")
+        print("Time period: full range")
+
+    print(f"New Variable added: '{new_var_name}'")
+    print(f"Dimensions: {list(ds[new_var_name].dims)}")
+    print(f"Shape: {ds[new_var_name].shape}")
+    
+    # Preview
+    print(f"\nMinimum Preview (First 5 values):")
+    if ds[new_var_name].size == 1:
+        print(f"{float(ds[new_var_name].values):.2f}")
+    else:
+        print(ds[new_var_name].values.flatten()[:5])
 
     return ds
 
 
-# ---------------- Median ----------------
-#   Median value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset
 
-def median_value_flexible(ds):
-    # Variable selection
-    vars_list = list(ds.data_vars)
-    print("\nAvailable variables:")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
-
-    while True:
-        try:
-            var_idx = int(input("\nIndex of the variable to find the median: "))
-            var_name = vars_list[var_idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index. Please try again.")
-
-    active_da = ds[var_name]
-
-    # Identification of available dimensions
-    available_dims = list(active_da.dims)
-    dims_to_reduce = []
-    
-    print("\nAcross which dimensions do you want to find the median?")
-    print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
-    for i, d in enumerate(available_dims):
-        print(f" [{i}] {d} ({ds.dims[d]} values)")
-
-    
-    while True:
-
-        choice_dims = input("Your choice: ").strip()
-
-        if choice_dims == "":
-            dims_to_reduce = available_dims
-            break
-
-        try:
-            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
-            dims_to_reduce = [available_dims[i] for i in indices]
-            break
-
-        except (ValueError, IndexError):
-            print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
-
-    # Handling of time period if 'time' is involved
-    active_da, period_label = apply_time_selection(ds, active_da, dims_to_reduce)
-
-    # Median calculation
-    print(f"\nCalculating median across: {dims_to_reduce}...")
-    median_val = active_da.median(dim=dims_to_reduce, skipna=True)
-
-    # Variable naming
-    dims_suffix = "_median_on_" + "_".join(dims_to_reduce)
-    new_var_name = f"median_{var_name}{dims_suffix}{period_label}"
-
-    # Add to Dataset
-    ds[new_var_name] = median_val
-
-    # Display results
-    print(f"\nVariable added: {new_var_name}")
-    if median_val.size == 1:
-        print(f"Unique median value: {float(median_val.values):.2f}")
-    else:
-        print(f"Remaining dimensions after calculation: {list(median_val.dims)}")
-        print(f"Result shape: {median_val.shape}")
-
-    return ds
 
 
 # ---------------- Percentile ----------------
@@ -474,6 +440,9 @@ def percentile_value_flexible(ds):
     # Percentile calculation
     print(f"\nCalculating {int(q*100)}th percentile across: {dims_to_reduce}...")
     # Note: quantile() in xarray uses the 0-1 scale for q
+    # FIX dask pour percentile
+    active_da = active_da.chunk({dim: -1 for dim in dims_to_reduce})
+
     perc_val = active_da.quantile(q, dim=dims_to_reduce, skipna=True)
 
     # Variable naming
@@ -483,13 +452,24 @@ def percentile_value_flexible(ds):
     # Add to Dataset
     ds[new_var_name] = perc_val
 
-    # Display results
-    print(f"\nVariable added: {new_var_name}")
-    if perc_val.size == 1:
-        print(f"Unique percentile value: {float(perc_val.values):.2f}")
+    # Summary
+    print(f"\nPercentile ({int(q*100)}th) calculation summary:")
+    print(f"Dimensions reduced: {dims_to_reduce}")
+    if period_label:
+        print(f"Time period: {period_label.lstrip('_')}")
     else:
-        print(f"Remaining dimensions after calculation: {list(perc_val.dims)}")
-        print(f"Result shape: {perc_val.shape}")
+        print("Time period: full range")
+
+    print(f"New Variable added: '{new_var_name}'")
+    print(f"Dimensions: {list(ds[new_var_name].dims)}")
+    print(f"Shape: {ds[new_var_name].shape}")
+    
+    # Preview
+    print(f"\nPercentile Preview (First 5 values):")
+    if ds[new_var_name].size == 1:
+        print(f"{float(ds[new_var_name].values):.2f}")
+    else:
+        print(ds[new_var_name].values.flatten()[:5])
 
     return ds
 
@@ -566,9 +546,23 @@ def rolling_mean_value(ds):
     # Add to Dataset
     ds[new_var_name] = rolling_val
 
-    # Display results
-    print(f"\nVariable added: {new_var_name}")
-    print(f"Result shape: {rolling_val.shape}")
+    # Summary
+    print(f"\nRolling Mean (window={window}) calculation summary:")
+    if period_label:
+        print(f"Time period: {period_label.lstrip('_')}")
+    else:
+        print("Time period: full range")
+
+    print(f"New Variable added: '{new_var_name}'")
+    print(f"Dimensions: {list(ds[new_var_name].dims)}")
+    print(f"Shape: {ds[new_var_name].shape}")
+    
+    # Preview
+    print(f"\nRolling Mean Preview (First 5 values):")
+    if ds[new_var_name].size == 1:
+        print(f"{float(ds[new_var_name].values):.2f}")
+    else:
+        print(ds[new_var_name].values.flatten()[:5])
 
     return ds
 
@@ -595,10 +589,11 @@ def monthly_interannual_average_xr(ds):
 
     # list of dimensions to identify the time dimension 
     dims_list = list(active_da.dims)
+    dims_list = list(active_da.dims)
     print(f"\nDimensions for '{var_name}':")
     for i, d in enumerate(dims_list):
-        print(f" [{i}] {d} ({active_da.dims[d]} values)")
-
+    # Utiliser active_da.sizes[d] au lieu de active_da.dims[d]
+        print(f" [{i}] {d} ({active_da.sizes[d]} values)")
     while True:
         try:
             dim_idx = int(input("Which time dimension do you want to use for grouping ? "))
@@ -633,20 +628,21 @@ def monthly_interannual_average_xr(ds):
     # Add to Dataset
     ds[new_var_name] = monthly_stats
 
-    # Display results
-    print(f"\nVariable added: {new_var_name}")
-    print(f"Resulting Shape: {monthly_stats.shape} (Dimensions: {list(monthly_stats.dims)})")
+    # Summary
+    print("\nInterannual monthly average summary:")
+    print(f"Grouped by : {time_dim}")
+
+    print(f"New Variable added: '{new_var_name}'")
+    print(f"Dimensions: {list(ds[new_var_name].dims)}")
+    print(f"Shape: {ds[new_var_name].shape}")
     
     # Preview
-    print("\nPreview of January averages:")
+    print("\nPreview (First 3 months):")
     try:
-        # Since we assigned coords, we select by the new 'month' coordinate
-        jan_preview = monthly_stats.sel(month="January")
-        print(jan_preview.head())
-        fev_preview = monthly_stats.sel(month="February")
-        print(fev_preview.head())
-        mar_preview = monthly_stats.sel(month="March")
-        print(mar_preview.head())
+        if "month" in ds[new_var_name].coords:
+            for m in ["January", "February", "March"]:
+                val = ds[new_var_name].sel(month=m).values.flatten()[:3]
+                print(f" - {m}: {val} ...")
     except Exception:
         pass
 
