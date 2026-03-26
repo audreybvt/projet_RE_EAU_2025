@@ -180,7 +180,10 @@ def mean_value_flexible(ds):
     # Add to Dataset
     # Direct assignment: do NOT use xr.where here because when reducing 
     # dimensions (e.g. 'model'), mean_val has fewer dimensions than ds[var_name].
-    # xr.where would cause undesired broadcasting and restore reduced dimensions.
+    if 'time' in dims_to_reduce and 'time' in ds.dims:
+        # broadcast mean_val to have the same time dimension as ds for consistent handling in future operations
+        mean_val, _ = xr.broadcast(mean_val, ds['time'])
+
     ds[new_var_name] = mean_val
 
     # Summary
@@ -266,6 +269,10 @@ def maximum_value_flexible(ds):
     new_var_name = f"max_{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
+    if 'time' in dims_to_reduce and 'time' in ds.dims:
+        # broadcast max_val to have the same time dimension as ds for consistent handling in future operations
+        max_val, _ = xr.broadcast(max_val, ds['time'])
+
     ds[new_var_name] = max_val
 
     # Summary
@@ -350,6 +357,10 @@ def minimum_value_flexible(ds):
     new_var_name = f"min_{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
+    if 'time' in dims_to_reduce and 'time' in ds.dims:
+        # broadcast min_val to have the same time dimension as ds for consistent handling in future operations
+        min_val, _ = xr.broadcast(min_val, ds['time'])
+
     ds[new_var_name] = min_val
 
     # Summary
@@ -450,6 +461,10 @@ def percentile_value_flexible(ds):
     new_var_name = f"perc{int(q*100)}_{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
+    if 'time' in dims_to_reduce and 'time' in ds.dims:
+        # broadcast perc_val to have the same time dimension as ds for consistent handling in future operations
+        perc_val, _ = xr.broadcast(perc_val, ds['time'])
+
     ds[new_var_name] = perc_val
 
     # Summary
@@ -589,10 +604,9 @@ def monthly_interannual_average_xr(ds):
 
     # list of dimensions to identify the time dimension 
     dims_list = list(active_da.dims)
-    dims_list = list(active_da.dims)
     print(f"\nDimensions for '{var_name}':")
     for i, d in enumerate(dims_list):
-    # Utiliser active_da.sizes[d] au lieu de active_da.dims[d]
+        # Utiliser active_da.sizes[d] au lieu de active_da.dims[d]
         print(f" [{i}] {d} ({active_da.sizes[d]} values)")
     while True:
         try:
