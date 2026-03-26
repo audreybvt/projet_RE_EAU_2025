@@ -733,7 +733,7 @@ def line_chart(ds: xr.Dataset):
                     # Plot individual model lines
                     for i in range(y_vals.shape[0]):
                         model_label = f"{label} (model {i+1})"
-                        ax.plot(x_vals, y_vals[i], label=model_label, alpha=0.7)
+                        ax.plot(x_vals, y_vals[i], label=model_label,linestyle='-', marker=None, alpha=0.7)
         else:
             # Normal plotting without envelope
             results = handle_xarray_dimensions(
@@ -750,7 +750,7 @@ def line_chart(ds: xr.Dataset):
                         f"{k}={v}" for k, v in sel.items()
                     )
 
-            ax.plot(x_vals, y_vals, label=label, marker='o')
+            ax.plot(x_vals, y_vals, label=label, linestyle='-', marker=None)
 
     # Plot individual line
     ax.set_xlabel(x_label)
