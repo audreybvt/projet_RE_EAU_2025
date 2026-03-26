@@ -1,9 +1,7 @@
 # Hydrological Indicators Calculation Functions
-import pandas as pd
 import numpy as np
-#from numpy import true
 
-# set up functions 
+# ---------------- Set Up Functions ----------------
 
 def categorical_filter(ds, standard_dims):
     """
@@ -52,7 +50,7 @@ def categorical_filter(ds, standard_dims):
                 break
             
         
-            # Sélection dimension
+            # Select dimension
             while True:
                 dim_idx_input = input(f"Which category? Index (0-{len(selectable_dims)-1}): ").strip()
                 if not dim_idx_input.isdigit(): 
@@ -65,7 +63,7 @@ def categorical_filter(ds, standard_dims):
                 dim_name = selectable_dims[dim_idx]
                 break
 
-            # Sélection valeur
+            # Select value
             vals = ds[dim_name].values
             print(f"\nValues in '{dim_name}':")
             for j, v in enumerate(vals):
@@ -91,9 +89,6 @@ def categorical_filter(ds, standard_dims):
 
                 
     return active_ds, selections_made
-
-
-
 
 def get_time_freq():
     """
@@ -127,9 +122,9 @@ def get_time_freq():
             print("Please enter a valid integer.")
 
 
+# ---------------- IPS ----------------
+#   Soil Water Balance Index
 
-
-# IPS (Soil Water Balance Index)
 def IPS(ds):
     """
     Return the Index of Soil Precipitation (IPS) based on the water balance.
@@ -264,7 +259,9 @@ def IPS(ds):
     # and the operator chooses to view the IPS over time at 'Piezometer 0', 
     # the values will be averaged across all models to produce a single time series.
 
-# Qmean/QA (mean discharge over a chosen period)
+
+# ---------------- Qmean/QA ----------------
+#   Mean discharge over a chosen period
 
 def Qmean(ds):
     """
@@ -355,7 +352,9 @@ def Qmean(ds):
     
     return ds
 
-## Q90/Q95 High-flow Indicators (flow exceeded only 10% or 5% of the time)
+
+# ---------------- Q90/Q95 ----------------
+#   High-flow Indicators (flow exceeded only 10% or 5% of the time)
 
 def Q90_95(ds):
     """
@@ -457,7 +456,9 @@ def Q90_95(ds):
     
     return ds
 
-# VCN10 (Minimum 10-day consecutive mean flow)
+
+# ---------------- VCN10 ----------------
+#   Minimum 10-day consecutive mean flow
 
 def VCN10(ds):
     """
@@ -552,7 +553,9 @@ def VCN10(ds):
     
     return ds
 
-## Q10/Q05 (flow exceeded only 10% or 5% of the time): low flow indicators
+
+# ---------------- Q10/Q05 ----------------
+#   Low flow indicators (flow exceeded only 10% or 5% of the time)
 
 def Q10_05(ds):
     """
@@ -654,7 +657,8 @@ def Q10_05(ds):
     return ds
 
 
-## VCX3 (Maximum 3-day consecutive mean flow)
+# ---------------- VCX3 ----------------
+#   Maximum 3-day consecutive mean flow
 
 def VCX3(ds):
     """
@@ -749,7 +753,9 @@ def VCX3(ds):
     
     return ds
 
-## Over-threshold indicator (count of occurrences above a threshold with tolerance, and episode statistics)
+
+# ---------------- Over-threshold Indicator ----------------
+#   Count of occurrences above a threshold with tolerance, and episode statistics
 
 def over_threshold(ds):
     """
@@ -781,36 +787,36 @@ outputs:
         except (ValueError, IndexError):
             print("Invalid index.")
 
-    # Threshold and Tolerance inputs
+    # Threshold and tolerance inputs
     while True:
         try:
-            seuil = float(input("Enter threshold value: "))
+            threshold = float(input("Enter threshold value: "))
             break
         except ValueError:
             print("Threshold must be a number.")
 
     while True:
         try:
-            tol = float(input("Tolerance percentage (%) around threshold: "))
-            if tol < 0:
+            tolerance = float(input("Tolerance percentage (%) around threshold: "))
+            if tolerance < 0:
                 print("Tolerance must be positive.")
                 continue
             break
         except ValueError:
             print("Tolerance must be a number.")
 
-    seuil_effectif = seuil * (1 + tol / 100)
-    print(f"Effective threshold used: {seuil_effectif:.3f}")
+    effective_threshold = threshold * (1 + tolerance / 100)
+    print(f"Effective threshold used: {effective_threshold:.3f}")
 
     # Add Visualization Variable (Magnitude)
     # This creates a new variable: Value - Threshold
     new_var_magnitude = f"POT_magnitude_{var_name}"
-    ds[new_var_magnitude] = ds[var_name] - seuil_effectif
-    ds[new_var_magnitude].attrs['description'] = f"Exceedance magnitude above {seuil_effectif} for {var_name}"
+    ds[new_var_magnitude] = ds[var_name] - effective_threshold
+    ds[new_var_magnitude].attrs['description'] = f"Exceedance magnitude above {effective_threshold} for {var_name}"
     
     # Episode Detection Logic
     da = active_ds[var_name]
-    exceed = da > seuil_effectif
+    exceed = da > effective_threshold
     
     # Global counts
     total_obs = da.size

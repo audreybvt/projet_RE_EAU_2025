@@ -630,6 +630,7 @@ def bar_chart(ds: xr.Dataset):
 
     return fig
 
+
 # ---------------- Line Chart ---------------- 
 
 def line_chart(ds: xr.Dataset):
@@ -805,6 +806,7 @@ def line_chart(ds: xr.Dataset):
 
     return fig
 
+
 # -------------- Scatter Plot ---------------
 
 def scatter_chart(ds: xr.Dataset):
@@ -927,6 +929,7 @@ def scatter_chart(ds: xr.Dataset):
     ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
     
     return fig
+
 
 # ---------------- Radar Chart ----------------
 '''
@@ -1222,6 +1225,7 @@ def radar_chart(ds: xr.Dataset):
 
     return fig
 #
+
 
 # ---------------- Histogram Chart ----------------
 

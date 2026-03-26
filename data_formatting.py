@@ -3,26 +3,28 @@ import xarray as xr
 import numpy as np
 from pathlib import Path
 
+# ---------------- NetCDF Formatting ----------------
+
 def handle_spatial_dimensions(ds, filename="dataset"):
     """
-    Gère simplement les dimensions spatiales du dataset.
-    Deux options: (1) Garder tout, (2) Sélectionner une seule entité (point/station).
+    Simply handles the spatial dimensions of the dataset.
+    Two options: (1) Keep everything, (2) Select a single entity (point/station).
     
     Parameters:
-        ds: xarray.Dataset à traiter
-        filename: nom du fichier pour affichage (optionnel)
+        ds: xarray.Dataset to process
+        filename: filename for display (optional)
     """
-    # Identifier les dimensions spatiales potentielles
+    # Identify potential spatial dimensions
     spatial_dim = None
 
-    # Chercher les dimensions de points (piézomètres, stations, etc.)
+    # Look for point dimensions (piezometers, stations, etc.)
     point_dims = ['piezometre', 'station', 'stations', 'site', 'sites', 'location', 'locations']
     for dim in point_dims:
         if dim in ds.dims:
             spatial_dim = dim
             break
 
-    # Si pas de dimension point, chercher les grilles
+    # If no point dimension, look for grids
     if not spatial_dim:
         grid_dims = ['latitude', 'longitude', 'lat', 'lon', 'x', 'y']
         for dim in grid_dims:
@@ -30,91 +32,91 @@ def handle_spatial_dimensions(ds, filename="dataset"):
                 spatial_dim = dim
                 break
 
-    # Si aucune dimension spatiale détectée, retourner le dataset tel quel
+    # If no spatial dimension detected, return the dataset as is
     if not spatial_dim:
         return ds
 
-    # Afficher l'info
-    print(f"\n Fichier: {filename}")
-    print(f"Dimension spatiale détectée: '{spatial_dim}' ({len(ds[spatial_dim])} valeurs)")
+    # Display info
+    print(f"\n Choice of the spatial dimension for the file: {filename}")
+    print(f"Spatial dimension detected: '{spatial_dim}' ({len(ds[spatial_dim])} values)")
 
-    # Menu simple
+    # Simple menu
     print("\nOptions:")
-    print("[1] Garder toutes les données")
-    print("[2] Sélectionner une seule entité")
+    print("[1] Keep all data")
+    print("[2] Select a single entity")
 
     while True:
         try:
-            choice = int(input("Votre choix (1-2): ").strip())
+            choice = int(input("Your choice (1-2): ").strip())
             if choice in [1, 2]:
                 break
-            print("Choix invalide. Entrez 1 ou 2.")
+            print("Invalid choice. Enter 1 or 2.")
         except ValueError:
-            print("Veuillez entrer un nombre.")
+            print("Please enter a number.")
 
-    # Option 1: Garder tout
+    # Option 1: Keep everything
     if choice == 1:
-        print("→ Conservation de toutes les données")
+        print("→ Keeping all data")
         return ds
 
-    # Option 2: Sélectionner une entité
+    # Option 2: Select an entity
     else:
-        print(f"\nEntités disponibles dans '{spatial_dim}':")
+        print(f"\nAvailable entities in '{spatial_dim}':")
         coords = ds.coords[spatial_dim].values
         
-        # Afficher les 10 premières
+        # Display the first 10
         for i, coord in enumerate(coords[:10]):
             print(f"[{i}] {coord}")
         if len(coords) > 10:
-            print(f"... et {len(coords) - 10} autres")
+            print(f"... and {len(coords) - 10} others")
 
         while True:
             try:
                 idx = int(input(f"Index (0-{len(coords)-1}): ").strip())
                 if 0 <= idx < len(coords):
                     selected = coords[idx]
-                    print(f"→ Sélection: {selected}")
+                    print(f"→ Selection: {selected}")
                     return ds.sel({spatial_dim: selected})
                 else:
-                    print("Index hors limites.")
+                    print("Index out of bounds.")
             except ValueError:
-                print("Veuillez entrer un nombre.")
+                print("Please enter a number.")
 
 def load_multiple_datasets(paths):
     """
-    Charge plusieurs fichiers NetCDF et ajoute les dimensions
-    model et scenario avant de les combiner.
-    Utilise dask pour éviter les problèmes de mémoire.
+    Load multiple NetCDF files and add model and scenario dimensions
+    before combining them.
+    Uses dask to avoid memory issues.
     """
 
     datasets = []
 
     for path in paths:
 
-        # Ouvrir sans décodage automatique (en spécifiant le moteur explicitement)
+        # Open without automatic decoding (by specifying the engine explicitly)
         try:
             ds = xr.open_dataset(path, decode_cf=False, engine='netcdf4')
         except Exception:
-            # Fallback: essayer h5netcdf
+            # Fallback: try h5netcdf
             try:
                 ds = xr.open_dataset(path, decode_cf=False, engine='h5netcdf')
             except Exception as e:
-                print(f"Erreur lors de l'ouverture du fichier {path}: {e}")
+                print(f"Error opening file {path}: {e}")
                 continue
 
-        # Décodage manuel du temps seulement
+        # Manual time decoding only
         if 'time' in ds:
             ds = ds.assign_coords(time=xr.coding.times.decode_cf_datetime(
                 ds['time'], ds['time'].attrs.get('units', 'days since 1900-01-01'),
                 calendar=ds['time'].attrs.get('calendar', 'standard')
             ))
 
-        # Gestion interactive des dimensions spatiales
-        filename = Path(path).name  # Extraire le nom du fichier
+        # Interactive spatial dimension handling
+        filename = Path(path).name  # Extract filename
         ds = handle_spatial_dimensions(ds, filename=filename)
 
         #Create attributes for model and scenario
-        # récupération des métadonnées si elles existent
+        # retrieve metadata if they exist
         scenario = ds.attrs.get("experiment_id", "unknown")
         gcm = ds.attrs.get("driving_model_id", "unknown")
         rcm = ds.attrs.get("model_id", "unknown")
@@ -123,53 +125,71 @@ def load_multiple_datasets(paths):
 
 
         if "unknown" in (gcm, rcm, bc, hy_model, scenario) :
-            return print("The format of the file is not appropriate")
+            print("The file format is not appropriate")
+            return
 
-        # Créer une seule dimension "model_chain"
+        # Create a single "model_chain" dimension
         model_chain = f"{gcm}-{rcm}-{bc}-{hy_model}"
 
-        # Étendre le dataset avec les deux nouvelles dimensions
+        # Extend the dataset with the two new dimensions
         ds = ds.expand_dims({
             "scenario": [scenario],
             "model": [model_chain]
         })
 
-        # Convertir en dask avec un chunking intelligent adapté aux dimensions disponibles
+        # Convert to dask with intelligent chunking adapted to available dimensions
         chunk_dict = {}
 
-        # Priorité au chunking temporel si disponible
+        # Priority to temporal chunking if available
         if 'time' in ds.dims:
             chunk_dict['time'] = min(1000, ds.sizes['time'])
 
-        # Chunking des dimensions spatiales/ponctuelles
+        # Chunking of spatial/point dimensions
         spatial_dims = ['piezometre', 'latitude', 'longitude', 'lat', 'lon', 'x', 'y']
         for dim in spatial_dims:
             if dim in ds.dims and ds.sizes[dim] > 1:
                 chunk_dict[dim] = min(100, ds.sizes[dim])
-                break  # Un seul chunking spatial pour éviter la surcharge
+                break  # Only one spatial chunking to avoid overload
 
-        # Si aucune dimension connue, chunker la plus grande dimension non-scalaire
+        # If no known dimension, chunk the largest non-scalar dimension
         if not chunk_dict:
             for dim, size in ds.sizes.items():
-                if size > 1 and dim not in ['scenario', 'model']:  # Éviter les nouvelles dimensions
+                if size > 1 and dim not in ['scenario', 'model']:  # Avoid new dimensions
                     chunk_dict[dim] = min(1000, size)
                     break
 
-        # Appliquer le chunking si des dimensions ont été trouvées
+        # Apply chunking if dimensions were found
         if chunk_dict:
             ds = ds.chunk(chunk_dict)
         else:
-            # Fallback: chunking automatique
+            # Fallback: automatic chunking
             ds = ds.chunk('auto')
 
         datasets.append(ds)
 
-    # combinaison avec dask
+    # combination with dask
     combined = xr.combine_by_coords(datasets, combine_attrs='drop', join='outer', data_vars='all')
-    print(f"\nCombinaison terminée. Dataset : {combined}")
+    print(f"\nCombination completed. Dataset: {combined}")
     return combined
 
+
+# ---------------- CSV Formatting ----------------
+
 def clean_dataframe(df):
+    """
+    Clean a DataFrame by detecting and converting date columns.
+
+    Attempts to identify date columns by name first, then by automatic detection
+    of columns that can be converted to datetime with high success rate.
+
+    Parameters:
+        df: pandas.DataFrame to clean
+
+    Returns:
+        tuple: (cleaned_df, date_column_name)
+            - cleaned_df: DataFrame with date column converted to datetime
+            - date_column_name: Name of the detected date column, or None
+    """
 
     df_clean = df.copy()
     date_col = None
@@ -245,11 +265,11 @@ def csv_to_xarray(filepath):
         try:
             skip_n = int(input("How many metadata lines (before column names)? "))
             if skip_n < 0:
-                print("Enter a positive number.")
+                print("Please enter a positive number.")
                 continue
             break
         except ValueError:
-            print("Enter a valid integer.")
+            print("Please enter a valid integer.")
 
     df = pd.read_csv(filepath, sep=";", skiprows=skip_n)
 
@@ -306,3 +326,55 @@ def csv_to_xarray(filepath):
     print(ds)
 
     return ds
+
+
+# ---------------- Excel Formatting ----------------
+
+def excel_to_long_csv(input_excel_path="input/excel/donnees_sandra_feuille2_test.xlsx", output_csv_path="input/CSV/donnees_longues.csv"):
+    """
+    Convert an Excel file with a dual header (2-level MultiIndex) to a long CSV.
+
+    This mirrors the previous standalone excel_to_csv.py script in a reusable function.
+
+    Args:
+        input_excel_path: source Excel file path.
+        output_csv_path: destination CSV file path.
+
+    Returns:
+        pandas.DataFrame: long-format data (with 'Date', 'model', and value columns).
+    """
+
+    # Load Excel with the two header rows
+    df = pd.read_excel(input_excel_path, header=[2, 3])
+
+    # Fix Date column name for MultiIndex
+    new_cols = list(df.columns)
+    if "Date" in str(new_cols[0]) or "Unnamed" in str(new_cols[0]):
+        new_cols[0] = ("Date", "")
+    df.columns = pd.MultiIndex.from_tuples(new_cols)
+
+    # Convert the Date column to datetime
+    df[("Date", "")] = pd.to_datetime(
+        df[("Date", "")],
+        dayfirst=True,
+        errors="coerce"
+    )
+
+    # Convert to long format by stacking the first level (models)
+    df_long = (
+        df
+        .set_index(("Date", ""))
+        .stack(level=0)
+        .reset_index()
+        .rename(columns={"level_1": "model"})
+    )
+
+    # Clean up the columns
+    df_long.columns.name = None
+    df_long = df_long.rename(columns={("Date", ""): "Date"})
+
+    # Write CSV
+    df_long.to_csv(output_csv_path, sep=";", index=False)
+    print(f"Long-format CSV written: {output_csv_path}")
+
+    return df_long

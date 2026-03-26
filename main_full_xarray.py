@@ -1,6 +1,3 @@
-# cinquième proposition -> full xarray
-#######################
-#######################
 # Import of the packages needed
 
 import pandas as pd
@@ -21,23 +18,23 @@ supported_file_format = {
 
 
 while True:
-    
+
     print("\nSupported file formats:")
     for num, name in supported_file_format.items():
         print(f"[{num}] {name}")
-    
+
     print("\nNote: Multiple files are supported only for NetCDF files.")
 
     user_input = input("\nSelect the format of your file: ").strip()
 
-    # Vérifier que c'est un entier
+    # Check that it's an integer
     try:
         file_format = int(user_input)
     except ValueError:
         print("Invalid input. Please enter a number.")
         continue
 
-    # Vérifier que c'est un choix valide
+    # Check that it's a valid choice
     if file_format not in supported_file_format:
         print("Invalid choice, please try again.")
         continue
@@ -48,7 +45,7 @@ while True:
 
 #Opening CSV file
 if supported_file_format[file_format] == "CSV":
-    
+
     path = input("Please enter your path to your file :")
     path = Path(path.strip().replace("\\", "/"))
 
@@ -56,7 +53,7 @@ if supported_file_format[file_format] == "CSV":
 
 #Opening NetCDF file(s)
 elif supported_file_format[file_format] == "NetCDF": # NetCDF case
-    
+
     paths = input("Enter path(s) separated by commas : ").split(",")
 
     paths = [Path(p.strip().replace("\\", "/")) for p in paths]
@@ -64,7 +61,7 @@ elif supported_file_format[file_format] == "NetCDF": # NetCDF case
     ds = dt_form.load_multiple_datasets(paths)
 
 
-#Création des dictionnaires
+#Creation of dictionaries
 dict_visu={"bar chart":1,"scatter plot":2,"line chart":3, "radar chart":4, "histogram chart":5}
 menu_visu = {
     1: visu_xr.bar_chart,
@@ -77,7 +74,7 @@ menu_visu = {
 dict_stats={"Flexible mean":1,"Flexible maximum":2, "Flexible minimum":3, "Flexible percentile":4, "Temporal rolling mean":5, "Monthly Interannual average":6}
 menu_stats_xr = {
     1: stat_xr.mean_value_flexible,
-    2: stat_xr.maximum_value_flexible,     
+    2: stat_xr.maximum_value_flexible,
     3: stat_xr.minimum_value_flexible,
     4: stat_xr.percentile_value_flexible,
     5: stat_xr.rolling_mean_value,
@@ -107,113 +104,103 @@ menu_indicateurs = {
 }
 
 
-while True: 
-# Demande des indicateurs
+while True:
+# Ask for indicators
     while True:
-        print("\nIndicateurs disponibles :")
+        print("\nAvailable indicators:")
         for name, num in dict_indicateurs.items():
             print(f"[{num}] {name}")
-        
+
         # indicator_choice = int(input("Entrez le numéro de l'indicateur à calculer (0 pour terminer) : "))
         while True:
             try:
-                indicator_choice = int(input("Entrez le numéro de l'indicateur à calculer (0 pour terminer) : "))
-        
+                indicator_choice = int(input("Enter the number of the indicator to calculate (0 to finish): "))
+
                 if indicator_choice == 0:
                     break
-            
+
                 if indicator_choice not in menu_indicateurs:
-                    print("Choix invalide, réessayez.")
+                    print("Invalid choice, please try again.")
                     continue
-            
+
                 break
-        
+
             except ValueError:
-                print("Veuillez entrer un nombre entier valide.")
+                print("Please enter a valid integer.")
         if indicator_choice == 0:
-            break  # sortir de la boucle
+            break  # exit the loop
 
-        #if indicator_choice not in menu_indicateurs:
-            #print("Choix invalide, réessayez.")
-            #continue
-
-        # Appel de la fonction choisie
+        # Call the chosen function
         ds = menu_indicateurs[indicator_choice](ds)
-        
 
-    # Demande des statistiques
+
+    # Ask for statistics
     while True:
-        print("\nCalculs statistiques disponibles :")
+        print("\nAvailable statistical calculations:")
         for name, num in dict_stats.items():
             print(f"[{num}] {name}")
-        
-        #stat_choice = int(input("Entrez le numéro de la stat à appliquer (0 pour terminer) : "))
 
         while True:
             try:
-                stat_choice = int(input("Entrez le numéro de la stat à appliquer (0 pour terminer) : "))
-        
+                stat_choice = int(input("Enter the number of the stat to apply (0 to finish): "))
+
                 if stat_choice == 0:
                     break
-            
+
                 if stat_choice not in menu_stats_xr:
-                    print("Choix invalide, réessayez.")
+                    print("Invalid choice, please try again.")
                     continue
-            
+
                 break
-        
+
             except ValueError:
-                print("Veuillez entrer un nombre entier valide.")
+                print("Please enter a valid integer.")
         if stat_choice == 0:
-            break  # sortir de la boucle
-
-        #if stat_choice not in menu_stats_xr:
-            #print("Choix invalide, réessayez.")
-            #continue
-
-        # Appel de la fonction choisie
+            break  # exit the loop
+        
+        # Call the chosen function
         ds = menu_stats_xr[stat_choice](ds)
 
-    # Demande de la visualisation
-    print("\nVisualisations disponibles :")
+    # Ask for visualization
+    print("\nAvailable visualizations:")
     for name, num in dict_visu.items():
         print(f"[{num}] {name}")
     #visualization = int(input("Enter the index of the visualization you want: "))
     while True:
         try:
             visualization = int(input("Enter the index of the visualization you want: "))
-        
+
             if visualization not in menu_visu:
-                print("Choix invalide.")
+                print("Invalid choice.")
                 continue
-            
+
             break
-        
+
         except ValueError:
-            print("Veuillez entrer un nombre entier valide.")
+            print("Please enter a valid integer.")
 
     makedirs("output", exist_ok=True)
 
     fig = menu_visu[visualization](ds)
     plt.savefig(f"output/{menu_visu[visualization].__name__}.png", bbox_inches="tight")
-    print("Affichage de la figure, fermez la fenêtre pour continuer le script.")
+    print("Displaying the figure, close the window to continue the script.")
     plt.show()
     plt.close(fig)
 
     print(f"{menu_visu[visualization].__name__}.png saved in output/")
 
-    
-    # choix de continuer
+
+    # choice to continue
     while True:
         continuer = input(
-            "\nVoulez-vous effectuer une autre analyse/visualisation sur ce fichier ? (o/n) : "
+            "\nDo you want to perform another analysis/visualization on this file? (y/n): "
         ).strip().lower()
 
-        if continuer in ["o", "n"]:
+        if continuer in ["y", "n"]:
             break
 
-        print("Entrée invalide. Veuillez répondre par 'o' ou 'n'.")
+        print("Invalid input. Please answer with 'y' or 'n'.")
 
-    if continuer != "o":
-        print("Fin du programme. Au revoir !")
+    if continuer != "y":
+        print("End of program. Goodbye!")
         break

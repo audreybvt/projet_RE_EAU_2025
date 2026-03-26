@@ -21,15 +21,15 @@ def ask_date(ds):
     min_date = time_values.min()
     max_date = time_values.max()
 
-    print("\nPériode disponible :")
-    print(f" Du {min_date.date()} au {max_date.date()}")
+    print("\nAvailable period:")
+    print(f" From {min_date.date()} to {max_date.date()}")
 
-    print("\nDéfinition de la période (laisser vide pour tout afficher)")
+    print("\nDefine period (leave blank for full range)")
 
     while True:
 
-        start_input = input("Date de début (YYYY-MM-DD) : ").strip()
-        end_input = input("Date de fin (YYYY-MM-DD) : ").strip()
+        start_input = input("Start date (YYYY-MM-DD): ").strip()
+        end_input = input("End date (YYYY-MM-DD): ").strip()
 
         try:
             start_date = pd.to_datetime(start_input) if start_input else None
@@ -45,24 +45,23 @@ def ask_date(ds):
 
         
 
-        # --- vérifier cohérence ---
+        # --- verify consistency ---
         if start_date and end_date and start_date > end_date:
-            print("La date de début doit être antérieure à la date de fin.")
+            print("Start date must be before end date.")
             continue
 
-        # --- vérifier dans le domaine ---
+        # --- verify range ---
         if start_date and start_date < min_date:
-            print("La date de début est avant la période disponible.")
+            print("Start date is before available period.")
             continue
 
         if end_date and end_date > max_date:
-            print("La date de fin est après la période disponible.")
+            print("End date is after available period.")
             continue
 
         break
 
     return start_date, end_date
-
 
 #function to apply to check if a time dimension is selected and allow user to select a specific period for the calculation.
 # This function is called in the mean, max, min and percentile functions to avoid code repetition.
@@ -141,12 +140,12 @@ def apply_time_selection(ds, active_da, dims_to_reduce):
         else:
             temp_da = active_da
 
-        # Sécurité 1 : dimension toujours présente ?
+        # Safety 1: dimension still present?
         if t_dim not in temp_da.dims:
             print("Time dimension disappeared after operation. Please try again.")
             continue
 
-        # Sécurité 2 : données non vides ?
+        # Safety 2: non-empty data?
         if temp_da.sizes.get(t_dim, 0) == 0:
             print("No data available in this period. Please try again.")
             continue
@@ -165,7 +164,6 @@ def apply_time_selection(ds, active_da, dims_to_reduce):
 
 
 ### Mean value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
-
 
 def mean_value_flexible(ds):
     # Variable selection
@@ -226,9 +224,9 @@ def mean_value_flexible(ds):
     new_var_name = f"{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
-    # Direct assignment: xr.where ne doit PAS être utilisé ici car si on réduit 
-    # des dimensions (ex: 'model'), mean_val a moins de dimensions que ds[var_name].
-    # xr.where provoquerait un broadcasting indésirable qui recréerait les dimensions réduites.
+    # Direct assignment: do NOT use xr.where here because when reducing 
+    # dimensions (e.g. 'model'), mean_val has fewer dimensions than ds[var_name].
+    # xr.where would cause undesired broadcasting and restore reduced dimensions.
     ds[new_var_name] = mean_val
 
     # Display results
@@ -240,7 +238,6 @@ def mean_value_flexible(ds):
         print(f"Result shape: {mean_val.shape}")
 
     return ds
-
 
 
 ### Maximum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
@@ -315,8 +312,6 @@ def maximum_value_flexible(ds):
     return ds
 
 
-
-
 ### Minimum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
 def minimum_value_flexible(ds):
@@ -387,10 +382,6 @@ def minimum_value_flexible(ds):
         print(f"Result shape: {min_val.shape}")
 
     return ds
-
-
-
-
 
 
 ### Median value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
@@ -545,17 +536,6 @@ def percentile_value_flexible(ds):
     return ds
 
 
-
-
-
-
-
-
-
-
-
-
-
 ### rolling mean value of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
 def rolling_mean_value(ds):
@@ -591,12 +571,12 @@ def rolling_mean_value(ds):
             else:
                 temp_da = active_da
 
-            # vérifier s'il y a des données
+            # verify that data exists
             if temp_da.time.size == 0:
                 print("No data available in this time range. Please choose another period.")
                 continue
 
-            # si la sélection est valide
+            # selection is valid
             active_da = temp_da
 
             if start_date or end_date:
@@ -634,19 +614,7 @@ def rolling_mean_value(ds):
     return ds
 
 
-
-
-
-
-
-
-
-
-
-
-
 ### Interannual grouping by month of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
-
 
 def monthly_interannual_average_xr(ds):
     # Variable selection
