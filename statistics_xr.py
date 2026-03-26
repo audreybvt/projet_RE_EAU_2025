@@ -129,6 +129,54 @@ def ask_date(ds, start_input_gui=None, end_input_gui=None, log_func=None):
     return active_da, period_label
 
 
+#function to apply to check if a time dimension is selected and allow user to select a specific period for the calculation.
+# This function is called in the mean, max, min and percentile functions to avoid code repdef apply_time_selection(ds, active_da, dims_to_reduce):
+    """
+    Detects a time-related dimension, prompts the user for a period,
+    and slices the DataArray accordingly.
+    
+    Returns:
+        updated_da (xr.DataArray): The sliced data.
+        period_label (str): A string suffix for the variable name (e.g., '_2023-01-01_2023-02-01').
+    """
+    period_label = ""
+    # Find any dimension that contains the string "time"
+    time_dims = [d for d in dims_to_reduce if "time" in d]
+
+    if time_dims:
+        # We target the first time-like dimension found
+        t_dim = time_dims[0]
+        print(f"\n--- Period configuration (detected dimension: {t_dim}) ---")
+
+    while True:
+        # This calls your existing ask_date function
+        start_date, end_date = ask_date(ds)
+
+        if start_date or end_date:
+            # Dynamic slicing using a dictionary for the dimension name
+            temp_da = active_da.sel({t_dim: slice(start_date, end_date)})
+        else:
+            # If no dates entered, use the full range
+            temp_da = active_da
+
+        # Safety check: ensure the selection isn't empty
+        if temp_da[t_dim].size == 0:
+            print(f"No data available in this range for '{t_dim}'. Please try again.")
+            continue
+
+        # Update the DataArray and create the label
+        active_da = temp_da
+        if start_date or end_date:
+            s = start_date.date() if start_date else "start"
+            e = end_date.date() if end_date else "end"
+            period_label = f"_{s}_{e}"
+        
+        break
+
+    return active_da, period_label
+
+
+
 
 
 ### Mean value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
