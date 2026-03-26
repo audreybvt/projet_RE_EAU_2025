@@ -850,37 +850,62 @@ with tab_viz:
         try:
             fig = None
 
+            # Always pass auto_mean_gui=True and dim_selections_gui={} so that
+            # handle_xarray_dimensions never prompts the terminal.
+            # The plot_config_gui dict provides labels from the Streamlit sidebar.
+            gui_config = {
+                "xlabel": plot_config_gui.get("xlabel") or "",
+                "ylabel": plot_config_gui.get("ylabel") or "",
+                "title": plot_config_gui.get("title") or "",
+            }
+
             if chart_type == "Graphique en ligne":
                 plot_vars = [var_main] + (vars_extra or [])
                 fig = viz.line_chart(
-                    ds_plot, 
-                    x_name_gui=var_x, 
-                    y_names_gui=plot_vars, 
-                    plot_config_gui=plot_config_gui,
+                    ds_plot,
+                    x_name_gui=var_x,
+                    y_names_gui=plot_vars,
+                    plot_config_gui=gui_config,
+                    auto_mean_gui=True,
+                    dim_selections_gui={},
                     plot_envelope_gui=st.session_state.get("viz_envelope", False),
                     envelope_type_gui=st.session_state.get("viz_env_type", "average")
                 )
 
             elif chart_type == "Graphique en barres":
                 plot_vars = [var_main] + (vars_extra or [])
-                fig = viz.bar_chart(ds_plot, x_name_gui=var_x, y_names_gui=plot_vars, plot_config_gui=plot_config_gui)
+                fig = viz.bar_chart(
+                    ds_plot,
+                    x_name_gui=var_x,
+                    y_names_gui=plot_vars,
+                    plot_config_gui=gui_config,
+                    auto_mean_gui=True,
+                    dim_selections_gui={}
+                )
 
             elif chart_type == "Nuage de points":
-                fig = viz.scatter_chart(ds_plot, x_name_gui=var_x, y_names_gui=[var_y], plot_config_gui=plot_config_gui)
+                fig = viz.scatter_chart(
+                    ds_plot,
+                    x_name_gui=var_x,
+                    y_names_gui=[var_y],
+                    plot_config_gui=gui_config,
+                    auto_mean_gui=True,
+                    dim_selections_gui={}
+                )
 
             elif chart_type == "Radar":
                 if not vars_multi:
                     st.warning("Sélectionnez au moins deux variables pour le radar.")
                 else:
-                    fig = viz.radar_chart(ds_plot, var_gui=vars_multi, plot_config_gui=plot_config_gui)
+                    fig = viz.radar_chart(ds_plot, var_gui=vars_multi, plot_config_gui=gui_config)
 
             elif chart_type == "Histogramme":
                 fig = viz.histogram_chart(
-                    ds_plot, 
-                    x_name_gui=var_x, 
-                    col_name_gui=var_main, 
+                    ds_plot,
+                    x_name_gui=var_x,
+                    col_name_gui=var_main,
                     bins_gui=st.session_state.get("viz_bins", 10),
-                    plot_config_gui=plot_config_gui
+                    plot_config_gui=gui_config
                 )
 
             if fig is not None:

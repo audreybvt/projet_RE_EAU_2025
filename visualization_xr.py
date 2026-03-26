@@ -10,6 +10,10 @@ import os
 import matplotlib.dates as mdates
 import itertools
 
+# Sentinel object: when plot_config_gui is set to this, all chart functions
+# will use safe defaults without any terminal input() calls.
+_GUI_CALL = object()
+
 # ---------------- Helper Functions ----------------
 def subset_time(ds, start, end):
 
@@ -171,14 +175,22 @@ def configure_plot(
         dict containing labels, title and limits
     """
 
+    # GUI mode: if plot_config_gui is provided (even empty or _GUI_CALL sentinel)
     if plot_config_gui is not None:
+        # Handle _GUI_CALL sentinel or dict
+        if plot_config_gui is _GUI_CALL:
+            cfg = {}
+        else:
+            cfg = plot_config_gui or {}
+        xlabel = cfg.get("xlabel") or cfg.get("x_label") or x_default or ""
+        ylabel = cfg.get("ylabel") or cfg.get("y_label") or (y_defaults if isinstance(y_defaults, str) else (y_defaults[0] if y_defaults else ""))
         return {
-            "x_label": plot_config_gui.get("x_label", x_default),
-            "y_label": plot_config_gui.get("y_label", y_defaults),
-            "legend_labels": plot_config_gui.get("legend_labels", []),
-            "title": plot_config_gui.get("title", ""),
-            "x_limits": plot_config_gui.get("x_limits", x_limits),
-            "y_limits": plot_config_gui.get("y_limits", y_limits)
+            "x_label": xlabel,
+            "y_label": ylabel,
+            "legend_labels": cfg.get("legend_labels", y_defaults if isinstance(y_defaults, list) else []),
+            "title": cfg.get("title") or "",
+            "x_limits": cfg.get("x_limits", None),
+            "y_limits": cfg.get("y_limits", None)
         }
 
     # ----------------------
@@ -370,14 +382,9 @@ def handle_xarray_dimensions(
     # Identify which dimensions need to be handled (those not in main_dims)
     dims = [d for d in da.dims if d not in main_dims]
     
-    # Improved GUI mode detection:
-    # If this is called from line_chart, bar_chart, etc., it should not block.
-    # We'll check if we have any gui-related arguments or if we can rely on a safer check.
-    # For now, let's assume if dim_selections_gui is a dict (even empty), it's GUI mode.
+    # GUI mode: treat ANY non-None dim_selections_gui or auto_mean_gui=True as GUI mode
+    # An empty dict {} is also GUI mode (no prompts)
     is_gui = (dim_selections_gui is not None or auto_mean_gui is True)
-    # If we are called with ANY GUI parameter (even if empty), we should NOT block
-    # We can detect this by seeing if the caller is one of our GUI plotting functions 
-    # OR if we pass a special flag. For now, let's look at the parameters.
 
     for dim in dims:
         if dim_selections_gui is not None and dim in dim_selections_gui:
@@ -388,41 +395,30 @@ def handle_xarray_dimensions(
                 selections[dim] = dim_selections_gui[dim]
                 continue
         
-        if auto_mean_gui:
+        # In GUI mode: auto-average all extra dims to prevent blocking
+        if is_gui or auto_mean_gui:
             da = da.mean(dim=dim, skipna=True)
             continue
-            
+
+        # ---- Terminal-only path (only reached when is_gui is False) ----
         coords = da.coords[dim].values
         n = len(coords)
 
-        # In GUI mode, if no selection provided, we MUST NOT call input()
-        # We'll default to mean for large dims and 'all' for small dims if no info
-        if is_gui:
-            if n > 30:
-                da = da.mean(dim=dim, skipna=True)
-            else:
-                selections[dim] = list(coords)
-            continue
-
-        # ---- If dimension very large → propose mean (Terminal only)
         if n > 30:
             print(f"\nDimension '{dim}' has {n} values.")
             while True:
                 choice = input(f"Average over '{dim}'? (y/n): ").strip().lower()
                 if choice in ["y", "n"]: break
                 print("Please enter 'y' or 'n'.")
-            
             if choice == "y":
                 da = da.mean(dim=dim, skipna=True)
                 print(f"→ Averaged over {dim}")
                 continue
 
-        # ---- If single value
         if n == 1:
-            selections[dim] = coords
+            selections[dim] = list(coords)
             continue
 
-        # ---- Ask user selection (Terminal only)
         print(f"\nDimension '{dim}' values:")
         for i, v in enumerate(coords):
             print(f"[{i}] {v}")
@@ -1098,8 +1094,12 @@ def radar_chart(ds: xr.Dataset):
         raise ValueError("A radar chart requires at least 3 categories")
     
     # -------- Units for radar values --------
-    
-    units_input = input("Units for radar variables (e.g.: kW, %, ms, leave empty if none): ").strip()
+    is_gui = (plot_config_gui is not None)
+
+    if is_gui:
+        units_input = (plot_config_gui.get("units") or "") if isinstance(plot_config_gui, dict) else ""
+    else:
+        units_input = input("Units for radar variables (e.g.: kW, %, ms, leave empty if none): ").strip()
     
     if units_input != "":
         units_text = f" ({units_input})"
@@ -1108,14 +1108,21 @@ def radar_chart(ds: xr.Dataset):
     
     # -------- Title and legend configuration --------
     
-    custom_title = input("Chart title (leave empty for automatic): ").strip()
+    if is_gui:
+        cfg = plot_config_gui if isinstance(plot_config_gui, dict) else {}
+        custom_title = cfg.get("title") or ""
+    else:
+        custom_title = input("Chart title (leave empty for automatic): ").strip()
     
     if custom_title == "":
         custom_title = f"Radar chart: {', '.join(value_names)}{units_text}{period_text}"
     else:
         custom_title = f"{custom_title}{units_text}"
     
-    legend_input = input("Legend names (comma-separated, leave empty for defaults): ").strip()
+    if is_gui:
+        legend_input = cfg.get("legend") or ""
+    else:
+        legend_input = input("Legend names (comma-separated, leave empty for defaults): ").strip()
     
     if legend_input == "":
         legend_labels = value_names

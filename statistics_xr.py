@@ -6,10 +6,11 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import calendar
+from utils_xr import show_info
 
 
 # functiun to ask for a date with error handling and support for multiple formats
-def ask_date(ds, start_input_gui=None, end_input_gui=None):
+def ask_date(ds, start_input_gui=None, end_input_gui=None, log_func=None):
     """
     Ask the user for a start and end date within the dataset time range.
     Returns (start_date, end_date) as pandas Timestamp or None.
@@ -29,9 +30,9 @@ def ask_date(ds, start_input_gui=None, end_input_gui=None):
     # but for safety let's assume if it is, we might block. 
     # Better: the calling functions in statistics_xr already have _gui params.
 
-    print("\nPériode disponible :")
-    print(f" Du {min_date.date()} au {max_date.date()}")
-    print("\nDéfinition de la période (laisser vide pour tout afficher)")
+    show_info("\nPériode disponible :", log_func=log_func)
+    show_info(f" Du {min_date.date()} au {max_date.date()}", log_func=log_func)
+    show_info("\nDéfinition de la période (laisser vide pour tout afficher)", log_func=log_func)
 
     while True:
         start_input = input("Date de début (YYYY-MM-DD) : ").strip()
@@ -60,7 +61,7 @@ def ask_date(ds, start_input_gui=None, end_input_gui=None):
 
 
 #function to apply to check if a time dimension is selected and allow user to select a specific period for the calculation.
-# This function is called in the mean, max, min and percentile functions to avoid code repdef apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui=None, end_input_gui=None):
+# This function is called in the mean, max, min and percentile functions to avoid code repdef apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui=None, end_input_gui=None, log_func=None):
     period_label = ""
     time_dims = [d for d in active_da.dims if "time" in d]
     if not time_dims:
@@ -69,7 +70,7 @@ def ask_date(ds, start_input_gui=None, end_input_gui=None):
     
     # If GUI params are provided, skip interactive loop
     if start_input_gui is not None or end_input_gui is not None:
-        start_date, end_date = ask_date(ds, start_input_gui, end_input_gui)
+        start_date, end_date = ask_date(ds, start_input_gui, end_input_gui, log_func=log_func)
         if start_date or end_date:
             slice_dict = {}
             if start_date and end_date:
@@ -90,9 +91,9 @@ def ask_date(ds, start_input_gui=None, end_input_gui=None):
             return temp_da, period_label
         return active_da, "" # If GUI params are provided but result in no date, return original da
 
-    print(f"\n--- Period configuration (detected dimension: {t_dim}) ---")
+    show_info(f"\n--- Period configuration (detected dimension: {t_dim}) ---", log_func=log_func)
     while True:
-        start_date, end_date = ask_date(ds, start_input_gui, end_input_gui)
+        start_date, end_date = ask_date(ds, start_input_gui, end_input_gui, log_func=log_func)
         if start_date or end_date:
             slice_dict = {}
             if start_date and end_date:
@@ -183,10 +184,11 @@ def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_in
                 print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions.")
 
     # Handling of time period if 'time' is contained in the selected dimensions
-    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui)
+    active_da, period_label = apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui)
 
     # Mean calculation
-    print(f"\nCalculating mean across: {dims_to_reduce}...")
+    if not is_gui:
+        print(f"\nCalculating mean across: {dims_to_reduce}...")
     mean_val = active_da.mean(dim=dims_to_reduce, skipna=True)
 
     # Variable naming
@@ -565,6 +567,7 @@ def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_
 
 def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
+    is_gui = any(p is not None for p in [var_name_gui, window_gui, start_input_gui, end_input_gui])
     if var_name_gui is not None:
         var_name = var_name_gui
     else:
@@ -587,8 +590,8 @@ def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=N
     period_label = ""
     
     if "time" in active_da.dims:
-
-        print("\n--- Period configuration for the rolling mean ---")
+        if not is_gui:
+            print("\n--- Period configuration for the rolling mean ---")
 
         while True:
 
@@ -630,8 +633,8 @@ def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=N
                 print("Window size must be a positive integer.")
 
     # Rolling mean calculation
-    # min_periods=1 ensures we get values even at the start of the series
-    print(f"\nCalculating rolling mean (window={window}) along 'time' dimension...")
+    if not is_gui:
+        print(f"\nCalculating rolling mean (window={window}) along 'time' dimension...")
     rolling_val = active_da.rolling(time=window, center=True, min_periods=1).mean()
 
     # Variable naming
