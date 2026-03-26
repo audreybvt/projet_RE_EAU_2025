@@ -777,7 +777,7 @@ def line_chart(ds: xr.Dataset):
     ax.set_title(title)
 
     ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.3))
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
     plt.subplots_adjust(bottom=0.3)
 
     return fig
@@ -902,7 +902,8 @@ def scatter_chart(ds: xr.Dataset):
     ax.set_ylabel(y_label)
     ax.set_title(title)
     ax.grid(True, linestyle='--', alpha=0.5)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
+    plt.subplots_adjust(bottom=0.3)
     
     return fig
 
@@ -1047,8 +1048,9 @@ def radar_chart(ds: xr.Dataset):
     ax.set_xticklabels(categories)
     ax.set_title(custom_title)
 
-    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1))
-
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
+    plt.subplots_adjust(bottom=0.3)
+    
     return fig
 
 
