@@ -37,7 +37,8 @@ def handle_spatial_dimensions(ds, filename="dataset"):
         return ds
 
     # Display info
-    print(f"\n Choice of the spatial dimension for the file: {filename}")
+    print(f"\n Choice of the spatial dimension for the file : {filename}")
+    print("Warning: Make sure to use the same choice across multiple files if applicable.")
     print(f"Spatial dimension detected: '{spatial_dim}' ({len(ds[spatial_dim])} values)")
 
     # Simple menu

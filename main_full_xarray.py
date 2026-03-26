@@ -10,13 +10,16 @@ import indicators_xr as indic_xr
 from pathlib import Path
 from os import makedirs
 
+
+# ---------------- File(s) formatting and opening ----------------
+
 #Determine file format
 supported_file_format = {
         1: "NetCDF",
         2: "CSV"
     }
 
-
+#Path(s) entry and file format selection
 while True:
 
     print("\nSupported file formats:")
@@ -41,9 +44,7 @@ while True:
 
     break
 
-
-
-#Opening CSV file
+#Formatting and opening CSV file
 if supported_file_format[file_format] == "CSV":
 
     path = input("Please enter your path to your file :")
@@ -51,7 +52,7 @@ if supported_file_format[file_format] == "CSV":
 
     ds = dt_form.csv_to_xarray(path)
 
-#Opening NetCDF file(s)
+#Formatting and opening NetCDF file(s)
 elif supported_file_format[file_format] == "NetCDF": # NetCDF case
 
     paths = input("Enter path(s) separated by commas : ").split(",")
@@ -61,7 +62,32 @@ elif supported_file_format[file_format] == "NetCDF": # NetCDF case
     ds = dt_form.load_multiple_datasets(paths)
 
 
-#Creation of dictionaries
+# ---------------- Creation of dictionaries ----------------
+
+# Indicator selection dictionaries
+dict_indicateurs = {
+    "Soil_Water_Balance_Index": 1,
+    "Standardised Piezometric Level Indicator": 2,
+    "Qmean": 3,
+    "Q90/95": 4,
+    "Q10/05": 5,
+    "VCN10": 6,
+    "VCX3": 7,
+    "over_threshold":8
+}
+
+menu_indicateurs = {
+    1:indic_xr.soil_water_balance_index,
+    2:indic_xr.SPLI,
+    3:indic_xr.Qmean,
+    4:indic_xr.Q90_95,
+    5:indic_xr.Q10_05,
+    6:indic_xr.VCN10,
+    7:indic_xr.VCX3,
+    8:indic_xr.over_threshold
+}
+
+# Visualization selection dictionaries
 dict_visu={"bar chart":1,"scatter plot":2,"line chart":3, "radar chart":4, "histogram chart":5}
 menu_visu = {
     1: visu_xr.bar_chart,
@@ -71,6 +97,7 @@ menu_visu = {
     5: visu_xr.histogram_chart
 }
 
+# Statistics selection dictionaries
 dict_stats={"Flexible mean":1,"Flexible maximum":2, "Flexible minimum":3, "Flexible percentile":4, "Temporal rolling mean":5, "Monthly Interannual average":6}
 menu_stats_xr = {
     1: stat_xr.mean_value_flexible,
@@ -81,28 +108,8 @@ menu_stats_xr = {
     6: stat_xr.monthly_interannual_average_xr
 }
 
-# Indicator selection dictionaries
 
-dict_indicateurs = {
-    "IPS": 1,
-    "Qmean": 2,
-    "Q90/95": 3,
-    "Q10/05": 4,
-    "VCN10": 5,
-    "VCX3": 6,
-    "over_threshold":7
-}
-
-menu_indicateurs = {
-    1:indic_xr.IPS,
-    2:indic_xr.Qmean,
-    3:indic_xr.Q90_95,
-    4:indic_xr.Q10_05,
-    5:indic_xr.VCN10,
-    6:indic_xr.VCX3,
-    7:indic_xr.over_threshold
-}
-
+# ---------------- Calculation(s) and visualization choices ----------------
 
 while True:
 # Ask for indicators
