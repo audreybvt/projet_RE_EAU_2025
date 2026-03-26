@@ -3,276 +3,82 @@ import xarray as xr
 import numpy as np
 from pathlib import Path
 
-def handle_spatial_dimensions(ds):
+def handle_spatial_dimensions(ds, filename="dataset"):
     """
-    Gère interactivement les dimensions spatiales du dataset.
-    Permet de garder toutes les données, sélectionner un point ou une zone.
+    Gère simplement les dimensions spatiales du dataset.
+    Deux options: (1) Garder tout, (2) Sélectionner une seule entité (point/station).
+    
+    Parameters:
+        ds: xarray.Dataset à traiter
+        filename: nom du fichier pour affichage (optionnel)
     """
     # Identifier les dimensions spatiales potentielles
-    spatial_dims = {}
-    coord_names = {}
+    spatial_dim = None
 
-    # Dimensions de grille (latitude/longitude) - vérifier indépendamment
-    if 'latitude' in ds.dims or 'longitude' in ds.dims:
-        spatial_dims['grid'] = ['latitude', 'longitude']
-        coord_names['grid'] = ['latitude', 'longitude']
-
-    # Dimensions alternatives de grille
-    elif 'lat' in ds.dims or 'lon' in ds.dims:
-        spatial_dims['grid'] = ['lat', 'lon']
-        coord_names['grid'] = ['lat', 'lon']
-
-    # Dimensions de coordonnées projetées
-    elif 'x' in ds.dims or 'y' in ds.dims:
-        spatial_dims['grid'] = ['x', 'y']
-        coord_names['grid'] = ['x', 'y']
-
-    # Dimensions de points (piézomètres, stations) - vérifier indépendamment
+    # Chercher les dimensions de points (piézomètres, stations, etc.)
     point_dims = ['piezometre', 'station', 'stations', 'site', 'sites', 'location', 'locations']
     for dim in point_dims:
         if dim in ds.dims:
-            spatial_dims['points'] = [dim]
-            coord_names['points'] = [dim]
+            spatial_dim = dim
             break
 
+    # Si pas de dimension point, chercher les grilles
+    if not spatial_dim:
+        grid_dims = ['latitude', 'longitude', 'lat', 'lon', 'x', 'y']
+        for dim in grid_dims:
+            if dim in ds.dims:
+                spatial_dim = dim
+                break
+
     # Si aucune dimension spatiale détectée, retourner le dataset tel quel
-    if not spatial_dims:
+    if not spatial_dim:
         return ds
 
-    # Afficher les dimensions spatiales disponibles
-    print(f"\nDataset spatial détecté avec les dimensions: {list(ds.dims.keys())}")
-    print(f"Types spatiaux détectés: {list(spatial_dims.keys())}")
+    # Afficher l'info
+    print(f"\n Fichier: {filename}")
+    print(f"Dimension spatiale détectée: '{spatial_dim}' ({len(ds[spatial_dim])} valeurs)")
 
-    # Menu de choix adapté aux types disponibles
-    print("\nOptions pour les dimensions spatiales:")
-    option_num = 1
-    options_map = {}
+    # Menu simple
+    print("\nOptions:")
+    print("[1] Garder toutes les données")
+    print("[2] Sélectionner une seule entité")
 
-    if 'grid' in spatial_dims:
-        print(f"[{option_num}] Garder toutes les données de grille")
-        options_map[option_num] = ('grid', 'keep')
-        option_num += 1
-        print(f"[{option_num}] Sélectionner un point sur la grille")
-        options_map[option_num] = ('grid', 'point')
-        option_num += 1
-        print(f"[{option_num}] Sélectionner une zone sur la grille")
-        options_map[option_num] = ('grid', 'region')
-        option_num += 1
-
-    if 'points' in spatial_dims:
-        print(f"[{option_num}] Garder toutes les stations/points")
-        options_map[option_num] = ('points', 'keep')
-        option_num += 1
-        print(f"[{option_num}] Sélectionner une station/point spécifique")
-        options_map[option_num] = ('points', 'select')
-        option_num += 1
-
-    print(f"[{option_num}] Conserver toutes les données spatiales")
-    options_map[option_num] = ('all', 'keep')
-
-    # Saisir le choix de l'utilisateur
     while True:
         try:
-            choice = int(input(f"Votre choix (1-{option_num}): ").strip())
-            if choice in options_map:
+            choice = int(input("Votre choix (1-2): ").strip())
+            if choice in [1, 2]:
                 break
-            print(f"Choix invalide. Entrez un nombre entre 1 et {option_num}.")
+            print("Choix invalide. Entrez 1 ou 2.")
         except ValueError:
             print("Veuillez entrer un nombre.")
 
-    # Traiter le choix
-    spatial_type, action = options_map[choice]
-
-    if spatial_type == 'all':
-        print("→ Conservation de toutes les données spatiales")
+    # Option 1: Garder tout
+    if choice == 1:
+        print("→ Conservation de toutes les données")
         return ds
-    elif spatial_type == 'grid':
-        if action == 'keep':
-            print("→ Conservation de toutes les données de grille")
-            return ds
-        elif action == 'point':
-            return select_spatial_point(ds, {'grid': spatial_dims['grid']}, {'grid': coord_names['grid']})
-        elif action == 'region':
-            return select_spatial_region(ds, spatial_dims['grid'], coord_names['grid'])
-    elif spatial_type == 'points':
-        if action == 'keep':
-            print("→ Conservation de toutes les stations/points")
-            return ds
-        elif action == 'select':
-            return select_spatial_point(ds, {'points': spatial_dims['points']}, {'points': coord_names['points']})
 
-def select_spatial_point(ds, spatial_dims, coord_names):
-    """Sélectionne un point/station spécifique"""
-    print("\nSélection d'un point/station:")
+    # Option 2: Sélectionner une entité
+    else:
+        print(f"\nEntités disponibles dans '{spatial_dim}':")
+        coords = ds.coords[spatial_dim].values
+        
+        # Afficher les 10 premières
+        for i, coord in enumerate(coords[:10]):
+            print(f"[{i}] {coord}")
+        if len(coords) > 10:
+            print(f"... et {len(coords) - 10} autres")
 
-    # Pour les données de points (piézomètres, stations)
-    if 'points' in spatial_dims:
-        dim_name = spatial_dims['points'][0]
-        coord_name = coord_names['points'][0]
-        
-        # Chercher les coordonnées spatiales associées aux points
-        spatial_coord_vars = {}
-        coord_pairs = [('latitude', 'longitude'), ('lat', 'lon'), ('Lat', 'Lon'), ('x', 'y')]
-        
-        for lat_var, lon_var in coord_pairs:
-            if lat_var in ds.data_vars and lon_var in ds.data_vars:
-                if ds[lat_var].dims == (dim_name,) and ds[lon_var].dims == (dim_name,):
-                    spatial_coord_vars = {'lat': lat_var, 'lon': lon_var}
-                    break
-        
-        # Menu de sélection
-        print(f"Points disponibles ({len(ds.coords[coord_name].values)}):")
-        print("[1] Sélectionner par index")
-        if spatial_coord_vars:
-            print("[2] Sélectionner le point le plus proche (par coordonnées)")
-            print("[3] Afficher les points proches")
-        
         while True:
             try:
-                method = int(input("Méthode (1-3): ").strip()) if spatial_coord_vars else 1
-                if (method in [1, 2, 3]) if spatial_coord_vars else (method == 1):
-                    break
-                print("Choix invalide.")
+                idx = int(input(f"Index (0-{len(coords)-1}): ").strip())
+                if 0 <= idx < len(coords):
+                    selected = coords[idx]
+                    print(f"→ Sélection: {selected}")
+                    return ds.sel({spatial_dim: selected})
+                else:
+                    print("Index hors limites.")
             except ValueError:
                 print("Veuillez entrer un nombre.")
-        
-        # Méthode 1: Par index
-        if method == 1:
-            for i, point in enumerate(ds.coords[coord_name].values[:10]):
-                print(f"[{i}] {point}")
-            if len(ds.coords[coord_name].values) > 10:
-                print(f"... et {len(ds.coords[coord_name].values) - 10} autres")
-
-            while True:
-                try:
-                    idx = int(input(f"Index (0-{len(ds.coords[coord_name].values)-1}): ").strip())
-                    if 0 <= idx < len(ds.coords[coord_name].values):
-                        selected_point = ds.coords[coord_name].values[idx]
-                        print(f"→ Sélection: {selected_point}")
-                        return ds.sel({dim_name: selected_point})
-                    else:
-                        print("Index hors limites.")
-                except ValueError:
-                    print("Veuillez entrer un nombre.")
-        
-        # Méthode 2: Point le plus proche
-        elif method == 2 and spatial_coord_vars:
-            lat_var = spatial_coord_vars['lat']
-            lon_var = spatial_coord_vars['lon']
-            
-            try:
-                lat_val = float(input("Latitude: ").strip())
-                lon_val = float(input("Longitude: ").strip())
-                
-                lats = ds[lat_var].values
-                lons = ds[lon_var].values
-                distances = ((lats - lat_val)**2 + (lons - lon_val)**2)**0.5
-                idx = int(np.argmin(distances))
-                
-                selected_point = ds.coords[coord_name].values[idx]
-                selected_lat = lats[idx]
-                selected_lon = lons[idx]
-                print(f"→ Point sélectionné: {selected_point} (lat={selected_lat:.4f}, lon={selected_lon:.4f})")
-                return ds.sel({dim_name: selected_point})
-                
-            except (ValueError, IndexError):
-                print("Entrée invalide.")
-                return ds
-        
-        # Méthode 3: Top 5 points proches
-        elif method == 3 and spatial_coord_vars:
-            lat_var = spatial_coord_vars['lat']
-            lon_var = spatial_coord_vars['lon']
-            
-            try:
-                lat_val = float(input("Latitude de référence: ").strip())
-                lon_val = float(input("Longitude de référence: ").strip())
-                
-                lats = ds[lat_var].values
-                lons = ds[lon_var].values
-                distances = ((lats - lat_val)**2 + (lons - lon_val)**2)**0.5
-                
-                closest_indices = np.argsort(distances)[:5]
-                
-                print(f"\nPoints les plus proches de ({lat_val:.4f}, {lon_val:.4f}):")
-                for i, idx in enumerate(closest_indices):
-                    point_name = ds.coords[coord_name].values[idx]
-                    point_lat = lats[idx]
-                    point_lon = lons[idx]
-                    dist = distances[idx]
-                    print(f"[{i}] {point_name} - lat={point_lat:.4f}, lon={point_lon:.4f} (dist={dist:.4f}°)")
-                
-                choice = int(input("Sélectionner (0-4): ").strip())
-                if 0 <= choice < len(closest_indices):
-                    idx = closest_indices[choice]
-                    selected_point = ds.coords[coord_name].values[idx]
-                    return ds.sel({dim_name: selected_point})
-                        
-            except (ValueError, IndexError):
-                print("Entrée invalide.")
-                return ds
-
-    # Pour les données grillées (sélection du point le plus proche)
-    elif 'grid' in spatial_dims:
-        lat_dim, lon_dim = spatial_dims['grid']
-        lat_coord, lon_coord = coord_names['grid']
-
-        print("Coordonnées disponibles:")
-        print(".2f")
-        print(".2f")
-
-        try:
-            lat_val = float(input("Latitude souhaitée: ").strip())
-            lon_val = float(input("Longitude souhaitée: ").strip())
-
-            # Sélection du point le plus proche
-            selected = ds.sel({lat_coord: lat_val, lon_coord: lon_val}, method='nearest')
-            print(".2f")
-            return selected
-
-        except ValueError:
-            print("Coordonnées invalides. Conservation de toutes les données.")
-            return ds
-
-def select_spatial_region(ds, grid_dims, coord_names):
-    """Sélectionne une région dans une grille"""
-    print("\nSélection d'une région:")
-
-    lat_dim, lon_dim = grid_dims
-    lat_coord, lon_coord = coord_names
-
-    print("Coordonnées disponibles:")
-    print(".2f")
-    print(".2f")
-
-    try:
-        print("\nDéfinissez la région (laisser vide pour garder les limites):")
-
-        lat_min_input = input(".2f").strip()
-        lat_max_input = input(".2f").strip()
-        lon_min_input = input(".2f").strip()
-        lon_max_input = input(".2f").strip()
-
-        # Utiliser les limites par défaut si vide
-        lat_min = float(lat_min_input) if lat_min_input else float(ds.coords[lat_coord].min())
-        lat_max = float(lat_max_input) if lat_max_input else float(ds.coords[lat_coord].max())
-        lon_min = float(lon_min_input) if lon_min_input else float(ds.coords[lon_coord].min())
-        lon_max = float(lon_max_input) if lon_max_input else float(ds.coords[lon_coord].max())
-
-        # Appliquer la sélection
-        selected = ds.sel({
-            lat_coord: slice(lat_min, lat_max),
-            lon_coord: slice(lon_min, lon_max)
-        })
-
-        print(".2f")
-        print(f"Nouvelle taille: {dict(selected.sizes)}")
-
-        return selected
-
-    except ValueError:
-        print("Coordonnées invalides. Conservation de toutes les données.")
-        return ds
 
 def load_multiple_datasets(paths):
     """
@@ -304,7 +110,8 @@ def load_multiple_datasets(paths):
             ))
 
         # Gestion interactive des dimensions spatiales
-        ds = handle_spatial_dimensions(ds)
+        filename = Path(path).name  # Extraire le nom du fichier
+        ds = handle_spatial_dimensions(ds, filename=filename)
 
         #Create attributes for model and scenario
         # récupération des métadonnées si elles existent
@@ -359,9 +166,8 @@ def load_multiple_datasets(paths):
 
     # combinaison avec dask
     combined = xr.combine_by_coords(datasets, combine_attrs='drop', join='outer', data_vars='all')
-
+    print(f"\nCombinaison terminée. Dataset : {combined}")
     return combined
-
 
 def clean_dataframe(df):
 
@@ -432,7 +238,7 @@ def csv_to_xarray(filepath):
             line = f.readline()
             clean_line = line.replace(";;", ";").strip(";")
             print(f"Line {i} | {clean_line[:100]}...")
-    print("____________________")
+    print("________")
 
     # Ask metadata lines to skip
     while True:
@@ -500,94 +306,3 @@ def csv_to_xarray(filepath):
     print(ds)
 
     return ds
-
-############# OLD clean_dataframe and OLD CSV_TO_XARRAY ###############
-#######################################################################
-#######################################################################
-
-
-'''
-def clean_dataframe(df):
-    """
-    Nettoie un DataFrame avant visualisation :
-    - Détecte automatiquement la colonne de dates et la convertit en datetime.
-    - Convertit les colonnes object contenant des nombres (avec ',' ou '.') en float.
-    - Les textes non convertibles restent inchangés (ou deviennent NaN si numeric coercion).
-    
-    Retourne :
-        df_clean : DataFrame nettoyé
-        date_col : nom de la colonne contenant la date (None si non trouvée)
-    """
-    df_clean = df.copy()
-    date_col = None
-
-    # --- Détection automatique de la colonne date ---
-    for col in df_clean.columns:
-        try:
-            df_clean[col] = pd.to_datetime(df_clean[col], dayfirst=True, errors="raise")
-            if df_clean[col].notna().all():
-                date_col = col
-                break
-        except Exception:
-            print("Attention : aucune colonne n'a pas pu être convertie en datetime.")
-            continue
-
-    # --- Conversion des colonnes object en float si possible ---
-    for col in df_clean.select_dtypes(include="object"):
-        # Remplacement de ',' par '.' pour les nombres décimaux
-        df_clean[col] = pd.to_numeric(df_clean[col].str.replace(",", ".", regex=False), errors="coerce")
-
-    return df_clean, date_col
-
-def csv_to_xarray(filepath):
-    """
-    Conversion générique CSV -> xarray.Dataset
-    """
-
-    # prévisualisation
-    print("\nAperçu des 5 premières lignes du fichier brut :")
-    with open(filepath, 'r', encoding='utf-8-sig', errors='replace') as f:
-        for i in range(5):
-            line = f.readline()
-            clean_line = line.replace(";;", ";").strip(";")
-            print(f"Ligne {i} | {clean_line[:100]}...")
-    print("____________________")
-
-    # On demande à l'utilisateur combien de lignes de métadonnées il souhaite ignorer
-    while True:
-        try:
-            skip_n = int(input("Combien de lignes de métadonnées (en-têtes sans compter le nom des colonnes) y a-t-il? "))
-            
-            if skip_n < 0:
-                print("Veuillez entrer un nombre positif.")
-                continue
-                
-            break
-            
-        except ValueError:
-            print("Veuillez entrer un nombre entier valide.")
-
-    df = pd.read_csv(filepath, sep=";", skiprows=skip_n)
-    # Nettoyage = supprimer les colonnes ou lignes entièrement vides (pas de dates, pas de noms ...)
-    df = df.dropna(how='all', axis=0).dropna(how='all', axis=1)
-
-    df, date_col = clean_dataframe(df)
-
-    # Identifier types de colonnes
-    numeric_cols = df.select_dtypes(include="number").columns.tolist()
-    object_cols = df.select_dtypes(include="object").columns.tolist()
-
-    # Si colonne date trouvée → index temporel
-    if date_col:
-        df = df.set_index(date_col)
-        df.index.name = "time" # correction 
-
-    # Cas long (au moins une colonne catégorielle)
-    if object_cols:
-        df = df.set_index(object_cols, append=True)
-
-    # Conversion
-    ds = df.to_xarray()
-
-    return ds
-'''

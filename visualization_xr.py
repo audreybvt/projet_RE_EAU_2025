@@ -470,7 +470,7 @@ def apply_categorical_sort(x_data, sort_key):
 
 
 # ---------------- Bar Chart ----------------
-'''
+
 def bar_chart(ds: xr.Dataset):
     """
     Create a bar chart from an xarray Dataset.
@@ -617,169 +617,6 @@ def bar_chart(ds: xr.Dataset):
     plt.tight_layout()
 
     return fig
-'''
-
-def bar_chart(ds: xr.Dataset):
-    """
-    Create a bar chart from an xarray Dataset.
-    """
-    
-    if not isinstance(ds, xr.Dataset):
-        raise TypeError("Expected: xarray.Dataset")
-
-    # ----------------------
-    # Variable selection
-    # ----------------------
-    
-    while True:
-        x_name = ask_variable(ds, prompt="Variable for X-axis: ")
-        y_name = ask_variable(ds, prompt="Variable for Y-axis: ")
-        
-        if x_name == y_name:
-            print("X and Y variables must be different. Please try again.")
-            continue
-        
-        break
-
-    
-    # ----------------------
-    # Time period selection
-    # ----------------------
-    
-    start_date, end_date = ask_time_period(ds)
-    ds_period = subset_time(ds, start_date, end_date)
-    period_text = format_period_text(start_date, end_date)
-
-    # ----------------------
-    # Figure setup
-    # ----------------------
-    
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    # ----------------------
-    # Configuration of labels/title
-    # ----------------------
-    
-    y_values = ds_period[y_name].values.astype(float).flatten()
-    y_values = y_values[np.isfinite(y_values)]
-    y_min = float(y_values.min()) if len(y_values) > 0 else 0
-    y_max = float(y_values.max()) if len(y_values) > 0 else 1
-
-    labels = configure_plot(
-        x_default=x_name,
-        y_defaults=y_name,
-        period_text=period_text,
-        x_limits=None,
-        y_limits=[y_min, y_max],
-        multiple_y=False
-    )
-    
-    x_label = labels["x_label"]
-    y_label = labels["y_label"]
-    title = labels["title"] or f"Bar chart: {y_label} vs {x_label}{period_text}"
-    
-    if labels["y_limits"] is not None:
-        ax.set_ylim(labels["y_limits"])
-
-    # ----------------------
-    # Extract X data
-    # ----------------------
-    
-    x_arr = ds_period[x_name] if x_name in ds_period else ds_period.coords[x_name]
-    if x_arr.ndim != 1:
-        raise ValueError(f"X variable '{x_name}' must be 1D")
-    
-    x_vals = x_arr.values
-
-    # ----------------------
-    # Handle Y dimensions
-    # ----------------------
-    
-    da_y = ds_period[y_name]
-    
-    x_dim = x_arr.dims[0]
-    other_dims = [d for d in da_y.dims if d != x_dim]
-    
-    if other_dims:
-        results = handle_xarray_dimensions(da_y, main_dims=[x_dim])
-    else:
-        results = [({}, da_y.values)]
-
-    # ----------------------
-    # Sort data if months/seasons detected
-    # ----------------------
-    
-    x_str_array = pd.Series([str(v) for v in x_vals])
-    sort_key = get_sort_key_for_category(x_str_array)
-    
-    if sort_key:
-        categorical = apply_categorical_sort(x_str_array, sort_key)
-        sort_idx = np.argsort(categorical)
-    else:
-        sort_idx = np.arange(len(x_vals))
-
-    # ----------------------
-    # Plot (FIXED VERSION)
-    # ----------------------
-    
-    n_series = len(results)
-    x = np.arange(len(x_vals))  # positions de base
-    width = 0.8 / n_series      # largeur des barres
-
-    colors = cm.viridis(np.linspace(0, 1, n_series))
-
-    for i, (sel, y_vals) in enumerate(results):
-
-        # Alignement taille
-        if len(y_vals) != len(x_vals):
-            if len(y_vals) == 1:
-                y_vals = np.full_like(x_vals, y_vals[0], dtype=float)
-            else:
-                y_vals = y_vals[:len(x_vals)]
-
-        # Conversion float
-        y_vals = pd.to_numeric(y_vals, errors='coerce')
-
-        # Tri
-        y_sorted = y_vals[sort_idx]
-
-        # Label
-        label = y_name
-        if sel:
-            label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
-
-        # Décalage
-        offset = (i - (n_series - 1)/2) * width
-
-        ax.bar(
-            x + offset,
-            y_sorted,
-            width=width,
-            label=label,
-            color=colors[i]
-        )
-
-    # ----------------------
-    # Styling
-    # ----------------------
-    
-    ax.set_xticks(x)
-    ax.set_xticklabels(x_str_array.iloc[sort_idx], rotation=45, ha='right')
-
-    ax.set_title(title)
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
-    ax.grid(axis='y', linestyle='--', alpha=0.6)
-
-    if n_series > 1:
-        ax.legend()
-
-    plt.tight_layout()
-
-    return fig
-
-
-
 
 # ---------------- Line Chart ---------------- 
 
@@ -912,6 +749,8 @@ def line_chart(ds: xr.Dataset):
                     label += " | " + ", ".join(
                         f"{k}={v}" for k, v in sel.items()
                     )
+
+            ax.plot(x_vals, y_vals, label=label, marker='o')
 
     # Plot individual line
     ax.set_xlabel(x_label)
@@ -1195,7 +1034,7 @@ def radar_chart(ds: xr.Dataset):
     ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
     
     return fig
-
+'''
 
 def radar_chart(ds: xr.Dataset):
     """
@@ -1347,327 +1186,15 @@ def radar_chart(ds: xr.Dataset):
     
     return fig
 
-def radar_chart(ds: xr.Dataset):
-    """
-    Create a radar chart from an xarray Dataset.
-    """
-
-    if not isinstance(ds, xr.Dataset):
-        raise TypeError("Expected: xarray.Dataset")
-    
-    # -------- Variable selection --------
-    
-    cat_name = ask_variable(ds, prompt="Variable for category axis (radar axes): ")
-    
-    value_names = ask_variable(
-        ds,
-        multiple=True,
-        prompt="Variables for radar values (comma-separated): "
-    )
-    
-    # -------- Period selection --------
-    
-    start_date, end_date = ask_time_period(ds)
-    ds_period = subset_time(ds, start_date, end_date)
-    
-    period_text = format_period_text(start_date, end_date)
-    
-    # -------- Get category data --------
-    
-    cat_arr = ds_period[cat_name] if cat_name in ds_period else ds_period.coords[cat_name]
-    
-    if cat_arr.ndim != 1:
-        raise ValueError("Category variable must be 1D")
-    
-    cat_dim = cat_arr.dims[0]
-
-    # Format categories
-    if np.issubdtype(cat_arr.dtype, np.datetime64):
-        categories = pd.to_datetime(cat_arr.values).strftime("%Y-%m-%d").tolist()
-    else:
-        categories = [str(v) for v in cat_arr.values]
-    
-    N = len(categories)
-    if N < 3:
-        raise ValueError("A radar chart requires at least 3 categories")
-    
-    # -------- Units --------
-    
-    units_input = input("Units for radar variables (leave empty if none): ").strip()
-    units_text = f" ({units_input})" if units_input else ""
-    
-    # -------- Title --------
-    
-    custom_title = input("Chart title (leave empty for automatic): ").strip()
-    
-    if custom_title == "":
-        custom_title = f"Radar chart: {', '.join(value_names)}{units_text}{period_text}"
-    else:
-        custom_title = f"{custom_title}{units_text}"
-    
-    # -------- Angles --------
-    
-    angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
-    angles += angles[:1]
-    
-    # -------- Figure --------
-    
-    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
-    
-    ax.set_theta_direction(-1)
-    ax.set_theta_offset(np.pi / 2)
-    
-    # -------- Colors --------
-    
-    colors = cm.viridis(np.linspace(0, 1, len(results) * len(value_names)))
-    
-    curve_idx = 0
-
-    # -------- Plot --------
-    
-    for val_name in value_names:
-        
-        da = ds_period[val_name]
-
-        if cat_dim not in da.dims:
-            continue
-
-        
-        results = handle_xarray_dimensions(da, main_dims=[cat_dim])
-
-        for sel, vals in results:
-
-            vals_numeric = pd.to_numeric(vals, errors='coerce')
-
-            if len(vals_numeric) != N:
-                continue
-
-            if not np.any(np.isfinite(vals_numeric)):
-                continue
-
-            values_list = vals_numeric.tolist()
-            values_list += values_list[:1]
-
-            # label dynamique
-            label = val_name
-            if sel:
-                label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
-
-            ax.plot(
-                angles,
-                values_list,
-                label=label,
-                color=colors[curve_idx % len(colors)]
-            )
-
-            curve_idx += 1
-
-    # -------- Radial limits --------
-    
-    all_vals = []
-
-    for val_name in value_names:
-        da = ds_period[val_name]
-        results = handle_xarray_dimensions(da, main_dims=[cat_dim])
-
-        for sel, vals in results:
-            vals_numeric = pd.to_numeric(vals, errors='coerce')
-            all_vals.extend(vals_numeric[np.isfinite(vals_numeric)])
-
-    all_vals = np.array(all_vals)
-
-    if len(all_vals) == 0:
-        raise ValueError("No valid data")
-
-    vmin = all_vals.min()
-    vmax = all_vals.max()
-
-    margin = 0.05 * (vmax - vmin) if vmax != vmin else 1
-
-    ax.set_ylim(vmin - margin, vmax + margin)
-
-    # -------- Styling --------
-    
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(categories)
-    ax.set_title(custom_title)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1))
-
-    return fig
-'''
-def radar_chart(ds: xr.Dataset):
-    """
-    Create a radar chart from an xarray Dataset.
-    """
-
-    if not isinstance(ds, xr.Dataset):
-        raise TypeError("Expected: xarray.Dataset")
-    
-    # -------- Variable selection --------
-    
-    cat_name = ask_variable(ds, prompt="Variable for category axis (radar axes): ")
-    
-    value_names = ask_variable(
-        ds,
-        multiple=True,
-        prompt="Variables for radar values (comma-separated): "
-    )
-    
-    # -------- Period selection --------
-    
-    start_date, end_date = ask_time_period(ds)
-    ds_period = subset_time(ds, start_date, end_date)
-    
-    period_text = format_period_text(start_date, end_date)
-    
-    # -------- Get category data --------
-    
-    cat_arr = ds_period[cat_name] if cat_name in ds_period else ds_period.coords[cat_name]
-    
-    if cat_arr.ndim != 1:
-        raise ValueError("Category variable must be 1D")
-    
-    cat_dim = cat_arr.dims[0]
-
-    # Format categories
-    if np.issubdtype(cat_arr.dtype, np.datetime64):
-        categories = pd.to_datetime(cat_arr.values).strftime("%Y-%m-%d").tolist()
-    else:
-        categories = [str(v) for v in cat_arr.values]
-    
-    N = len(categories)
-    if N < 3:
-        raise ValueError("A radar chart requires at least 3 categories")
-    
-    # -------- Units & Title --------
-    
-    units_input = input("Units for radar variables (leave empty if none): ").strip()
-    units_text = f" ({units_input})" if units_input else ""
-    
-    custom_title = input("Chart title (leave empty for automatic): ").strip()
-    
-    if custom_title == "":
-        custom_title = f"Radar chart: {', '.join(value_names)}{units_text}{period_text}"
-    else:
-        custom_title = f"{custom_title}{units_text}"
-    
-    # -------- Angles --------
-    
-    angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
-    angles += angles[:1]
-    
-    # -------- PRE-COMPUTE curves & values --------
-    
-    all_curves = []
-    all_values = []
-
-    for val_name in value_names:
-        da = ds_period[val_name]
-
-        if cat_dim not in da.dims:
-            continue
-
-        results = handle_xarray_dimensions(da, main_dims=[cat_dim])
-
-        for sel, vals in results:
-
-            vals_numeric = pd.to_numeric(vals, errors='coerce')
-
-            if len(vals_numeric) != N:
-                continue
-
-            vals_numeric = np.array(vals_numeric)
-
-            if not np.any(np.isfinite(vals_numeric)):
-                continue
-
-            all_curves.append((val_name, sel, vals_numeric))
-            all_values.extend(vals_numeric[np.isfinite(vals_numeric)])
-
-    if len(all_curves) == 0:
-        raise ValueError("No valid data to plot")
-
-    # -------- Radial limits (GLOBAL) --------
-    
-    all_values = np.array(all_values)
-
-    vmin = all_values.min()
-    vmax = all_values.max()
-
-    margin = 0.05 * (vmax - vmin) if vmax != vmin else 1
-
-    # -------- Figure --------
-    
-    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
-    
-    ax.set_theta_direction(-1)
-    ax.set_theta_offset(np.pi / 2)
-
-    ax.set_ylim(vmin - margin, vmax + margin)
-
-    # -------- Colors --------
-    
-    colors = cm.viridis(np.linspace(0, 1, len(all_curves)))
-
-    # -------- Plot --------
-    
-    for i, (val_name, sel, vals_numeric) in enumerate(all_curves):
-
-        values_list = vals_numeric.tolist()
-        values_list += values_list[:1]
-
-        label = val_name
-        if sel:
-            label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
-
-        ax.plot(
-            angles,
-            values_list,
-            label=label,
-            color=colors[i]
-        )
-
-    # -------- Styling --------
-    
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(categories)
-    ax.set_title(custom_title)
-
-    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1))
-
-    return fig
-
-
 # ---------------- Histogram Chart ----------------
 
-'''
 def histogram_chart(ds: xr.Dataset):
     """
     Plot a histogram from an xarray Dataset.
     """
     col_name = ask_variable(ds, prompt="Select variable to plot: ")
+    bins = int(input("Number of bins for histogram: ").strip())
 
-
-    default_bins = 10
-
-    while True:
-        bins_input = input(f"Number of bins for histogram (leave empty for {default_bins}): ").strip()
-
-        if bins_input == "":
-            bins = default_bins
-            break
-
-        try:
-            bins = int(bins_input)
-            if bins <= 0:
-                print("Number of bins must be positive.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a valid integer.")
-
-
-    
     # --- Period selection ---
     start_date, end_date = ask_time_period(ds)
     ds_period = subset_time(ds, start_date, end_date)
@@ -1685,9 +1212,6 @@ def histogram_chart(ds: xr.Dataset):
 
     y_min = 0
     y_max = counts.max()
-
-    if y_max == 0:
-        y_max = 1  # éviter axe plat
 
     labels = configure_plot(
             x_default=col_name,
@@ -1707,7 +1231,7 @@ def histogram_chart(ds: xr.Dataset):
 
     # -------- Loop over selected variable --------
 
-    da = ds_period[col_name]
+    da = ds[col_name]
 
     # Handle extra dimensions
     results = handle_xarray_dimensions(da, main_dims=["time"])
@@ -1738,128 +1262,4 @@ def histogram_chart(ds: xr.Dataset):
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.grid(True, linestyle='--', alpha=0.5)
-    return fig
-'''
-
-def histogram_chart(ds: xr.Dataset):
-    """
-    Plot a histogram from an xarray Dataset (robust + user-friendly).
-    """
-
-    # -------- Variable selection --------
-    col_name = ask_variable(ds, prompt="Select variable to plot: ")
-
-    # -------- Bins selection --------
-    default_bins = 10
-
-    while True:
-        bins_input = input(f"Number of bins for histogram (leave empty for {default_bins}): ").strip()
-
-        if bins_input == "":
-            bins = default_bins
-            break
-
-        try:
-            bins = int(bins_input)
-            if bins <= 0:
-                print("Number of bins must be positive.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a valid integer.")
-
-    # -------- Period selection WITH LOOP --------
-    while True:
-        start_date, end_date = ask_time_period(ds)
-        ds_period = subset_time(ds, start_date, end_date)
-
-        da = ds_period[col_name]
-
-        # Vérifie s’il existe AU MOINS une valeur valide
-        raw_data = np.array(da.values, dtype=float)
-        valid_data = raw_data[np.isfinite(raw_data)]
-
-        if len(valid_data) == 0:
-            print("No valid data in this period. Please choose another period.")
-            continue
-
-        break  # période valide
-
-    period_text = format_period_text(start_date, end_date)
-
-    # -------- Handle dimensions --------
-    results = handle_xarray_dimensions(da, main_dims=["time"])
-
-    # -------- Figure --------
-    fig, ax = plt.subplots(figsize=(10, 6))
-    colors = cm.viridis(np.linspace(0, 1, len(results)))
-
-    all_counts = []
-
-    # -------- Plot loop --------
-    for i, (sel, data) in enumerate(results):
-
-        # Nettoyage données
-        data = np.array(data, dtype=float)
-        data = data[np.isfinite(data)]
-
-        if len(data) == 0:
-            print(f"No valid data for selection {sel}, skipping.")
-            continue
-
-        # Histogram (pour y max)
-        counts, bin_edges = np.histogram(data, bins=bins)
-        all_counts.append(counts)
-
-        # Label
-        label = col_name
-        if sel:
-            label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
-
-        # Plot
-        ax.hist(
-            data,
-            bins=bins,
-            label=label,
-            linewidth=1,
-            color=colors[i],
-            edgecolor='black'
-        )
-
-    # -------- Sécurité --------
-    if len(all_counts) == 0:
-        print("No valid data after dimension filtering.")
-        return fig
-
-    # -------- Y limits --------
-    y_max = max(c.max() for c in all_counts)
-    if y_max == 0:
-        y_max = 1
-
-    # -------- Labels & config --------
-    labels = configure_plot(
-        x_default=col_name,
-        y_defaults="Frequency",
-        period_text=period_text,
-        x_limits=None,
-        y_limits=[0, y_max],
-        multiple_y=False
-    )
-
-    ax.set_title(labels["title"] or f"Histogram of {col_name}{period_text}")
-    ax.set_xlabel(labels["x_label"])
-    ax.set_ylabel(labels["y_label"])
-
-    ax.set_xticks(bin_edges)
-    # ax.set_xticks(bin_edges[::2])  # 1 tick sur 2
-
-    if labels["y_limits"] is not None:
-        ax.set_ylim(labels["y_limits"])
-
-
-    ax.grid(True, axis='x', linestyle='--', alpha=0.5)
-
-    if len(all_counts) > 1:
-        ax.legend()
-
     return fig
