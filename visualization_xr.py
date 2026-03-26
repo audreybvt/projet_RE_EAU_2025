@@ -474,12 +474,6 @@ def apply_categorical_sort(x_data, sort_key):
 def bar_chart(ds: xr.Dataset):
     """
     Create a bar chart from an xarray Dataset.
-    
-    Interactive function that allows selection of:
-    - X and Y variables
-    - Time period
-    - Custom labels, units, and title
-    - Automatic sorting for months/seasons
     """
     
     if not isinstance(ds, xr.Dataset):
@@ -489,12 +483,17 @@ def bar_chart(ds: xr.Dataset):
     # Variable selection
     # ----------------------
     
-    x_name = ask_variable(ds, prompt="Variable for X-axis: ")
-    y_name = ask_variable(ds, prompt="Variable for Y-axis: ")
-    
-    if x_name == y_name:
-        raise ValueError("X and Y variables must be different.")
+    while True:
+        x_name = ask_variable(ds, prompt="Variable for X-axis: ")
+        y_name = ask_variable(ds, prompt="Variable for Y-axis: ")
+        
+        if x_name == y_name:
+            print("X and Y variables must be different. Please try again.")
+            continue
+        
+        break
 
+    
     # ----------------------
     # Time period selection
     # ----------------------
@@ -550,11 +549,9 @@ def bar_chart(ds: xr.Dataset):
     
     da_y = ds_period[y_name]
     
-    # Get extra dimensions (not matching X dimension)
     x_dim = x_arr.dims[0]
     other_dims = [d for d in da_y.dims if d != x_dim]
     
-    # Handle extra dimensions
     if other_dims:
         results = handle_xarray_dimensions(da_y, main_dims=[x_dim])
     else:
@@ -574,46 +571,61 @@ def bar_chart(ds: xr.Dataset):
         sort_idx = np.arange(len(x_vals))
 
     # ----------------------
-    # Plot
+    # Plot (FIXED VERSION)
     # ----------------------
     
-    for sel, y_vals in results:
-        
-        # Ensure proper length alignment
+    n_series = len(results)
+    x = np.arange(len(x_vals))  # positions de base
+    width = 0.8 / n_series      # largeur des barres
+
+    colors = cm.viridis(np.linspace(0, 1, n_series))
+
+    for i, (sel, y_vals) in enumerate(results):
+
+        # Alignement taille
         if len(y_vals) != len(x_vals):
             if len(y_vals) == 1:
                 y_vals = np.full_like(x_vals, y_vals[0], dtype=float)
             else:
                 y_vals = y_vals[:len(x_vals)]
-        
-        # Convert to float
-        try:
-            y_vals = np.array(y_vals, dtype=float)
-        except (ValueError, TypeError):
-            y_vals = pd.to_numeric(y_vals, errors='coerce').values
-        
-        # Apply sorting
-        x_sorted = x_str_array.iloc[sort_idx].values
+
+        # Conversion float
+        y_vals = pd.to_numeric(y_vals, errors='coerce')
+
+        # Tri
         y_sorted = y_vals[sort_idx]
-        
-        # Create label for legend (if multiple datasets)
+
+        # Label
         label = y_name
         if sel:
             label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
-        
-        # Plot
-        colors = cm.viridis(np.linspace(0, 1, len(x_sorted)))
-        ax.bar(x_sorted, y_sorted, color=colors, label=label)
+
+        # Décalage
+        offset = (i - (n_series - 1)/2) * width
+
+        ax.bar(
+            x + offset,
+            y_sorted,
+            width=width,
+            label=label,
+            color=colors[i]
+        )
 
     # ----------------------
     # Styling
     # ----------------------
     
+    ax.set_xticks(x)
+    ax.set_xticklabels(x_str_array.iloc[sort_idx], rotation=45, ha='right')
+
     ax.set_title(title)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.grid(axis='y', linestyle='--', alpha=0.6)
-    plt.xticks(rotation=45, ha='right')
+
+    if n_series > 1:
+        ax.legend()
+
     plt.tight_layout()
 
     return fig
@@ -1036,6 +1048,7 @@ def radar_chart(ds: xr.Dataset):
     return fig
 '''
 
+#
 def radar_chart(ds: xr.Dataset):
     """
     Create a radar chart from an xarray Dataset.
@@ -1070,7 +1083,7 @@ def radar_chart(ds: xr.Dataset):
     
     cat_dim = cat_arr.dims[0]
 
-    # Format categories (important if datetime)
+    # Format categories
     if np.issubdtype(cat_arr.dtype, np.datetime64):
         categories = pd.to_datetime(cat_arr.values).strftime("%Y-%m-%d").tolist()
     else:
@@ -1080,12 +1093,10 @@ def radar_chart(ds: xr.Dataset):
     if N < 3:
         raise ValueError("A radar chart requires at least 3 categories")
     
-    # -------- Units --------
+    # -------- Units & Title --------
     
     units_input = input("Units for radar variables (leave empty if none): ").strip()
     units_text = f" ({units_input})" if units_input else ""
-    
-    # -------- Title --------
     
     custom_title = input("Chart title (leave empty for automatic): ").strip()
     
@@ -1094,97 +1105,92 @@ def radar_chart(ds: xr.Dataset):
     else:
         custom_title = f"{custom_title}{units_text}"
     
-    # -------- Legend --------
-    
-    legend_input = input("Legend names (comma-separated, leave empty for defaults): ").strip()
-    
-    if legend_input == "":
-        legend_labels = value_names
-    else:
-        legend_labels = [name.strip() for name in legend_input.split(",")]
-        if len(legend_labels) != len(value_names):
-            raise ValueError("Number of legend names must match number of value variables")
-    
     # -------- Angles --------
     
     angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
     angles += angles[:1]
     
-    # -------- Figure --------
+    # -------- PRE-COMPUTE curves & values --------
     
-    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
-    
-    ax.set_theta_direction(-1)
-    ax.set_theta_offset(np.pi / 2)
-    
-    # -------- Radial limits --------
-    
+    all_curves = []
     all_values = []
+
     for val_name in value_names:
         da = ds_period[val_name]
 
         if cat_dim not in da.dims:
             continue
 
-        # ✅ FIX : moyenne sur dimensions supplémentaires
-        other_dims = [d for d in da.dims if d != cat_dim]
-        if other_dims:
-            da = da.mean(dim=other_dims, skipna=True)
+        results = handle_xarray_dimensions(da, main_dims=[cat_dim])
 
-        all_values.extend(da.values.flatten())
+        for sel, vals in results:
 
-    all_values = np.array([v for v in all_values if np.isfinite(v)])
+            vals_numeric = pd.to_numeric(vals, errors='coerce')
+
+            if len(vals_numeric) != N:
+                continue
+
+            vals_numeric = np.array(vals_numeric)
+
+            if not np.any(np.isfinite(vals_numeric)):
+                continue
+
+            all_curves.append((val_name, sel, vals_numeric))
+            all_values.extend(vals_numeric[np.isfinite(vals_numeric)])
+
+    if len(all_curves) == 0:
+        raise ValueError("No valid data to plot")
+
+    # -------- Radial limits (GLOBAL) --------
     
-    if len(all_values) == 0:
-        raise ValueError("No valid numeric values found")
+    all_values = np.array(all_values)
+
+    vmin = all_values.min()
+    vmax = all_values.max()
+
+    margin = 0.05 * (vmax - vmin) if vmax != vmin else 1
+
+    # -------- Figure --------
     
-    val_min = all_values.min()
-    val_max = all_values.max()
-    margin = 0.05 * (val_max - val_min) if val_max != val_min else val_max * 0.1
-    ax.set_ylim(val_min - margin, val_max + margin)
+    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
     
+    ax.set_theta_direction(-1)
+    ax.set_theta_offset(np.pi / 2)
+
+    ax.set_ylim(vmin - margin, vmax + margin)
+
     # -------- Colors --------
     
-    colors = cm.viridis(np.linspace(0, 1, len(value_names)))
-    
+    colors = cm.viridis(np.linspace(0, 1, len(all_curves)))
+
     # -------- Plot --------
     
-    for i, val_name in enumerate(value_names):
-        
-        da = ds_period[val_name]
-
-        if cat_dim not in da.dims:
-            continue
-
-        #  FIX PRINCIPAL
-        other_dims = [d for d in da.dims if d != cat_dim]
-        if other_dims:
-            da = da.mean(dim=other_dims, skipna=True)
-
-        vals = da.values
-
-        # Conversion propre
-        vals_numeric = pd.to_numeric(vals, errors='coerce')
-
-        if len(vals_numeric) != N:
-            raise ValueError(f"{val_name}: mismatch between values and categories")
+    for i, (val_name, sel, vals_numeric) in enumerate(all_curves):
 
         values_list = vals_numeric.tolist()
-        values_list += values_list[:1]  # close radar
-        
-        label = legend_labels[i] if i < len(legend_labels) else val_name
-        
-        ax.plot(angles, values_list, label=label, color=colors[i])
-        # ax.fill(angles, values_list, alpha=0.1, color=colors[i])
-    
+        values_list += values_list[:1]
+
+        label = val_name
+        if sel:
+            label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
+
+        ax.plot(
+            angles,
+            values_list,
+            label=label,
+            color=colors[i]
+        )
+
     # -------- Styling --------
     
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(categories)
     ax.set_title(custom_title)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
-    
+
+    ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1))
+
     return fig
+#
 
 # ---------------- Histogram Chart ----------------
 
