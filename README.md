@@ -446,14 +446,37 @@ output/line_chart.png
 Figures are also displayed interactively.
 
 ---
-
 ## Available Visualizations
 
-* Bar chart
-* Scatter plot
-* Line chart
-* Radar chart
-* Histogram
+* **Bar Chart**  
+  Displays values of a variable as bars for categories or points on the X-axis.  
+  - Can compare multiple series side by side (e.g., different models, stations, or scenarios).  
+  - X-axis can represent time, categories, months, or other dimensions.  
+  - Bars can be sorted if X-axis represents months, seasons, or categorical data.  
+  - Useful for comparing values across groups or over a period.
+
+* **Line Chart**  
+  Shows a variable as a line over time or another continuous dimension.  
+  - Supports multiple Y variables simultaneously.  
+  - Can display model envelopes (min-max range) or individual model lines.  
+  - Ideal for visualizing temporal trends, changes, or comparisons across models, stations, or scenarios.
+
+* **Scatter Plot**  
+  Displays individual observations as points to show the relationship between two variables.  
+  - Multiple Y variables can be plotted against a single X variable.  
+  - Useful for detecting correlations, clusters, or outliers.
+
+* **Radar Chart**  
+  Compares multiple variables or entities on a circular grid.  
+  - Each axis represents a variable or indicator.  
+  - Useful for comparing profiles across models, stations, or scenarios.  
+  - Requires at least 3 categories for meaningful visualization.
+
+* **Histogram**  
+  Shows the distribution of a numeric variable.  
+  - Values are grouped into bins on the X-axis; frequency is on the Y-axis.  
+  - Can handle multiple series for comparison.  
+  - Useful to visualize variability, detect skewness, or identify extreme values.
 
 ---
 
