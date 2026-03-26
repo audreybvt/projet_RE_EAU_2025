@@ -1,4 +1,31 @@
 # PROJECT CENTRALESUPELEC-BRGM 2025-2026
+## Table of Contents
+
+- [Hydrological Visualization Tool](#hydrological-visualization-tool)
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Supported Input Data](#supported-input-data)
+  - [NetCDF](#netcdf)
+  - [CSV](#csv)
+    - [Date Column (REQUIRED)](#date-column-required)
+    - [Optional Dimension Columns](#optional-dimension-columns)
+    - [Long Format for Multimodel Data](#long-format-for-multimodel-data)
+    - [Variable Columns](#variable-columns)
+    - [Not Supported](#not-supported)
+    - [Example Minimal Valid CSV](#example-minimal-valid-csv)
+    - [Example Multidimensional CSV](#example-multidimensional-csv)
+- [Outputs](#outputs)
+  - [Figures](#figures)
+- [Available Visualizations](#available-visualizations)
+- [Available Statistical Operations](#available-statistical-operations)
+- [Available Hydrological Indicators](#available-hydrological-indicators)
+- [Required Libraries](#required-libraries)
+  - [Core dependencies](#core-dependencies)
+  - [Installation with pip and requirements.txt](#installation-with-pip-and-requirementstxt)
+- [How to Run](#how-to-run)
+- [Workflow Overview](#workflow-overview)
+- [Notes](#notes)
+- [Authors](#authors)
 
 ## Hydrological Visualization Tool
 
@@ -109,9 +136,21 @@ Recognized dimension names include:
 - location, locations  
 - latitude, longitude  
 - lat, lon  
-- x, y  
+- x, y
 
-These columns will be treated as categorical coordinates in xarray.
+These names must match exactly (same spelling and casing).  
+Columns with different names (e.g., `Model`, `StationID`, `Longitude_deg`, `site_name`) will **not** be automatically recognized as dimensions and will instead be treated as regular data variables.
+
+No automatic renaming or fuzzy matching is performed.
+
+For example:
+
+- `model` → recognized ✔️  
+- `Model` → NOT recognized ❌  
+- `station` → recognized ✔️  
+- `station_id` → NOT recognized ❌
+
+Recognized dimension columns are converted to categorical coordinates in xarray and used to build a multidimensional dataset.
 
 ---
 
@@ -123,9 +162,38 @@ For datasets containing multiple models, stations, or scenarios, a **long format
 |------|-------|---------|----------|
 | ...  | M1    | S1      | ...      |
 
+Each row represents one observation defined by:
+
+- Time (Date column)
+- One or more dimension columns (model, station, scenario, etc.)
+- One or more data variables
+
 The combination of time + dimension columns must uniquely identify each observation.
 
 If duplicates exist, the conversion will fail.
+
+---
+
+Wide formats are NOT supported.
+
+Tables where models, stations, or scenarios are encoded in column names — for example:
+
+- `flow_M1`, `flow_M2`
+- `temperature_modelA`
+- one column per station or model
+
+will not be interpreted as multidimensional data.
+
+Such columns will be treated as independent variables, not as coordinates.
+
+As a result, advanced features of the tool will not be available, including:
+
+- Inter-model statistics (e.g., averages across models)
+- Model envelopes (min/max across models)
+- Dimension-based filtering
+- Multidimensional visualizations
+
+To use these features, the dataset must be converted to long format with explicit dimension columns.
 
 ---
 
