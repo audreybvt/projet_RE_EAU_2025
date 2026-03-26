@@ -142,7 +142,7 @@ def mean_value_flexible(ds):
     print("\nWhich dimensions do you want to average across?")
     print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
     for i, d in enumerate(available_dims):
-        print(f" [{i}] {d}")
+        print(f" [{i}] {d} ({ds.dims[d]} values)")
 
     
     while True:
@@ -177,8 +177,10 @@ def mean_value_flexible(ds):
     new_var_name = f"{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
-    # Inject the mean value. Xarray will automatically align/broadcast it across the remaining dimensions.
-    ds[new_var_name] = xr.where(ds[var_name].isnull(), np.nan, mean_val)
+    # Direct assignment: xr.where ne doit PAS être utilisé ici car si on réduit 
+    # des dimensions (ex: 'model'), mean_val a moins de dimensions que ds[var_name].
+    # xr.where provoquerait un broadcasting indésirable qui recréerait les dimensions réduites.
+    ds[new_var_name] = mean_val
 
     # Display results
     print(f"\n Variable added: {new_var_name}")
@@ -220,7 +222,7 @@ def maximum_value_flexible(ds):
     print("\nAcross which dimensions do you want to find the maximum?")
     print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
     for i, d in enumerate(available_dims):
-        print(f" [{i}] {d}")
+        print(f" [{i}] {d} ({ds.dims[d]} values)")
 
     
     while True:
@@ -253,8 +255,7 @@ def maximum_value_flexible(ds):
     new_var_name = f"max_{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
-    # Broadcast the max result back to the original dataset shape for compatibility
-    ds[new_var_name] = xr.where(ds[var_name].isnull(), np.nan, max_val)
+    ds[new_var_name] = max_val
 
     # 7. Display results
     print(f"\n Variable added: {new_var_name}")
@@ -309,7 +310,7 @@ def minimum_value_flexible(ds):
     print("\nAcross which dimensions do you want to find the minimum?")
     print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
     for i, d in enumerate(available_dims):
-        print(f" [{i}] {d}")
+        print(f" [{i}] {d} ({ds.dims[d]} values)")
 
     
     while True:
@@ -341,8 +342,7 @@ def minimum_value_flexible(ds):
     new_var_name = f"min_{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
-    # Broadcast the min result back to the original dataset shape for compatibility
-    ds[new_var_name] = xr.where(ds[var_name].isnull(), np.nan, min_val)
+    ds[new_var_name] = min_val
 
     # Display results
     print(f"\n Variable added: {new_var_name}")
@@ -395,7 +395,7 @@ def percentile_value_flexible(ds):
     print("\nAcross which dimensions do you want to calculate the percentile?")
     print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
     for i, d in enumerate(available_dims):
-        print(f" [{i}] {d}")
+        print(f" [{i}] {d} ({ds.dims[d]} values)")
 
     
     while True:
@@ -428,8 +428,7 @@ def percentile_value_flexible(ds):
     new_var_name = f"perc{int(q*100)}_{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
-    # Broadcast the result back to the original dataset shape
-    ds[new_var_name] = xr.where(ds[var_name].isnull(), np.nan, perc_val)
+    ds[new_var_name] = perc_val
 
     # Display results
     print(f"\nVariable added: {new_var_name}")
@@ -567,7 +566,7 @@ def monthly_interannual_average_xr(ds):
     dims_list = list(active_da.dims)
     print(f"\nDimensions for '{var_name}':")
     for i, d in enumerate(dims_list):
-        print(f" [{i}] {d}")
+        print(f" [{i}] {d} ({active_da.dims[d]} values)")
 
     while True:
         try:
