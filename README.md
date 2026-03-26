@@ -485,14 +485,45 @@ Figures are also displayed interactively.
 
 ---
 
-## Available Statistical Operations
+## Available Statistical Processing Functions
 
-* Flexible mean
-* Flexible maximum
-* Flexible minimum
-* Flexible percentile
-* Temporal rolling mean
-* Monthly interannual average
+* **Flexible Mean**
+   
+  Computes the mean of a selected variable across one or more dimensions.  
+  - User can choose which dimensions to average over (e.g., time, model, location).  
+  - Optionally, a specific time period can be applied.  
+  - Result is added to the dataset with a descriptive name indicating reduced dimensions and period.
+
+* **Flexible Maximum**
+
+  Computes the maximum value of a variable along selected dimensions.  
+  - Supports optional time period selection.  
+  - Useful for identifying peak values across models, locations, or time slices.
+
+* **Flexible Minimum**
+   
+  Computes the minimum value of a variable along selected dimensions.  
+  - Works similarly to the maximum function.  
+  - Helps to identify extreme low values.
+
+* **Flexible Percentile**
+  
+  Computes any specified percentile (e.g., 10th, 90th) along selected dimensions.  
+  - Allows focusing on extremes or specific thresholds of data distribution.  
+  - Output is named to indicate percentile and reduced dimensions.
+
+* **Temporal Rolling Mean**
+  
+  Computes a rolling mean along the time dimension with a user-specified window size.  
+  - Smooths short-term fluctuations to reveal trends.  
+  - Supports optional period selection for analysis.
+
+* **Monthly Interannual Average**
+  
+  Computes the average of a variable for each month across all years.  
+  - Groups data by month, then averages across the selected time dimension.  
+  - Useful for detecting seasonal patterns and long-term monthly trends.  
+  - Output variable includes month names as coordinates for clarity.
 
 ---
 
