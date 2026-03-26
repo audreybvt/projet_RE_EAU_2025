@@ -777,7 +777,8 @@ def line_chart(ds: xr.Dataset):
     ax.set_title(title)
 
     ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.2))
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.3))
+    plt.subplots_adjust(bottom=0.3)
 
     return fig
 
