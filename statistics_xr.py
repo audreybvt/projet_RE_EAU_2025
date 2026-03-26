@@ -393,6 +393,76 @@ def minimum_value_flexible(ds):
 
 
 
+### Median value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
+
+def median_value_flexible(ds):
+    # Variable selection
+    vars_list = list(ds.data_vars)
+    print("\nAvailable variables:")
+    for i, var in enumerate(vars_list):
+        print(f" [{i}] {var}")
+
+    while True:
+        try:
+            var_idx = int(input("\nIndex of the variable to find the median: "))
+            var_name = vars_list[var_idx]
+            break
+        except (ValueError, IndexError):
+            print("Invalid index. Please try again.")
+
+    active_da = ds[var_name]
+
+    # Identification of available dimensions
+    available_dims = list(active_da.dims)
+    dims_to_reduce = []
+    
+    print("\nAcross which dimensions do you want to find the median?")
+    print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
+    for i, d in enumerate(available_dims):
+        print(f" [{i}] {d} ({ds.dims[d]} values)")
+
+    
+    while True:
+
+        choice_dims = input("Your choice: ").strip()
+
+        if choice_dims == "":
+            dims_to_reduce = available_dims
+            break
+
+        try:
+            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+            dims_to_reduce = [available_dims[i] for i in indices]
+            break
+
+        except (ValueError, IndexError):
+            print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
+
+    # Handling of time period if 'time' is involved
+    active_da, period_label = apply_time_selection(ds, active_da, dims_to_reduce)
+
+    # Median calculation
+    print(f"\nCalculating median across: {dims_to_reduce}...")
+    median_val = active_da.median(dim=dims_to_reduce, skipna=True)
+
+    # Variable naming
+    dims_suffix = "_median_on_" + "_".join(dims_to_reduce)
+    new_var_name = f"median_{var_name}{dims_suffix}{period_label}"
+
+    # Add to Dataset
+    ds[new_var_name] = median_val
+
+    # Display results
+    print(f"\nVariable added: {new_var_name}")
+    if median_val.size == 1:
+        print(f"Unique median value: {float(median_val.values):.2f}")
+    else:
+        print(f"Remaining dimensions after calculation: {list(median_val.dims)}")
+        print(f"Result shape: {median_val.shape}")
+
+    return ds
+
+
 ### Percentile value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
 def percentile_value_flexible(ds):
@@ -555,8 +625,7 @@ def rolling_mean_value(ds):
     new_var_name = f"rolling_mean_{var_name}_w{window}{period_label}"
 
     # Add to Dataset
-    # We use xr.where to maintain the original mask/null values
-    ds[new_var_name] = xr.where(ds[var_name].isnull(), np.nan, rolling_val)
+    ds[new_var_name] = rolling_val
 
     # Display results
     print(f"\nVariable added: {new_var_name}")
