@@ -23,10 +23,7 @@ The workflow is interactive: users select indicators, statistical operations, an
 
 ```
 PROJET_RE_EAU_2025/
-│
-├── Données/                 # Input data examples (optional)
-├── hydro_plot/              # Plot-related utilities (if used)
-├── input/                   # Input files (optional)
+├── input/                   # Input files
 ├── output/                  # Generated figures
 ├── old/                     # Deprecated code
 │
@@ -44,7 +41,7 @@ PROJET_RE_EAU_2025/
 
 ## Supported Input Data
 
-### NetCDF (Recommended)
+### NetCDF
 
 * Supports one or multiple `.nc` files
 * Ideal for climate, hydrology, or environmental datasets
@@ -57,7 +54,7 @@ Example dimensions:
 * `lat`, `lon`
 * `model`
 * `station`
-* any other scientific dimensions
+* any other accurate dimensions
 
 ---
 
@@ -92,7 +89,7 @@ Figures are also displayed interactively.
 
 ---
 
-## 📊Available Visualizations
+## Available Visualizations
 
 * Bar chart
 * Scatter plot
@@ -127,7 +124,7 @@ These indicators are computed directly on the dataset and can be chained with st
 
 ---
 
-## 📚Required Libraries
+## Required Libraries
 
 The project relies on scientific Python libraries commonly used for environmental data analysis.
 
@@ -136,37 +133,15 @@ The project relies on scientific Python libraries commonly used for environmenta
 * pandas
 * xarray
 * matplotlib
+* netCDF4
 * pathlib (standard library)
 * os (standard library)
 
-### Recommended additional dependency for NetCDF support
-
-* netCDF4
-
 ---
 
-### Installation with pip
+### Installation with pip and requirements.txt
 
 Install all required packages:
-
-```bash
-pip install pandas xarray matplotlib netcdf4
-```
-
----
-
-### 📄 Optional: requirements.txt
-
-You may create a `requirements.txt` file containing:
-
-```
-pandas
-xarray
-matplotlib
-netcdf4
-```
-
-Install with:
 
 ```bash
 pip install -r requirements.txt
@@ -204,16 +179,6 @@ Load data → Compute indicators → Apply statistics → Visualize → Save out
 ```
 
 The process can be repeated multiple times on the same dataset.
-
----
-
-## Technical Stack
-
-* Python 3.x
-* pandas
-* xarray
-* matplotlib
-* pathlib
 
 ---
 
