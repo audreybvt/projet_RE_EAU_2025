@@ -3,7 +3,7 @@ import xarray as xr
 import numpy as np
 from pathlib import Path
 
-def handle_spatial_dimensions(ds):
+def handle_spatial_dimensions(ds, spatial_gui: dict = None):
     """
     Gère interactivement les dimensions spatiales du dataset.
     Permet de garder toutes les données, sélectionner un point ou une zone.
@@ -70,15 +70,19 @@ def handle_spatial_dimensions(ds):
     print(f"[{option_num}] Conserver toutes les données spatiales")
     options_map[option_num] = ('all', 'keep')
 
-    # Saisir le choix de l'utilisateur
-    while True:
-        try:
-            choice = int(input(f"Votre choix (1-{option_num}): ").strip())
-            if choice in options_map:
-                break
-            print(f"Choix invalide. Entrez un nombre entre 1 et {option_num}.")
-        except ValueError:
-            print("Veuillez entrer un nombre.")
+    # Saisir le choix de l'utilisateur (GUI bypass)
+    if spatial_gui is not None and 'choice' in spatial_gui:
+        choice = spatial_gui['choice']
+        print(f"Choix fourni via GUI: {choice}")
+    else:
+        while True:
+            try:
+                choice = int(input(f"Votre choix (1-{option_num}): ").strip())
+                if choice in options_map:
+                    break
+                print(f"Choix invalide. Entrez un nombre entre 1 et {option_num}.")
+            except ValueError:
+                print("Veuillez entrer un nombre.")
 
     # Traiter le choix
     spatial_type, action = options_map[choice]
@@ -101,7 +105,7 @@ def handle_spatial_dimensions(ds):
         elif action == 'select':
             return select_spatial_point(ds, {'points': spatial_dims['points']}, {'points': coord_names['points']})
 
-def select_spatial_point(ds, spatial_dims, coord_names):
+def select_spatial_point(ds, spatial_dims, coord_names, method_gui: int = None, idx_gui: int = None, lat_gui: float = None, lon_gui: float = None):
     """Sélectionne un point/station spécifique"""
     print("\nSélection d'un point/station:")
 
@@ -127,14 +131,19 @@ def select_spatial_point(ds, spatial_dims, coord_names):
             print("[2] Sélectionner le point le plus proche (par coordonnées)")
             print("[3] Afficher les points proches")
         
-        while True:
-            try:
-                method = int(input("Méthode (1-3): ").strip()) if spatial_coord_vars else 1
-                if (method in [1, 2, 3]) if spatial_coord_vars else (method == 1):
-                    break
-                print("Choix invalide.")
-            except ValueError:
-                print("Veuillez entrer un nombre.")
+        # Méthode de sélection (GUI bypass)
+        if method_gui is not None:
+            method = method_gui
+            print(f"Méthode fournie via GUI: {method}")
+        else:
+            while True:
+                try:
+                    method = int(input("Méthode (1-3): ").strip()) if spatial_coord_vars else 1
+                    if (method in [1, 2, 3]) if spatial_coord_vars else (method == 1):
+                        break
+                    print("Choix invalide.")
+                except ValueError:
+                    print("Veuillez entrer un nombre.")
         
         # Méthode 1: Par index
         if method == 1:
@@ -185,9 +194,14 @@ def select_spatial_point(ds, spatial_dims, coord_names):
             lon_var = spatial_coord_vars['lon']
             
             try:
-                lat_val = float(input("Latitude de référence: ").strip())
-                lon_val = float(input("Longitude de référence: ").strip())
-                
+                if method == 3:
+                    if lat_gui is not None and lon_gui is not None:
+                        lat_val = lat_gui
+                        lon_val = lon_gui
+                        print(f"Latitude/Longitude de référence fournis via GUI: {lat_val}, {lon_val}")
+                    else:
+                        lat_val = float(input("Latitude de référence: ").strip())
+                        lon_val = float(input("Longitude de référence: ").strip())                
                 lats = ds[lat_var].values
                 lons = ds[lon_var].values
                 distances = ((lats - lat_val)**2 + (lons - lon_val)**2)**0.5
@@ -217,9 +231,12 @@ def select_spatial_point(ds, spatial_dims, coord_names):
         lat_dim, lon_dim = spatial_dims['grid']
         lat_coord, lon_coord = coord_names['grid']
 
+        lat_min, lat_max = float(ds.coords[lat_coord].min()), float(ds.coords[lat_coord].max())
+        lon_min, lon_max = float(ds.coords[lon_coord].min()), float(ds.coords[lon_coord].max())
+
         print("Coordonnées disponibles:")
-        print(".2f")
-        print(".2f")
+        print(f"Latitude : de {lat_min:.2f} à {lat_max:.2f}")
+        print(f"Longitude : de {lon_min:.2f} à {lon_max:.2f}")
 
         try:
             lat_val = float(input("Latitude souhaitée: ").strip())
@@ -227,37 +244,48 @@ def select_spatial_point(ds, spatial_dims, coord_names):
 
             # Sélection du point le plus proche
             selected = ds.sel({lat_coord: lat_val, lon_coord: lon_val}, method='nearest')
-            print(".2f")
+            print(f"Point le plus proche sélectionné.")
             return selected
 
         except ValueError:
             print("Coordonnées invalides. Conservation de toutes les données.")
             return ds
 
-def select_spatial_region(ds, grid_dims, coord_names):
+def select_spatial_region(ds, grid_dims, coord_names, region_gui: dict = None):
     """Sélectionne une région dans une grille"""
     print("\nSélection d'une région:")
 
     lat_dim, lon_dim = grid_dims
     lat_coord, lon_coord = coord_names
 
+    lat_min_ds, lat_max_ds = float(ds.coords[lat_coord].min()), float(ds.coords[lat_coord].max())
+    lon_min_ds, lon_max_ds = float(ds.coords[lon_coord].min()), float(ds.coords[lon_coord].max())
+
     print("Coordonnées disponibles:")
-    print(".2f")
-    print(".2f")
+    print(f"Latitude : de {lat_min_ds:.2f} à {lat_max_ds:.2f}")
+    print(f"Longitude : de {lon_min_ds:.2f} à {lon_max_ds:.2f}")
 
     try:
         print("\nDéfinissez la région (laisser vide pour garder les limites):")
 
-        lat_min_input = input(".2f").strip()
-        lat_max_input = input(".2f").strip()
-        lon_min_input = input(".2f").strip()
-        lon_max_input = input(".2f").strip()
+        # Région GUI bypass
+        if region_gui is not None:
+            lat_min = region_gui.get('lat_min', lat_min_ds)
+            lat_max = region_gui.get('lat_max', lat_max_ds)
+            lon_min = region_gui.get('lon_min', lon_min_ds)
+            lon_max = region_gui.get('lon_max', lon_max_ds)
+            print(f"Région fournie via GUI: lat [{lat_min}, {lat_max}], lon [{lon_min}, {lon_max}]")
+        else:
+            lat_min_input = input(f"Lat min (défaut {lat_min_ds:.2f}): ").strip()
+            lat_max_input = input(f"Lat max (défaut {lat_max_ds:.2f}): ").strip()
+            lon_min_input = input(f"Lon min (défaut {lon_min_ds:.2f}): ").strip()
+            lon_max_input = input(f"Lon max (défaut {lon_max_ds:.2f}): ").strip()
 
-        # Utiliser les limites par défaut si vide
-        lat_min = float(lat_min_input) if lat_min_input else float(ds.coords[lat_coord].min())
-        lat_max = float(lat_max_input) if lat_max_input else float(ds.coords[lat_coord].max())
-        lon_min = float(lon_min_input) if lon_min_input else float(ds.coords[lon_coord].min())
-        lon_max = float(lon_max_input) if lon_max_input else float(ds.coords[lon_coord].max())
+            # Utiliser les limites par défaut si vide
+            lat_min = float(lat_min_input) if lat_min_input else lat_min_ds
+            lat_max = float(lat_max_input) if lat_max_input else lat_max_ds
+            lon_min = float(lon_min_input) if lon_min_input else lon_min_ds
+            lon_max = float(lon_max_input) if lon_max_input else lon_max_ds
 
         # Appliquer la sélection
         selected = ds.sel({
@@ -265,7 +293,7 @@ def select_spatial_region(ds, grid_dims, coord_names):
             lon_coord: slice(lon_min, lon_max)
         })
 
-        print(".2f")
+        print(f"Région découpée avec succès.")
         print(f"Nouvelle taille: {dict(selected.sizes)}")
 
         return selected
@@ -292,9 +320,13 @@ def load_multiple_datasets(paths):
             # Fallback: essayer h5netcdf
             try:
                 ds = xr.open_dataset(path, decode_cf=False, engine='h5netcdf')
-            except Exception as e:
-                print(f"Erreur lors de l'ouverture du fichier {path}: {e}")
-                continue
+            except Exception:
+                # 2ème Fallback: essayer scipy (pour les NetCDF3 très courants sous Windows)
+                try:
+                    ds = xr.open_dataset(path, decode_cf=False, engine='scipy')
+                except Exception as e:
+                    print(f"Erreur lors de l'ouverture du fichier {path}: {e}")
+                    continue
 
         # Décodage manuel du temps seulement
         if 'time' in ds:
@@ -394,7 +426,7 @@ def clean_dataframe(df):
 
     return df_clean, date_col
 
-def csv_to_xarray(filepath):
+def csv_to_xarray(filepath, skip_n_gui: int = None):
     """
     Conversion générique CSV -> xarray.Dataset
     """

@@ -5,7 +5,7 @@ import numpy as np
 
 # set up functions 
 
-def categorical_filter(ds, standard_dims):
+def categorical_filter(ds, standard_dims, filter_choice_gui=None, dict_filters_gui=None):
     """
     Allows the operator to select a specific category (such as one model) to which 
     the indicator will be applied, if there are multiple. 
@@ -13,6 +13,8 @@ def categorical_filter(ds, standard_dims):
     Args:
         ds: The input Xarray Dataset.
         standard_dims: List of dimensions to skip (e.g., ['time', 'lat', 'lon']).
+        filter_choice_gui: Optional GUI parameter 'y' or 'n'
+        dict_filters_gui: Optional GUI dict for filters.
 
     Returns:
         active_ds: The Dataset after applying filters.
@@ -34,6 +36,13 @@ def categorical_filter(ds, standard_dims):
                 val = ds[d].values[0]
                 active_ds = active_ds.sel({d: val})
                 selections_made.append(f"{d}: {val} (auto)")
+
+        if dict_filters_gui is not None:
+            for k, v in dict_filters_gui.items():
+                if k in selectable_dims:
+                    active_ds = active_ds.sel({k: v})
+                    selections_made.append(f"{k}: {v}")
+            return active_ds, selections_made
 
         # Step 3: Interactive selection loop
         while selectable_dims:
@@ -95,13 +104,14 @@ def categorical_filter(ds, standard_dims):
 
 
 
-def get_time_freq():
+def get_time_freq(unite_gui=None, nb_gui=None):
     """
     Allows the operator to define the time frequency (such as 3 months) 
     over which the indicator will be calculated.
 
     Args:
-        None
+        unite_gui: Optional GUI parameter 'd', 'm', or 'y'
+        nb_gui: Optional int step
 
     Returns:
         frequence: The Xarray-compatible frequency string (e.g., '3MS').
@@ -110,6 +120,13 @@ def get_time_freq():
         label_unite: The plural label for the unit (e.g., 'months').
     """ 
     freq_map = {"d": "D", "m": "MS", "y": "AS"}
+    
+    if unite_gui is not None and nb_gui is not None:
+        unite = unite_gui.lower()
+        nb = int(nb_gui)
+        label = {"d": "days", "m": "months", "y": "years"}.get(unite, "unknown")
+        return f"{nb}{freq_map[unite]}", unite, nb, label
+        
     while True:
         try:
             print(" Time Period Configuration ")
@@ -130,12 +147,16 @@ def get_time_freq():
 
 
 # IPS (Soil Water Balance Index)
-def IPS(ds):
+def IPS(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=None):
     """
     Return the Index of Soil Precipitation (IPS) based on the water balance.
 
     Args:
         ds: Input xarray Dataset with P, ETR, and ΔR variables.
+        dict_filters_gui: Dict for categorical filters.
+        var_p_gui: Variable name for Precipitation.
+        var_etr_gui: Variable name for ETR.
+        var_dr_gui: Variable name for Storage Change.
     Returns:
         ds: Original dataset with added IPS variable.
     """
@@ -147,7 +168,12 @@ def IPS(ds):
     active_ds = ds.copy()
     selections_made = []
 
-    if extra_dims:
+    if dict_filters_gui is not None:
+        for k, v in dict_filters_gui.items():
+            if k in extra_dims:
+                active_ds = active_ds.sel({k: v})
+                selections_made.append(f"{k}: {v}")
+    elif extra_dims:
         print("Categorical Filtering Phase ")
         
         while True:
@@ -201,20 +227,23 @@ def IPS(ds):
                 break
 
     # Variable selection for IPS calculation
-    print(" Variable Selection ")
-    vars_list = list(active_ds.data_vars)
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
+    if var_p_gui is not None and var_etr_gui is not None and var_dr_gui is not None:
+        var_p, var_etr, var_dr = var_p_gui, var_etr_gui, var_dr_gui
+    else:
+        print(" Variable Selection ")
+        vars_list = list(active_ds.data_vars)
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
 
-    while True:
-        try:
-            idx_p = int(input("Index of Precipitation (P): "))
-            idx_etr = int(input("Index of Actual Evapotranspiration (ETR): "))
-            idx_dr = int(input("Index of Storage Change (ΔR): "))
-            var_p, var_etr, var_dr = vars_list[idx_p], vars_list[idx_etr], vars_list[idx_dr]
-            break
-        except (ValueError, IndexError):
-            print("Invalid variable indices. Try again.")
+        while True:
+            try:
+                idx_p = int(input("Index of Precipitation (P): "))
+                idx_etr = int(input("Index of Actual Evapotranspiration (ETR): "))
+                idx_dr = int(input("Index of Storage Change (ΔR): "))
+                var_p, var_etr, var_dr = vars_list[idx_p], vars_list[idx_etr], vars_list[idx_dr]
+                break
+            except (ValueError, IndexError):
+                print("Invalid variable indices. Try again.")
 
     # IPS Calculation: IPS = P - ETR - ΔR
     new_var_name = "IPS"
@@ -266,7 +295,7 @@ def IPS(ds):
 
 # Qmean/QA (mean discharge over a chosen period)
 
-def Qmean(ds):
+def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
     Return the mean flow rate (Qmean) for a chosen period.
 
@@ -279,13 +308,16 @@ def Qmean(ds):
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
     
     # Categorical Filtering
-    active_ds, selections_made = categorical_filter(ds, standard_dims)
+    active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
     # Time coordinate selection
-    coords_list = list(ds.coords)
-    print("\nAvailable coordinates for time:")
-    for i, coord in enumerate(coords_list):
-        print(f" [{i}] {coord}")
+    if time_coord_gui is not None:
+        time_coord = time_coord_gui
+    else:
+        coords_list = list(ds.coords)
+        print("\nAvailable coordinates for time:")
+        for i, coord in enumerate(coords_list):
+            print(f" [{i}] {coord}")
     
     while True:
         try:
@@ -296,21 +328,24 @@ def Qmean(ds):
             print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
     # Discharge variable selection
-    vars_list = list(active_ds.data_vars)
-    print("\nAvailable variables (for Discharge):")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
-    
-    while True:
-        try:
-            idx_q = int(input("Index of Discharge variable (Q): "))
-            var_q = vars_list[idx_q]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
+    if var_q_gui is not None:
+        var_q = var_q_gui
+    else:
+        vars_list = list(active_ds.data_vars)
+        print("\nAvailable variables (for Discharge):")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
+        
+        while True:
+            try:
+                idx_q = int(input("Index of Discharge variable (Q): "))
+                var_q = vars_list[idx_q]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
     # Time config
-    frequence, unite, nb, label_unite = get_time_freq()
+    frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
     # Calculation
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
@@ -357,7 +392,7 @@ def Qmean(ds):
 
 ## Q90/Q95 High-flow Indicators (flow exceeded only 10% or 5% of the time)
 
-def Q90_95(ds):
+def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
     Return the flow rates exceeded 90% and 95% of the time for a chosen period (xarray version).
 
@@ -370,38 +405,44 @@ def Q90_95(ds):
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
     
     # Categorical Filtering (reusing your existing helper)
-    active_ds, selections_made = categorical_filter(ds, standard_dims)
+    active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
     # Time coordinate selection
-    coords_list = list(ds.coords)
-    print("\nAvailable coordinates for time:")
-    for i, coord in enumerate(coords_list):
-        print(f" [{i}] {coord}")
-    
-    while True:
-        try:
-            idx_t = int(input("Index of Date/Time coordinate: "))
-            time_coord = coords_list[idx_t]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
+    if time_coord_gui is not None:
+        time_coord = time_coord_gui
+    else:
+        coords_list = list(ds.coords)
+        print("\nAvailable coordinates for time:")
+        for i, coord in enumerate(coords_list):
+            print(f" [{i}] {coord}")
+        
+        while True:
+            try:
+                idx_t = int(input("Index of Date/Time coordinate: "))
+                time_coord = coords_list[idx_t]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
     # Discharge variable selection
-    vars_list = list(active_ds.data_vars)
-    print("\nAvailable variables (for Discharge):")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
-    
-    while True:
-        try:
-            idx_q = int(input("Index of Discharge variable (Q): "))
-            var_q = vars_list[idx_q]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
+    if var_q_gui is not None:
+        var_q = var_q_gui
+    else:
+        vars_list = list(active_ds.data_vars)
+        print("\nAvailable variables (for Discharge):")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
+        
+        while True:
+            try:
+                idx_q = int(input("Index of Discharge variable (Q): "))
+                var_q = vars_list[idx_q]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
     # Time config (reusing your get_time_freq function)
-    frequence, unite, nb, label_unite = get_time_freq()
+    frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
     # Naming configuration
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
@@ -459,7 +500,7 @@ def Q90_95(ds):
 
 # VCN10 (Minimum 10-day consecutive mean flow)
 
-def VCN10(ds):
+def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
     Return the minimum 10-day consecutive mean flow (VCN10) for a chosen period (xarray version).
 
@@ -472,38 +513,44 @@ def VCN10(ds):
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
     
     # Categorical Filtering (reusing your existing helper)
-    active_ds, selections_made = categorical_filter(ds, standard_dims)
+    active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
     # Time coordinate selection
-    coords_list = list(ds.coords)
-    print("\nAvailable coordinates for time:")
-    for i, coord in enumerate(coords_list):
-        print(f" [{i}] {coord}")
-    
-    while True:
-        try:
-            idx_t = int(input("Index of Date/Time coordinate: "))
-            time_coord = coords_list[idx_t]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
+    if time_coord_gui is not None:
+        time_coord = time_coord_gui
+    else:
+        coords_list = list(ds.coords)
+        print("\nAvailable coordinates for time:")
+        for i, coord in enumerate(coords_list):
+            print(f" [{i}] {coord}")
+        
+        while True:
+            try:
+                idx_t = int(input("Index of Date/Time coordinate: "))
+                time_coord = coords_list[idx_t]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
     # Discharge variable selection
-    vars_list = list(active_ds.data_vars)
-    print("\nAvailable variables (for Discharge):")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
-    
-    while True:
-        try:
-            idx_q = int(input("Index of Discharge variable (Q): "))
-            var_q = vars_list[idx_q]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
+    if var_q_gui is not None:
+        var_q = var_q_gui
+    else:
+        vars_list = list(active_ds.data_vars)
+        print("\nAvailable variables (for Discharge):")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
+        
+        while True:
+            try:
+                idx_q = int(input("Index of Discharge variable (Q): "))
+                var_q = vars_list[idx_q]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
     # Time config (reusing your get_time_freq function)
-    frequence, unite, nb, label_unite = get_time_freq()
+    frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
     # Naming configuration
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
@@ -554,7 +601,7 @@ def VCN10(ds):
 
 ## Q10/Q05 (flow exceeded only 10% or 5% of the time): low flow indicators
 
-def Q10_05(ds):
+def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
     Return the flow rates exceeded 10% and 5% of the time for a chosen period (xarray version).
 
@@ -567,38 +614,44 @@ def Q10_05(ds):
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
     
     # Categorical Filtering
-    active_ds, selections_made = categorical_filter(ds, standard_dims)
+    active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
     # Time coordinate selection
-    coords_list = list(ds.coords)
-    print("\nAvailable coordinates for time:")
-    for i, coord in enumerate(coords_list):
-        print(f" [{i}] {coord}")
-    
-    while True:
-        try:
-            idx_t = int(input("Index of Date/Time coordinate: "))
-            time_coord = coords_list[idx_t]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
+    if time_coord_gui is not None:
+        time_coord = time_coord_gui
+    else:
+        coords_list = list(ds.coords)
+        print("\nAvailable coordinates for time:")
+        for i, coord in enumerate(coords_list):
+            print(f" [{i}] {coord}")
+        
+        while True:
+            try:
+                idx_t = int(input("Index of Date/Time coordinate: "))
+                time_coord = coords_list[idx_t]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
     # Discharge variable selection
-    vars_list = list(active_ds.data_vars)
-    print("\nAvailable variables (for Discharge):")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
-    
-    while True:
-        try:
-            idx_q = int(input("Index of Discharge variable (Q): "))
-            var_q = vars_list[idx_q]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
+    if var_q_gui is not None:
+        var_q = var_q_gui
+    else:
+        vars_list = list(active_ds.data_vars)
+        print("\nAvailable variables (for Discharge):")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
+        
+        while True:
+            try:
+                idx_q = int(input("Index of Discharge variable (Q): "))
+                var_q = vars_list[idx_q]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
     # Time config
-    frequence, unite, nb, label_unite = get_time_freq()
+    frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
     # Naming configuration
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
@@ -656,7 +709,7 @@ def Q10_05(ds):
 
 ## VCX3 (Maximum 3-day consecutive mean flow)
 
-def VCX3(ds):
+def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
     Return the maximum 3-day consecutive mean flow (VCX3) for a chosen period (xarray version).
 
@@ -669,38 +722,44 @@ def VCX3(ds):
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
     
     # Categorical Filtering
-    active_ds, selections_made = categorical_filter(ds, standard_dims)
+    active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
     # Time coordinate selection
-    coords_list = list(ds.coords)
-    print("\nAvailable coordinates for time:")
-    for i, coord in enumerate(coords_list):
-        print(f" [{i}] {coord}")
-    
-    while True:
-        try:
-            idx_t = int(input("Index of Date/Time coordinate: "))
-            time_coord = coords_list[idx_t]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
+    if time_coord_gui is not None:
+        time_coord = time_coord_gui
+    else:
+        coords_list = list(ds.coords)
+        print("\nAvailable coordinates for time:")
+        for i, coord in enumerate(coords_list):
+            print(f" [{i}] {coord}")
+        
+        while True:
+            try:
+                idx_t = int(input("Index of Date/Time coordinate: "))
+                time_coord = coords_list[idx_t]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
     # Discharge variable selection
-    vars_list = list(active_ds.data_vars)
-    print("\nAvailable variables (for Discharge):")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
-    
-    while True:
-        try:
-            idx_q = int(input("Index of Discharge variable (Q): "))
-            var_q = vars_list[idx_q]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
+    if var_q_gui is not None:
+        var_q = var_q_gui
+    else:
+        vars_list = list(active_ds.data_vars)
+        print("\nAvailable variables (for Discharge):")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
+        
+        while True:
+            try:
+                idx_q = int(input("Index of Discharge variable (Q): "))
+                var_q = vars_list[idx_q]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
     # Time config
-    frequence, unite, nb, label_unite = get_time_freq()
+    frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
     # Naming configuration
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
@@ -751,7 +810,7 @@ def VCX3(ds):
 
 ## Over-threshold indicator (count of occurrences above a threshold with tolerance, and episode statistics)
 
-def over_threshold(ds):
+def over_threshold(ds, dict_filters_gui=None, var_name_gui=None, seuil_gui=None, tol_gui=None):
     """
     Identify and count exceedance episodes above a threshold with tolerance.
     Computes episode statistics (duration and Peak Over Threshold (POT)).
@@ -765,39 +824,46 @@ outputs:
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
     
     # Categorical Filtering
-    active_ds, selections_made = categorical_filter(ds, standard_dims)
+    active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
     # Variable selection
-    vars_list = list(active_ds.data_vars)
-    print("Over-threshold indicator: available variables")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
+    if var_name_gui is not None:
+        var_name = var_name_gui
+    else:
+        vars_list = list(active_ds.data_vars)
+        print("Over-threshold indicator: available variables")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
 
-    while True:
-        try:
-            idx = int(input("Index of the variable to analyze: "))
-            var_name = vars_list[idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index.")
+        while True:
+            try:
+                idx = int(input("Index of the variable to analyze: "))
+                var_name = vars_list[idx]
+                break
+            except (ValueError, IndexError):
+                print("Invalid index.")
 
     # Threshold and Tolerance inputs
-    while True:
-        try:
-            seuil = float(input("Enter threshold value: "))
-            break
-        except ValueError:
-            print("Threshold must be a number.")
+    if seuil_gui is not None and tol_gui is not None:
+        seuil = float(seuil_gui)
+        tol = float(tol_gui)
+    else:
+        while True:
+            try:
+                seuil = float(input("Enter threshold value: "))
+                break
+            except ValueError:
+                print("Threshold must be a number.")
 
-    while True:
-        try:
-            tol = float(input("Tolerance percentage (%) around threshold: "))
-            if tol < 0:
-                print("Tolerance must be positive.")
-                continue
-            break
-        except ValueError:
-            print("Tolerance must be a number.")
+        while True:
+            try:
+                tol = float(input("Tolerance percentage (%) around threshold: "))
+                if tol < 0:
+                    print("Tolerance must be positive.")
+                    continue
+                break
+            except ValueError:
+                print("Tolerance must be a number.")
 
     seuil_effectif = seuil * (1 + tol / 100)
     print(f"Effective threshold used: {seuil_effectif:.3f}")

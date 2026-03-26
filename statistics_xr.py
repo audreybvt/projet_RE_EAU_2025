@@ -9,7 +9,7 @@ import calendar
 
 
 # functiun to ask for a date with error handling and support for multiple formats
-def ask_date(ds):
+def ask_date(ds, start_input_gui=None, end_input_gui=None):
     """
     Ask the user for a start and end date within the dataset time range.
     Returns (start_date, end_date) as pandas Timestamp or None.
@@ -20,6 +20,11 @@ def ask_date(ds):
 
     min_date = time_values.min()
     max_date = time_values.max()
+
+    if start_input_gui is not None or end_input_gui is not None:
+        start_date = pd.to_datetime(start_input_gui) if start_input_gui else None
+        end_date = pd.to_datetime(end_input_gui) if end_input_gui else None
+        return start_date, end_date
 
     print("\nPériode disponible :")
     print(f" Du {min_date.date()} au {max_date.date()}")
@@ -67,7 +72,7 @@ def ask_date(ds):
 #function to apply to check if a time dimension is selected and allow user to select a specific period for the calculation.
 # This function is called in the mean, max, min and percentile functions to avoid code repetition.
 
-def apply_time_selection(ds, active_da, dims_to_reduce):
+def apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui=None, end_input_gui=None):
     """
     Detects a time-related dimension, prompts the user for a period,
     and slices the DataArray accordingly.
@@ -78,16 +83,18 @@ def apply_time_selection(ds, active_da, dims_to_reduce):
     """
     period_label = ""
     # Find any dimension that contains the string "time"
-    time_dims = [d for d in dims_to_reduce if "time" in d]
+    time_dims = [d for d in active_da.dims if "time" in d]
 
-    if time_dims:
-        # We target the first time-like dimension found
-        t_dim = time_dims[0]
-        print(f"\n--- Period configuration (detected dimension: {t_dim}) ---")
+    if not time_dims:
+        return active_da, ""
+
+    # We target the first time-like dimension found
+    t_dim = time_dims[0]
+    print(f"\n--- Period configuration (detected dimension: {t_dim}) ---")
 
     while True:
         # This calls your existing ask_date function
-        start_date, end_date = ask_date(ds)
+        start_date, end_date = ask_date(ds, start_input_gui, end_input_gui)
 
         if start_date or end_date:
             # Dynamic slicing using a dictionary for the dimension name
@@ -99,6 +106,8 @@ def apply_time_selection(ds, active_da, dims_to_reduce):
         # Safety check: ensure the selection isn't empty
         if temp_da[t_dim].size == 0:
             print(f"No data available in this range for '{t_dim}'. Please try again.")
+            if start_input_gui is not None:
+                break
             continue
 
         # Update the DataArray and create the label
@@ -118,54 +127,56 @@ def apply_time_selection(ds, active_da, dims_to_reduce):
 ### Mean value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
 
-def mean_value_flexible(ds):
-    # Variable selection
+def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
-    print("\nAvailable variables:")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
+    
+    if var_name_gui is not None:
+        var_name = var_name_gui
+    else:
+        # Variable selection
+        print("\nAvailable variables:")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
 
-    while True:
-        try:
-            var_idx = int(input("\nIndex of the variable to process: "))
-            var_name = vars_list[var_idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index. Please try again.")
+        while True:
+            try:
+                var_idx = int(input("\nIndex of the variable to process: "))
+                var_name = vars_list[var_idx]
+                break
+            except (ValueError, IndexError):
+                print("Invalid index. Please try again.")
 
     active_da = ds[var_name]
 
     # Identification of available dimensions
     available_dims = list(active_da.dims)
-    dims_to_reduce = []
     
-    print("\nWhich dimensions do you want to average across?")
-    print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
-    for i, d in enumerate(available_dims):
-        print(f" [{i}] {d}")
+    if dims_to_reduce_gui is not None:
+        dims_to_reduce = dims_to_reduce_gui
+    else:
+        dims_to_reduce = []
+        print("\nWhich dimensions do you want to average across?")
+        print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
+        for i, d in enumerate(available_dims):
+            print(f" [{i}] {d}")
 
-    
-    while True:
+        while True:
+            choice_dims = input("Your choice: ").strip()
 
-        choice_dims = input("Your choice: ").strip()
+            if choice_dims == "":
+                dims_to_reduce = available_dims
+                break
 
-        if choice_dims == "":
-            dims_to_reduce = available_dims
-            break
+            try:
+                indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+                dims_to_reduce = [available_dims[i] for i in indices]
+                break
 
-        try:
-            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
-            dims_to_reduce = [available_dims[i] for i in indices]
-            break
+            except (ValueError, IndexError):
+                print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions.")
 
-        except (ValueError, IndexError):
-            print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions.")
-
-
-        
     # Handling of time period if 'time' is contained in the selected dimensions
-
-    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce)
+    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui)
 
     # Mean calculation
     print(f"\nCalculating mean across: {dims_to_reduce}...")
@@ -196,53 +207,56 @@ def mean_value_flexible(ds):
 
 ### Maximum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
-def maximum_value_flexible(ds):
-    # Variable selection
+def maximum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
-    print("\nAvailable variables:")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
+    
+    if var_name_gui is not None:
+        var_name = var_name_gui
+    else:
+        # Variable selection
+        print("\nAvailable variables:")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
 
-    while True:
-        try:
-            var_idx = int(input("\nIndex of the variable to find the maximum: "))
-            var_name = vars_list[var_idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index. Please try again.")
+        while True:
+            try:
+                var_idx = int(input("\nIndex of the variable to find the maximum: "))
+                var_name = vars_list[var_idx]
+                break
+            except (ValueError, IndexError):
+                print("Invalid index. Please try again.")
 
     active_da = ds[var_name]
 
     # Identification of available dimensions
     available_dims = list(active_da.dims)
-    dims_to_reduce = []
     
-    print("\nAcross which dimensions do you want to find the maximum?")
-    print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
-    for i, d in enumerate(available_dims):
-        print(f" [{i}] {d}")
+    if dims_to_reduce_gui is not None:
+        dims_to_reduce = dims_to_reduce_gui
+    else:
+        dims_to_reduce = []
+        print("\nAcross which dimensions do you want to find the maximum?")
+        print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
+        for i, d in enumerate(available_dims):
+            print(f" [{i}] {d}")
 
-    
-    while True:
+        while True:
+            choice_dims = input("Your choice: ").strip()
 
-        choice_dims = input("Your choice: ").strip()
+            if choice_dims == "":
+                dims_to_reduce = available_dims
+                break
 
-        if choice_dims == "":
-            dims_to_reduce = available_dims
-            break
+            try:
+                indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+                dims_to_reduce = [available_dims[i] for i in indices]
+                break
 
-        try:
-            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
-            dims_to_reduce = [available_dims[i] for i in indices]
-            break
-
-        except (ValueError, IndexError):
-            print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
-
+            except (ValueError, IndexError):
+                print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
 
     # Handling of time period if 'time' is contained in the selected dimensions
-
-    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce)
+    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui)
 
     # Maximum calculation
     print(f"\nCalculating maximum across: {dims_to_reduce}...")
@@ -284,53 +298,56 @@ def maximum_value_flexible(ds):
 
 ### Minimum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
-def minimum_value_flexible(ds):
-    # Variable selection
+def minimum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
-    print("\nAvailable variables:")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
+    
+    if var_name_gui is not None:
+        var_name = var_name_gui
+    else:
+        # Variable selection
+        print("\nAvailable variables:")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
 
-    while True:
-        try:
-            var_idx = int(input("\nIndex of the variable to find the minimum: "))
-            var_name = vars_list[var_idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index. Please try again.")
+        while True:
+            try:
+                var_idx = int(input("\nIndex of the variable to find the minimum: "))
+                var_name = vars_list[var_idx]
+                break
+            except (ValueError, IndexError):
+                print("Invalid index. Please try again.")
 
     active_da = ds[var_name]
 
     # Identification of available dimensions
     available_dims = list(active_da.dims)
-    dims_to_reduce = []
-          
-
-    print("\nAcross which dimensions do you want to find the minimum?")
-    print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
-    for i, d in enumerate(available_dims):
-        print(f" [{i}] {d}")
-
     
-    while True:
+    if dims_to_reduce_gui is not None:
+        dims_to_reduce = dims_to_reduce_gui
+    else:
+        dims_to_reduce = []
+        print("\nAcross which dimensions do you want to find the minimum?")
+        print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
+        for i, d in enumerate(available_dims):
+            print(f" [{i}] {d}")
 
-        choice_dims = input("Your choice: ").strip()
+        while True:
+            choice_dims = input("Your choice: ").strip()
 
-        if choice_dims == "":
-            dims_to_reduce = available_dims
-            break
+            if choice_dims == "":
+                dims_to_reduce = available_dims
+                break
 
-        try:
-            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
-            dims_to_reduce = [available_dims[i] for i in indices]
-            break
+            try:
+                indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+                dims_to_reduce = [available_dims[i] for i in indices]
+                break
 
-        except (ValueError, IndexError):
-            print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
+            except (ValueError, IndexError):
+                print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
 
-    
     # Handling of time period if 'time' is contained in the selected dimensions
-    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce)
+    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui)
 
     # Minimum calculation
     print(f"\nCalculating minimum across: {dims_to_reduce}...")
@@ -361,62 +378,69 @@ def minimum_value_flexible(ds):
 
 ### Percentile value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
-def percentile_value_flexible(ds):
-    # Variable selection
+def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
-    print("\nAvailable variables:")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
+    
+    if var_name_gui is not None:
+        var_name = var_name_gui
+    else:
+        # Variable selection
+        print("\nAvailable variables:")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
 
-    while True:
-        try:
-            var_idx = int(input("\nIndex of the variable to process: "))
-            var_name = vars_list[var_idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index. Please try again.")
+        while True:
+            try:
+                var_idx = int(input("\nIndex of the variable to process: "))
+                var_name = vars_list[var_idx]
+                break
+            except (ValueError, IndexError):
+                print("Invalid index. Please try again.")
 
     active_da = ds[var_name]
 
-    # Percentile selection
-    while True:
-        try:
-            q = float(input("Desired percentile (e.g., 0.9 for 90%): "))
-            if not 0 <= q <= 1:
-                raise ValueError
-            break
-        except ValueError:
-            print("The percentile must be a number between 0 and 1.")
+    if q_gui is not None:
+        q = q_gui
+    else:
+        # Percentile selection
+        while True:
+            try:
+                q = float(input("Desired percentile (e.g., 0.9 for 90%): "))
+                if not 0 <= q <= 1:
+                    raise ValueError
+                break
+            except ValueError:
+                print("The percentile must be a number between 0 and 1.")
 
     # Identification of available dimensions
     available_dims = list(active_da.dims)
-    dims_to_reduce = []
     
-    print("\nAcross which dimensions do you want to calculate the percentile?")
-    print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
-    for i, d in enumerate(available_dims):
-        print(f" [{i}] {d}")
+    if dims_to_reduce_gui is not None:
+        dims_to_reduce = dims_to_reduce_gui
+    else:
+        dims_to_reduce = []
+        print("\nAcross which dimensions do you want to calculate the percentile?")
+        print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
+        for i, d in enumerate(available_dims):
+            print(f" [{i}] {d}")
 
-    
-    while True:
+        while True:
+            choice_dims = input("Your choice: ").strip()
 
-        choice_dims = input("Your choice: ").strip()
+            if choice_dims == "":
+                dims_to_reduce = available_dims
+                break
 
-        if choice_dims == "":
-            dims_to_reduce = available_dims
-            break
+            try:
+                indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+                dims_to_reduce = [available_dims[i] for i in indices]
+                break
 
-        try:
-            indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
-            dims_to_reduce = [available_dims[i] for i in indices]
-            break
+            except (ValueError, IndexError):
+                print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
 
-        except (ValueError, IndexError):
-            print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
-
-    
     # Handling of time period if 'time' is contained in the selected dimensions
-    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce)
+    active_da, period_label=apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui)
 
     # Percentile calculation
     print(f"\nCalculating {int(q*100)}th percentile across: {dims_to_reduce}...")
@@ -455,20 +479,23 @@ def percentile_value_flexible(ds):
 
 ### rolling mean value of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
-def rolling_mean_value(ds):
-    # Variable selection
+def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
-    print("\nAvailable variables:")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
+    if var_name_gui is not None:
+        var_name = var_name_gui
+    else:
+        # Variable selection
+        print("\nAvailable variables:")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
 
-    while True:
-        try:
-            var_idx = int(input("\nIndex of the variable for rolling mean: "))
-            var_name = vars_list[var_idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index. Please try again.")
+        while True:
+            try:
+                var_idx = int(input("\nIndex of the variable for rolling mean: "))
+                var_name = vars_list[var_idx]
+                break
+            except (ValueError, IndexError):
+                print("Invalid index. Please try again.")
 
     active_da = ds[var_name]
 
@@ -481,7 +508,7 @@ def rolling_mean_value(ds):
 
         while True:
 
-            start_date, end_date = ask_date(ds)
+            start_date, end_date = ask_date(ds, start_input_gui, end_input_gui)
 
             if start_date or end_date:
                 temp_da = active_da.sel(time=slice(start_date, end_date))
@@ -491,6 +518,8 @@ def rolling_mean_value(ds):
             # vérifier s'il y a des données
             if temp_da.time.size == 0:
                 print("No data available in this time range. Please choose another period.")
+                if start_input_gui is not None:
+                    break # Break if using GUI because we cannot prompt again
                 continue
 
             # si la sélection est valide
@@ -503,15 +532,18 @@ def rolling_mean_value(ds):
 
             break
 
-    # Window size selection
-    while True:
-        try:
-            window = int(input("\nWindow size (number of time steps): "))
-            if window <= 0:
-                raise ValueError
-            break
-        except ValueError:
-            print("Window size must be a positive integer.")
+    if window_gui is not None:
+        window = window_gui
+    else:
+        # Window size selection
+        while True:
+            try:
+                window = int(input("\nWindow size (number of time steps): "))
+                if window <= 0:
+                    raise ValueError
+                break
+            except ValueError:
+                print("Window size must be a positive integer.")
 
     # Rolling mean calculation
     # min_periods=1 ensures we get values even at the start of the series
@@ -546,36 +578,42 @@ def rolling_mean_value(ds):
 ### Interannual grouping by month of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
 
-def monthly_interannual_average_xr(ds):
-    # Variable selection
+def monthly_interannual_average_xr(ds, var_name_gui=None, time_dim_gui=None):
     vars_list = list(ds.data_vars)
-    print("\nAvailable variables:")
-    for i, var in enumerate(vars_list):
-        print(f" [{i}] {var}")
+    if var_name_gui is not None:
+        var_name = var_name_gui
+    else:
+        # Variable selection
+        print("\nAvailable variables:")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
 
-    while True:
-        try:
-            var_idx = int(input("\nIndex of the variable to process: "))
-            var_name = vars_list[var_idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index. Please try again.")
+        while True:
+            try:
+                var_idx = int(input("\nIndex of the variable to process: "))
+                var_name = vars_list[var_idx]
+                break
+            except (ValueError, IndexError):
+                print("Invalid index. Please try again.")
 
     active_da = ds[var_name]
 
-    # list of dimensions to identify the time dimension 
-    dims_list = list(active_da.dims)
-    print(f"\nDimensions for '{var_name}':")
-    for i, d in enumerate(dims_list):
-        print(f" [{i}] {d}")
+    if time_dim_gui is not None:
+        time_dim = time_dim_gui
+    else:
+        # list of dimensions to identify the time dimension 
+        dims_list = list(active_da.dims)
+        print(f"\nDimensions for '{var_name}':")
+        for i, d in enumerate(dims_list):
+            print(f" [{i}] {d}")
 
-    while True:
-        try:
-            dim_idx = int(input("Which time dimension do you want to use for grouping ? "))
-            time_dim = dims_list[dim_idx]
-            break
-        except (ValueError, IndexError):
-            print("Invalid index. Please choose an existing dimension.")
+        while True:
+            try:
+                dim_idx = int(input("Which time dimension do you want to use for grouping ? "))
+                time_dim = dims_list[dim_idx]
+                break
+            except (ValueError, IndexError):
+                print("Invalid index. Please choose an existing dimension.")
 
     # Calculation of monthly means (1 to 12)
     print(f"\nCalculating interannual monthly averages for '{var_name}'...")
