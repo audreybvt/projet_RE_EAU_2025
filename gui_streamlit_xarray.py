@@ -263,7 +263,7 @@ with st.sidebar:
 
                             # Gestion spatiale
                             if spatial_mode == "Conserver tout":
-                                spatial_gui_val = None
+                                spatial_gui_val = {"keep_all": True}
                             else:
                                 # Calculer le 'choice' selon le type de dims
                                 spatial_gui_val = {"choice": 6}  # fallback: conserver tout
@@ -339,7 +339,7 @@ with st.sidebar:
 
                         else:
                             # Multi-fichiers
-                            ds_loaded = df_mod.load_multiple_datasets(tmp_paths)
+                            ds_loaded = df_mod.load_multiple_datasets(tmp_paths, spatial_gui=spatial_gui_val)
 
                         st.session_state["ds"] = ds_loaded
 
@@ -441,6 +441,7 @@ with tab_stat:
             "Moyenne flexible",
             "Maximum flexible",
             "Minimum flexible",
+            "Médiane flexible",
             "Percentile flexible",
             "Moyenne glissante (rolling)",
             "Moyenne interannuelle mensuelle",
@@ -528,6 +529,15 @@ with tab_stat:
 
             elif stat_func == "Minimum flexible":
                 ds_work = stats.minimum_value_flexible(
+                    ds_work,
+                    var_name_gui=var_name,
+                    dims_to_reduce_gui=dims_to_reduce,
+                    start_input_gui=start_str,
+                    end_input_gui=end_str,
+                )
+
+            elif stat_func == "Médiane flexible":
+                ds_work = stats.median_value_flexible(
                     ds_work,
                     var_name_gui=var_name,
                     dims_to_reduce_gui=dims_to_reduce,
@@ -760,14 +770,35 @@ with tab_viz:
 
     # ── Configuration commune ───────────────────────────────────────────────
     col_v1, col_v2 = st.columns(2)
-    if chart_type == "Nuage de points":
-        var_x = col_v1.selectbox("Variable X", vars_viz, key="viz_x")
-        var_y = col_v2.selectbox("Variable Y", vars_viz, key="viz_y")
-    elif chart_type == "Radar":
+    
+    if chart_type == "Radar":
         vars_multi = st.multiselect("Variables (axes du radar)", vars_viz, key="viz_radar")
+        var_x = None # Non utilisé pour le radar
     else:
-        var_main = col_v1.selectbox("Variable principale", ds_vars(), key="viz_main")
-        vars_extra = col_v2.multiselect("Variables supplémentaires (optionnel)", ds_vars(), key="viz_extra")
+        # Pour tous les autres types, on peut choisir X et Y
+        var_x = col_v1.selectbox("Axe X (abscisse)", vars_viz, key="viz_x")
+        
+        if chart_type == "Nuage de points":
+            var_y = col_v2.selectbox("Axe Y (ordonnée)", vars_viz, key="viz_y")
+        elif chart_type == "Histogramme":
+            var_main = col_v2.selectbox("Variable à analyser", ds_vars(), key="viz_main")
+        else: # Ligne ou Barres
+            var_main = col_v2.selectbox("Variable principale (Y)", ds_vars(), key="viz_main")
+            vars_extra = st.multiselect("Variables supplémentaires (optionnel)", ds_vars(), key="viz_extra")
+
+        # Options spécifiques selon le type
+        st.markdown("---")
+        if chart_type == "Graphique en ligne":
+            show_envelope = st.checkbox("Afficher les enveloppes (min-max)", value=False, help="Si une dimension 'model' est présente")
+            env_type = "average"
+            if show_envelope:
+                env_type = st.radio("Type d'enveloppe", ["average", "individual"], index=0, horizontal=True)
+            st.session_state["viz_envelope"] = show_envelope
+            st.session_state["viz_env_type"] = env_type
+            
+        elif chart_type == "Histogramme":
+            nb_bins = st.number_input("Nombre de classes (bins)", min_value=1, max_value=100, value=10)
+            st.session_state["viz_bins"] = nb_bins
 
     # Période temporelle
     t_dims_viz = time_like_dims()
@@ -821,14 +852,21 @@ with tab_viz:
 
             if chart_type == "Graphique en ligne":
                 plot_vars = [var_main] + (vars_extra or [])
-                fig = viz.line_chart(ds_plot, var_gui=plot_vars, plot_config_gui=plot_config_gui)
+                fig = viz.line_chart(
+                    ds_plot, 
+                    x_name_gui=var_x, 
+                    y_names_gui=plot_vars, 
+                    plot_config_gui=plot_config_gui,
+                    plot_envelope_gui=st.session_state.get("viz_envelope", False),
+                    envelope_type_gui=st.session_state.get("viz_env_type", "average")
+                )
 
             elif chart_type == "Graphique en barres":
                 plot_vars = [var_main] + (vars_extra or [])
-                fig = viz.bar_chart(ds_plot, var_gui=plot_vars, plot_config_gui=plot_config_gui)
+                fig = viz.bar_chart(ds_plot, x_name_gui=var_x, y_names_gui=plot_vars, plot_config_gui=plot_config_gui)
 
             elif chart_type == "Nuage de points":
-                fig = viz.scatter_chart(ds_plot, x_name_gui=var_x, y_name_gui=var_y, plot_config_gui=plot_config_gui)
+                fig = viz.scatter_chart(ds_plot, x_name_gui=var_x, y_names_gui=[var_y], plot_config_gui=plot_config_gui)
 
             elif chart_type == "Radar":
                 if not vars_multi:
@@ -837,7 +875,13 @@ with tab_viz:
                     fig = viz.radar_chart(ds_plot, var_gui=vars_multi, plot_config_gui=plot_config_gui)
 
             elif chart_type == "Histogramme":
-                fig = viz.histogram_chart(ds_plot, var_gui=var_main, plot_config_gui=plot_config_gui)
+                fig = viz.histogram_chart(
+                    ds_plot, 
+                    x_name_gui=var_x, 
+                    col_name_gui=var_main, 
+                    bins_gui=st.session_state.get("viz_bins", 10),
+                    plot_config_gui=plot_config_gui
+                )
 
             if fig is not None:
                 st.pyplot(fig, use_container_width=True)

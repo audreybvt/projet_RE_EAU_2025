@@ -365,9 +365,19 @@ def handle_xarray_dimensions(
         (selection_dict, data_values)
     """
 
-    dims = [d for d in da.dims if d not in main_dims]
-
     selections = {}
+    
+    # Identify which dimensions need to be handled (those not in main_dims)
+    dims = [d for d in da.dims if d not in main_dims]
+    
+    # Improved GUI mode detection:
+    # If this is called from line_chart, bar_chart, etc., it should not block.
+    # We'll check if we have any gui-related arguments or if we can rely on a safer check.
+    # For now, let's assume if dim_selections_gui is a dict (even empty), it's GUI mode.
+    is_gui = (dim_selections_gui is not None or auto_mean_gui is True)
+    # If we are called with ANY GUI parameter (even if empty), we should NOT block
+    # We can detect this by seeing if the caller is one of our GUI plotting functions 
+    # OR if we pass a special flag. For now, let's look at the parameters.
 
     for dim in dims:
         if dim_selections_gui is not None and dim in dim_selections_gui:
@@ -385,17 +395,22 @@ def handle_xarray_dimensions(
         coords = da.coords[dim].values
         n = len(coords)
 
-        # ---- If dimension very large → propose mean
+        # In GUI mode, if no selection provided, we MUST NOT call input()
+        # We'll default to mean for large dims and 'all' for small dims if no info
+        if is_gui:
+            if n > 30:
+                da = da.mean(dim=dim, skipna=True)
+            else:
+                selections[dim] = list(coords)
+            continue
+
+        # ---- If dimension very large → propose mean (Terminal only)
         if n > 30:
-
             print(f"\nDimension '{dim}' has {n} values.")
-
             while True:
                 choice = input(f"Average over '{dim}'? (y/n): ").strip().lower()
-                if choice in ["y", "n"]:
-                    break
+                if choice in ["y", "n"]: break
                 print("Please enter 'y' or 'n'.")
-                        
             
             if choice == "y":
                 da = da.mean(dim=dim, skipna=True)
@@ -407,30 +422,21 @@ def handle_xarray_dimensions(
             selections[dim] = coords
             continue
 
-        # ---- Ask user selection
+        # ---- Ask user selection (Terminal only)
         print(f"\nDimension '{dim}' values:")
-
         for i, v in enumerate(coords):
             print(f"[{i}] {v}")
 
-
         while True:
             choice = input(f"indices for {dim} (ex: 0,1 or leave empty for all): ").strip()
-
             if choice == "" or choice.lower() == "all":
                 selections[dim] = list(coords)
                 break
-
             try:
-             
                 idx = [int(i.strip()) for i in choice.split(",")]
-
-                if any(i < 0 or i >= n for i in idx):
-                    raise IndexError
-
+                if any(i < 0 or i >= n for i in idx): raise IndexError
                 selections[dim] = [coords[i] for i in idx]
                 break
-
             except (ValueError, IndexError):
                 print("Invalid indices. Please try again.")
 
@@ -663,13 +669,21 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, start_gui=None, 
 
 # ---------------- Line Chart ---------------- 
 
-def line_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False, plot_envelope_gui=None, envelope_type_gui=None):
+def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False, plot_envelope_gui=None, envelope_type_gui=None):
 
     if not isinstance(ds, xr.Dataset):
         raise TypeError("Attendu : xarray.Dataset")
 
     # -------- Variable selection --------
-    
+    # If var_gui is provided (list of Y variables), we use the first time-like or coord for X
+    # unless x_name_gui is provided.
+    if var_gui is not None and y_names_gui is None:
+        y_names_gui = var_gui if isinstance(var_gui, list) else [var_gui]
+
+    if x_name_gui is None:
+        # Fallback for X: find the first dimension that looks like time/lat/lon
+        x_name_gui = next((d for d in ds.dims if any(s in d.lower() for s in ['time', 'date', 'lat', 'lon', 'x', 'y'])), list(ds.dims)[0])
+
     x_name = ask_variable(ds, prompt="Variable for X: ", var_gui=x_name_gui)
 
     y_names = ask_variable(
@@ -679,20 +693,25 @@ def line_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=None
         var_gui=y_names_gui
     )
 
-    # -------- Period --------
-
-    start_date, end_date = ask_time_period(ds, start_gui=start_gui, end_gui=end_gui)
-    ds = subset_time(ds, start_date, end_date)
-
-    period_text = format_period_text(start_date, end_date)
+    # -------- Period selection --------
+    is_gui = any(p is not None for p in [var_gui, x_name_gui, y_names_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
+    
+    if is_gui:
+        ds_period = ds
+        period_text = ""
+    else:
+        start_date, end_date = ask_time_period(ds, start_gui=start_gui, end_gui=end_gui)
+        ds_period = subset_time(ds, start_date, end_date)
+        period_text = format_period_text(start_date, end_date)
 
     # -------- Figure --------
 
     fig, ax = plt.subplots(figsize=(10,6))
 
     # -------- Configuration labels --------
-    y_min = float(ds[y_names].to_array().min().values)
-    y_max = float(ds[y_names].to_array().max().values)
+    # Use ds_period instead of ds here
+    y_min = float(ds_period[y_names].to_array().min().values)
+    y_max = float(ds_period[y_names].to_array().max().values)
 
     labels = configure_plot(
             x_default=x_name,
@@ -714,11 +733,15 @@ def line_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=None
     # -------- Check for model dimension and envelope option --------
     plot_envelope = False
     envelope_type = "average"  # "average" or "individual"
-    if any('model' in ds[y_name].dims for y_name in y_names):
+
+    if any('model' in ds_period[y_name].dims for y_name in y_names):
         if plot_envelope_gui is not None:
             plot_envelope = plot_envelope_gui
             if envelope_type_gui is not None:
                 envelope_type = envelope_type_gui
+        elif is_gui:
+            # In GUI mode, if not specified, we default to False to avoid blocking
+            plot_envelope = False
         else:
             while True:
                 choice = input("Model dimension detected. Plot envelopes (min-max)? (y/n): ").strip().lower()
@@ -737,7 +760,7 @@ def line_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=None
 
     # -------- X --------
 
-    x_arr = ds[x_name] if x_name in ds else ds.coords[x_name]
+    x_arr = ds_period[x_name] if x_name in ds_period else ds_period.coords[x_name]
 
     if x_arr.ndim != 1:
         raise ValueError("X must be 1D")
@@ -748,12 +771,12 @@ def line_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=None
     # -------- Y loop --------
     for y_name in y_names:
 
-        da = ds[y_name]
+        da = ds_period[y_name]
 
         if x_dim not in da.dims:
             continue
 
-        # Check if we should plot envelope for this variable
+        # -------- Case: model dimension exists and ensemble plot is requested --------
         if plot_envelope and 'model' in da.dims:
             # For envelope plotting, handle extra dimensions interactively
             results = handle_xarray_dimensions(
@@ -772,7 +795,7 @@ def line_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=None
                 # Create label
                 label = y_name
                 if sel:
-                    label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
+                    label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items() if k != 'model')
 
                 # Plot envelope (min-max range)
                 ax.fill_between(x_vals, y_min, y_max, alpha=0.3, label=f"{label} (min-max)")
@@ -803,6 +826,7 @@ def line_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=None
                     label += " | " + ", ".join(
                         f"{k}={v}" for k, v in sel.items()
                     )
+                ax.plot(x_vals, y_vals, label=label)
 
     # Plot individual line
     ax.set_xlabel(x_label)
@@ -814,22 +838,104 @@ def line_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=None
 
     return fig
 
+# ---------------- Bar Chart ---------------- 
+
+def bar_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
+    """
+    Create a bar chart from an xarray Dataset.
+    Same logic as line_chart but uses ax.bar.
+    """
+    if not isinstance(ds, xr.Dataset):
+        raise TypeError("Attendu : xarray.Dataset")
+
+    if var_gui is not None and y_names_gui is None:
+        y_names_gui = var_gui if isinstance(var_gui, list) else [var_gui]
+
+    if x_name_gui is None:
+        x_name_gui = next((d for d in ds.dims if any(s in d.lower() for s in ['time', 'date', 'lat', 'lon'])), list(ds.dims)[0])
+
+    x_name = ask_variable(ds, prompt="Variable for X: ", var_gui=x_name_gui)
+    y_names = ask_variable(ds, multiple=True, prompt="Variables for Y: ", var_gui=y_names_gui)
+
+    # -------- Period selection --------
+    is_gui = any(p is not None for p in [x_name_gui, y_names_gui, plot_config_gui, dim_selections_gui])
+    
+    if is_gui:
+        ds_period = ds
+        period_text = ""
+    else:
+        start_date, end_date = ask_time_period(ds)
+        ds_period = subset_time(ds, start_date, end_date)
+        period_text = format_period_text(start_date, end_date)
+
+    fig, ax = plt.subplots(figsize=(10,6))
+    
+    labels = configure_plot(x_default=x_name, y_defaults=y_names, period_text=period_text, plot_config_gui=plot_config_gui)
+    title = labels["title"] or f"Bar chart: {', '.join(y_names)} vs {labels['x_label']}{period_text}"
+
+    x_arr = ds_period[x_name] if x_name in ds_period else ds_period.coords[x_name]
+    x_dim = x_arr.dims[0]
+    
+    # Selection of X values (handle_xarray_dimensions returns (sel, values) pairs)
+    # We need to ensure we align the bars with the correct X values
+    
+    # Small helper for bar width
+    n_vars = len(y_names)
+    width = 0.8 / n_vars
+
+    # We'll use the unique X values from the dataset to align the bars
+    unique_x = x_arr.values
+    x_indices = np.arange(len(unique_x))
+
+    for i, y_name in enumerate(y_names):
+        da = ds_period[y_name]
+        # Use x_dim as the main dimension to preserve it
+        results = handle_xarray_dimensions(
+            da,
+            main_dims=[x_dim],
+            dim_selections_gui=dim_selections_gui,
+            auto_mean_gui=auto_mean_gui
+        )
+        
+        for sel, y_vals in results:
+            label = y_name
+            if sel:
+                label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
+            
+            # Simple bar plot (might overlap if multiple series from handle_xarray_dimensions)
+            ax.bar(x_indices + (i - n_vars/2 + 0.5)*width, y_vals, width, label=label)
+
+    ax.set_xticks(x_indices)
+    # Format labels if they are dates
+    if np.issubdtype(x_arr.dtype, np.datetime64):
+        ax.set_xticklabels(pd.to_datetime(unique_x).strftime('%Y-%m-%d'), rotation=45)
+    else:
+        ax.set_xticklabels([str(v) for v in unique_x], rotation=45)
+
+    ax.set_xlabel(labels["x_label"])
+    ax.set_ylabel(labels["y_label"])
+    ax.set_title(title)
+    ax.legend()
+    plt.tight_layout()
+
+    return fig
+
 # -------------- Scatter Plot ---------------
 
-def scatter_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
+def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, y_name_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
     """
     Create a scatter plot from an xarray Dataset.
-    
-    Interactive function that allows selection of:
-    - X variable (single)
-    - Y variables (multiple)
-    - Time period
-    - Custom labels, units, title, and legend
     """
     
     if not isinstance(ds, xr.Dataset):
         raise TypeError("Expected: xarray.Dataset")
     
+    # Handle parameter name variations from GUI
+    if y_name_gui is not None and y_names_gui is None:
+        y_names_gui = [y_name_gui]
+    if var_gui is not None and y_names_gui is None:
+        y_names_gui = var_gui if isinstance(var_gui, list) else [var_gui]
+
     # -------- Variable selection --------
     
     x_name = ask_variable(ds, prompt="Variable for X-axis: ", var_gui=x_name_gui)
@@ -842,11 +948,15 @@ def scatter_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=N
     )
     
     # -------- Period selection --------
+    is_gui = any(p is not None for p in [x_name_gui, y_names_gui, plot_config_gui, dim_selections_gui])
     
-    start_date, end_date = ask_time_period(ds, start_gui=start_gui, end_gui=end_gui)
-    ds_period = subset_time(ds, start_date, end_date)
-    
-    period_text = format_period_text(start_date, end_date)
+    if is_gui:
+        ds_period = ds
+        period_text = ""
+    else:
+        start_date, end_date = ask_time_period(ds)
+        ds_period = subset_time(ds, start_date, end_date)
+        period_text = format_period_text(start_date, end_date)
     
     # -------- Figure setup --------
     
@@ -892,10 +1002,9 @@ def scatter_chart(ds: xr.Dataset, x_name_gui=None, y_names_gui=None, start_gui=N
     # Convert X to numeric and handle NaN
     x_numeric = pd.to_numeric(x_vals, errors='coerce')
     
-    # -------- Y loop --------
-    
-    colors = cm.viridis(np.linspace(0, 1, len(y_names)))
-    
+    # Determine if we are in GUI mode
+    is_gui_scatter = any(p is not None for p in [var_gui, x_name_gui, y_names_gui, y_name_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
+
     for i, y_name in enumerate(y_names):
         
         da = ds_period[y_name]
@@ -1092,7 +1201,7 @@ def radar_chart(ds: xr.Dataset):
     return fig
 '''
 
-def radar_chart(ds: xr.Dataset, cat_name_gui=None, value_names_gui=None, start_gui=None, end_gui=None, units_gui=None, title_gui=None, legend_gui=None):
+def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui=None, start_gui=None, end_gui=None, units_gui=None, title_gui=None, legend_gui=None, plot_config_gui=None):
     """
     Create a radar chart from an xarray Dataset.
     """
@@ -1100,8 +1209,15 @@ def radar_chart(ds: xr.Dataset, cat_name_gui=None, value_names_gui=None, start_g
     if not isinstance(ds, xr.Dataset):
         raise TypeError("Expected: xarray.Dataset")
     
+    if var_gui is not None and value_names_gui is None:
+        value_names_gui = var_gui if isinstance(var_gui, list) else [var_gui]
+
     # -------- Variable selection --------
     
+    # For radar, we need a category dimension (like 'time' or 'model')
+    if cat_name_gui is None:
+        cat_name_gui = next((d for d in ds.dims if any(s in d.lower() for s in ['time', 'date', 'model', 'scenario'])), list(ds.dims)[0])
+
     cat_name = ask_variable(ds, prompt="Variable for category axis (radar axes): ", var_gui=cat_name_gui)
     
     value_names = ask_variable(
@@ -1112,11 +1228,15 @@ def radar_chart(ds: xr.Dataset, cat_name_gui=None, value_names_gui=None, start_g
     )
     
     # -------- Period selection --------
+    is_gui = any(p is not None for p in [var_gui, cat_name_gui, value_names_gui, plot_config_gui])
     
-    start_date, end_date = ask_time_period(ds, start_gui=start_gui, end_gui=end_gui)
-    ds_period = subset_time(ds, start_date, end_date)
-    
-    period_text = format_period_text(start_date, end_date)
+    if is_gui:
+        ds_period = ds
+        period_text = ""
+    else:
+        start_date, end_date = ask_time_period(ds, start_gui=start_gui, end_gui=end_gui)
+        ds_period = subset_time(ds, start_date, end_date)
+        period_text = format_period_text(start_date, end_date)
     
     # -------- Get category data --------
     
@@ -1141,6 +1261,8 @@ def radar_chart(ds: xr.Dataset, cat_name_gui=None, value_names_gui=None, start_g
     
     if units_gui is not None:
         units_input = units_gui
+    elif is_gui:
+        units_input = ""
     else:
         units_input = input("Units for radar variables (leave empty if none): ").strip()
         
@@ -1150,6 +1272,8 @@ def radar_chart(ds: xr.Dataset, cat_name_gui=None, value_names_gui=None, start_g
     
     if title_gui is not None:
         custom_title = title_gui
+    elif is_gui:
+        custom_title = ""
     else:
         custom_title = input("Chart title (leave empty for automatic): ").strip()
     
@@ -1162,6 +1286,8 @@ def radar_chart(ds: xr.Dataset, cat_name_gui=None, value_names_gui=None, start_g
     
     if legend_gui is not None:
         legend_input = legend_gui
+    elif is_gui:
+        legend_input = ""
     else:
         legend_input = input("Legend names (comma-separated, leave empty for defaults): ").strip()
     
@@ -1284,9 +1410,15 @@ def histogram_chart(ds: xr.Dataset):
 
     
     # --- Period selection ---
-    start_date, end_date = ask_time_period(ds)
-    ds_period = subset_time(ds, start_date, end_date)
-    period_text = format_period_text(start_date, end_date)
+    is_gui = any(p is not None for p in [var_gui, plot_config_gui])
+    
+    if is_gui:
+        ds_period = ds
+        period_text = ""
+    else:
+        start_date, end_date = ask_time_period(ds)
+        ds_period = subset_time(ds, start_date, end_date)
+        period_text = format_period_text(start_date, end_date)
 
     # -------- Figure --------
 
@@ -1356,10 +1488,12 @@ def histogram_chart(ds: xr.Dataset):
     return fig
 '''
 
-def histogram_chart(ds: xr.Dataset, col_name_gui=None, bins_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict=None, dim_selections_gui: dict=None, auto_mean_gui: bool=False):
+def histogram_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, col_name_gui=None, bins_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict=None, dim_selections_gui: dict=None, auto_mean_gui: bool=False):
     """
     Plot a histogram from an xarray Dataset (robust + user-friendly).
     """
+    if var_gui is not None and col_name_gui is None:
+        col_name_gui = var_gui
 
     # -------- Variable selection --------
     col_name = ask_variable(ds, prompt="Select variable to plot: ", var_gui=col_name_gui)
@@ -1367,8 +1501,13 @@ def histogram_chart(ds: xr.Dataset, col_name_gui=None, bins_gui=None, start_gui=
     # -------- Bins selection --------
     default_bins = 10
     
+    # Determine if we are in GUI mode
+    is_gui = any(p is not None for p in [var_gui, x_name_gui, col_name_gui, start_gui, end_gui, plot_config_gui])
+
     if bins_gui is not None:
         bins = int(bins_gui)
+    elif is_gui:
+        bins = default_bins
     else:
         while True:
             bins_input = input(f"Number of bins for histogram (leave empty for {default_bins}): ").strip()
@@ -1386,27 +1525,31 @@ def histogram_chart(ds: xr.Dataset, col_name_gui=None, bins_gui=None, start_gui=
             except ValueError:
                 print("Invalid input. Please enter a valid integer.")
 
-    # -------- Period selection WITH LOOP --------
-    while True:
-        start_date, end_date = ask_time_period(ds, start_gui=start_gui, end_gui=end_gui)
-        ds_period = subset_time(ds, start_date, end_date)
-
-        da = ds_period[col_name]
-
-        # Vérifie s’il existe AU MOINS une valeur valide
-        raw_data = np.array(da.values, dtype=float)
-        valid_data = raw_data[np.isfinite(raw_data)]
-
-        if len(valid_data) == 0:
-            print("No valid data in this period. Please choose another period.")
-            continue
-
-        break  # période valide
-
-    period_text = format_period_text(start_date, end_date)
+    # -------- Period selection --------
+    is_gui = any(p is not None for p in [var_gui, x_name_gui, col_name_gui])
+    
+    if is_gui:
+        ds_period = ds
+        period_text = ""
+    else:
+        while True:
+            start_date, end_date = ask_time_period(ds)
+            ds_period = subset_time(ds, start_date, end_date)
+            da = ds_period[col_name]
+            raw_data = np.array(da.values, dtype=float)
+            valid_data = raw_data[np.isfinite(raw_data)]
+            if len(valid_data) == 0:
+                print("No valid data in this period. Please choose another period.")
+                continue
+            break
+        period_text = format_period_text(start_date, end_date)
 
     # -------- Handle dimensions --------
-    results = handle_xarray_dimensions(da, main_dims=["time"], dim_selections_gui=dim_selections_gui, auto_mean_gui=auto_mean_gui)
+    # Use selected x_name to identify the dimension to "keep"
+    x_arr_hist = ds_period[x_name] if x_name in ds_period else ds_period.coords[x_name]
+    x_dim_hist = x_arr_hist.dims[0] if x_arr_hist.dims else None
+    
+    results = handle_xarray_dimensions(da, main_dims=[x_dim_hist] if x_dim_hist else [], dim_selections_gui=dim_selections_gui, auto_mean_gui=auto_mean_gui)
 
     # -------- Figure --------
     fig, ax = plt.subplots(figsize=(10, 6))

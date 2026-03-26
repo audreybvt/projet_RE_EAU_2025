@@ -129,14 +129,17 @@ def get_time_freq(unite_gui=None, nb_gui=None):
         
     while True:
         try:
-            print(" Time Period Configuration ")
+            print("\nTime Period Configuration")
             unite = input("Choose time unit (d: days, m: months, y: years): ").lower().strip()
             if unite not in freq_map:
                 print("Unit must be d, m, or y.")
                 continue
             
             label = {"d": "days", "m": "months", "y": "years"}[unite]
-            nb = int(input(f"Enter time step (e.g., '3' to get the mean every 3 {label}): "))
+            nb_input = input(f"Enter time step (e.g., '3' to get the mean every 3 {label}): ").strip()
+            if not nb_input:
+                continue
+            nb = int(nb_input)
             if nb <= 0: continue
             
             return f"{nb}{freq_map[unite]}", unite, nb, label
@@ -174,37 +177,32 @@ def IPS(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=
                 active_ds = active_ds.sel({k: v})
                 selections_made.append(f"{k}: {v}")
     elif extra_dims:
-        print("Categorical Filtering Phase ")
+        print("Categorical Filtering Phase")
         
         while True:
             print("Available categories:")
             for i, dim in enumerate(extra_dims):
-                # Count the number of elements in this dimension
                 count = ds.dims[dim]
                 print(f" [{i}] {dim} ({count} value(s) available)")
             
-            # Choice to filter
             while True:
-                filter_choice = input("Do you want to filter a specific category? (y/n): ").lower()
+                filter_choice = input("Do you want to filter a specific category? (y/n): ").lower().strip()
                 if filter_choice in ['y', 'n']:
                     break
                 print("Invalid input. Please enter 'y' or 'n'.")
 
             if filter_choice == 'n':
                 print("-> Calculation will proceed without filtering all dimensions.")
-                print("-> If there are multiple dimensions, the result will be multi-dimensional (e.g. one for each model,scenarios...).")
                 break
             
-            # Select Dimension
             while True:
                 try:
-                    dim_idx = int(input("Index of the dimension to filter: "))
+                    dim_idx = int(input("Index of the dimension to filter: ").strip())
                     dim_name = extra_dims[dim_idx]
                     break
                 except (ValueError, IndexError):
                     print(f"Invalid index. Please choose between 0 and {len(extra_dims)-1}.")
 
-            # Select Value
             available_values = ds[dim_name].values
             print(f"Values in '{dim_name}':")
             for j, val in enumerate(available_values):
@@ -212,13 +210,12 @@ def IPS(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=
             
             while True:
                 try:
-                    val_idx = int(input(f"Select index for {dim_name}: "))
+                    val_idx = int(input(f"Select index for {dim_name}: ").strip())
                     selected_val = available_values[val_idx]
                     break
                 except (ValueError, IndexError):
                     print(f"Invalid index.")
 
-            # Apply Filter
             active_ds = active_ds.sel({dim_name: selected_val})
             selections_made.append(f"{dim_name}: {selected_val}")
             print(f"-> SUCCESS: Data subset to {dim_name} = {selected_val}")
@@ -321,7 +318,7 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
     
     while True:
         try:
-            idx_t = int(input("Index of Date/Time coordinate: "))
+            idx_t = int(input("Index of Date/Time coordinate: ").strip())
             time_coord = coords_list[idx_t]
             break
         except (ValueError, IndexError):
@@ -338,7 +335,7 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
         
         while True:
             try:
-                idx_q = int(input("Index of Discharge variable (Q): "))
+                idx_q = int(input("Index of Discharge variable (Q): ").strip())
                 var_q = vars_list[idx_q]
                 break
             except (ValueError, IndexError):
@@ -418,7 +415,7 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         
         while True:
             try:
-                idx_t = int(input("Index of Date/Time coordinate: "))
+                idx_t = int(input("Index of Date/Time coordinate: ").strip())
                 time_coord = coords_list[idx_t]
                 break
             except (ValueError, IndexError):
@@ -435,7 +432,7 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         
         while True:
             try:
-                idx_q = int(input("Index of Discharge variable (Q): "))
+                idx_q = int(input("Index of Discharge variable (Q): ").strip())
                 var_q = vars_list[idx_q]
                 break
             except (ValueError, IndexError):
@@ -526,7 +523,7 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
         
         while True:
             try:
-                idx_t = int(input("Index of Date/Time coordinate: "))
+                idx_t = int(input("Index of Date/Time coordinate: ").strip())
                 time_coord = coords_list[idx_t]
                 break
             except (ValueError, IndexError):
@@ -543,7 +540,7 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
         
         while True:
             try:
-                idx_q = int(input("Index of Discharge variable (Q): "))
+                idx_q = int(input("Index of Discharge variable (Q): ").strip())
                 var_q = vars_list[idx_q]
                 break
             except (ValueError, IndexError):
@@ -627,7 +624,7 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         
         while True:
             try:
-                idx_t = int(input("Index of Date/Time coordinate: "))
+                idx_t = int(input("Index of Date/Time coordinate: ").strip())
                 time_coord = coords_list[idx_t]
                 break
             except (ValueError, IndexError):
@@ -644,7 +641,7 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         
         while True:
             try:
-                idx_q = int(input("Index of Discharge variable (Q): "))
+                idx_q = int(input("Index of Discharge variable (Q): ").strip())
                 var_q = vars_list[idx_q]
                 break
             except (ValueError, IndexError):
@@ -735,7 +732,7 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
         
         while True:
             try:
-                idx_t = int(input("Index of Date/Time coordinate: "))
+                idx_t = int(input("Index of Date/Time coordinate: ").strip())
                 time_coord = coords_list[idx_t]
                 break
             except (ValueError, IndexError):
@@ -752,7 +749,7 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
         
         while True:
             try:
-                idx_q = int(input("Index of Discharge variable (Q): "))
+                idx_q = int(input("Index of Discharge variable (Q): ").strip())
                 var_q = vars_list[idx_q]
                 break
             except (ValueError, IndexError):
@@ -837,7 +834,7 @@ outputs:
 
         while True:
             try:
-                idx = int(input("Index of the variable to analyze: "))
+                idx = int(input("Index of the variable to analyze: ").strip())
                 var_name = vars_list[idx]
                 break
             except (ValueError, IndexError):
@@ -850,14 +847,16 @@ outputs:
     else:
         while True:
             try:
-                seuil = float(input("Enter threshold value: "))
+                seuil = float(input("Enter threshold value: ").strip())
                 break
             except ValueError:
                 print("Threshold must be a number.")
 
         while True:
             try:
-                tol = float(input("Tolerance percentage (%) around threshold: "))
+                tol_input = input("Tolerance percentage (%) around threshold: ").strip()
+                if not tol_input: continue
+                tol = float(tol_input)
                 if tol < 0:
                     print("Tolerance must be positive.")
                     continue

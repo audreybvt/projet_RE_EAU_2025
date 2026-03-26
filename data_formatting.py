@@ -8,6 +8,10 @@ def handle_spatial_dimensions(ds, spatial_gui: dict = None):
     Gère interactivement les dimensions spatiales du dataset.
     Permet de garder toutes les données, sélectionner un point ou une zone.
     """
+    # GUI mode: if caller explicitly says to keep all data, return immediately
+    if spatial_gui is not None and spatial_gui.get('keep_all', False):
+        return ds
+
     # Identifier les dimensions spatiales potentielles
     spatial_dims = {}
     coord_names = {}
@@ -37,6 +41,10 @@ def handle_spatial_dimensions(ds, spatial_gui: dict = None):
 
     # Si aucune dimension spatiale détectée, retourner le dataset tel quel
     if not spatial_dims:
+        return ds
+
+    # If running in GUI mode with no valid spatial choice, return as-is to avoid blocking
+    if spatial_gui is not None and 'choice' not in spatial_gui:
         return ds
 
     # Afficher les dimensions spatiales disponibles
@@ -95,15 +103,23 @@ def handle_spatial_dimensions(ds, spatial_gui: dict = None):
             print("→ Conservation de toutes les données de grille")
             return ds
         elif action == 'point':
-            return select_spatial_point(ds, {'grid': spatial_dims['grid']}, {'grid': coord_names['grid']})
+            return select_spatial_point(ds, {'grid': spatial_dims['grid']}, {'grid': coord_names['grid']}, 
+                                     method_gui=spatial_gui.get('method_gui') if spatial_gui else None,
+                                     lat_gui=spatial_gui.get('lat_gui') if spatial_gui else None,
+                                     lon_gui=spatial_gui.get('lon_gui') if spatial_gui else None)
         elif action == 'region':
-            return select_spatial_region(ds, spatial_dims['grid'], coord_names['grid'])
+            return select_spatial_region(ds, spatial_dims['grid'], coord_names['grid'], 
+                                       region_gui=spatial_gui.get('region_gui') if spatial_gui else None)
     elif spatial_type == 'points':
         if action == 'keep':
             print("→ Conservation de toutes les stations/points")
             return ds
         elif action == 'select':
-            return select_spatial_point(ds, {'points': spatial_dims['points']}, {'points': coord_names['points']})
+            return select_spatial_point(ds, {'points': spatial_dims['points']}, {'points': coord_names['points']},
+                                     method_gui=spatial_gui.get('method_gui') if spatial_gui else None,
+                                     idx_gui=spatial_gui.get('idx_gui') if spatial_gui else None,
+                                     lat_gui=spatial_gui.get('lat_gui') if spatial_gui else None,
+                                     lon_gui=spatial_gui.get('lon_gui') if spatial_gui else None)
 
 def select_spatial_point(ds, spatial_dims, coord_names, method_gui: int = None, idx_gui: int = None, lat_gui: float = None, lon_gui: float = None):
     """Sélectionne un point/station spécifique"""
@@ -131,10 +147,16 @@ def select_spatial_point(ds, spatial_dims, coord_names, method_gui: int = None, 
             print("[2] Sélectionner le point le plus proche (par coordonnées)")
             print("[3] Afficher les points proches")
         
-        # Méthode de sélection (GUI bypass)
+        # Selection method detection (improved GUI bypass)
+        is_gui = any(p is not None for p in [method_gui, idx_gui, lat_gui, lon_gui])
+
         if method_gui is not None:
             method = method_gui
             print(f"Méthode fournie via GUI: {method}")
+        elif is_gui:
+            # Default method in GUI if others provided but not method: 
+            # If lat/lon provided -> 2, else 1
+            method = 2 if (lat_gui is not None and lon_gui is not None) else 1
         else:
             while True:
                 try:
@@ -152,17 +174,23 @@ def select_spatial_point(ds, spatial_dims, coord_names, method_gui: int = None, 
             if len(ds.coords[coord_name].values) > 10:
                 print(f"... et {len(ds.coords[coord_name].values) - 10} autres")
 
-            while True:
-                try:
-                    idx = int(input(f"Index (0-{len(ds.coords[coord_name].values)-1}): ").strip())
-                    if 0 <= idx < len(ds.coords[coord_name].values):
-                        selected_point = ds.coords[coord_name].values[idx]
-                        print(f"→ Sélection: {selected_point}")
-                        return ds.sel({dim_name: selected_point})
-                    else:
-                        print("Index hors limites.")
-                except ValueError:
-                    print("Veuillez entrer un nombre.")
+            if idx_gui is not None:
+                idx = idx_gui
+                print(f"Index fourni via GUI: {idx}")
+            else:
+                while True:
+                    try:
+                        idx = int(input(f"Index (0-{len(ds.coords[coord_name].values)-1}): ").strip())
+                        if 0 <= idx < len(ds.coords[coord_name].values):
+                            break
+                        else:
+                            print("Index hors limites.")
+                    except ValueError:
+                        print("Veuillez entrer un nombre.")
+            
+            selected_point = ds.coords[coord_name].values[idx]
+            print(f"→ Sélection: {selected_point}")
+            return ds.sel({dim_name: selected_point})
         
         # Méthode 2: Point le plus proche
         elif method == 2 and spatial_coord_vars:
@@ -170,8 +198,13 @@ def select_spatial_point(ds, spatial_dims, coord_names, method_gui: int = None, 
             lon_var = spatial_coord_vars['lon']
             
             try:
-                lat_val = float(input("Latitude: ").strip())
-                lon_val = float(input("Longitude: ").strip())
+                if lat_gui is not None and lon_gui is not None:
+                    lat_val = lat_gui
+                    lon_val = lon_gui
+                    print(f"Coordonnées fournies via GUI: {lat_val}, {lon_val}")
+                else:
+                    lat_val = float(input("Latitude: ").strip())
+                    lon_val = float(input("Longitude: ").strip())
                 
                 lats = ds[lat_var].values
                 lons = ds[lon_var].values
@@ -194,14 +227,14 @@ def select_spatial_point(ds, spatial_dims, coord_names, method_gui: int = None, 
             lon_var = spatial_coord_vars['lon']
             
             try:
-                if method == 3:
-                    if lat_gui is not None and lon_gui is not None:
-                        lat_val = lat_gui
-                        lon_val = lon_gui
-                        print(f"Latitude/Longitude de référence fournis via GUI: {lat_val}, {lon_val}")
-                    else:
-                        lat_val = float(input("Latitude de référence: ").strip())
-                        lon_val = float(input("Longitude de référence: ").strip())                
+                if lat_gui is not None and lon_gui is not None:
+                    lat_val = lat_gui
+                    lon_val = lon_gui
+                    print(f"Latitude/Longitude de référence fournies via GUI: {lat_val}, {lon_val}")
+                else:
+                    lat_val = float(input("Latitude de référence: ").strip())
+                    lon_val = float(input("Longitude de référence: ").strip())                
+                
                 lats = ds[lat_var].values
                 lons = ds[lon_var].values
                 distances = ((lats - lat_val)**2 + (lons - lon_val)**2)**0.5
@@ -216,11 +249,23 @@ def select_spatial_point(ds, spatial_dims, coord_names, method_gui: int = None, 
                     dist = distances[idx]
                     print(f"[{i}] {point_name} - lat={point_lat:.4f}, lon={point_lon:.4f} (dist={dist:.4f}°)")
                 
-                choice = int(input("Sélectionner (0-4): ").strip())
-                if 0 <= choice < len(closest_indices):
-                    idx = closest_indices[choice]
-                    selected_point = ds.coords[coord_name].values[idx]
-                    return ds.sel({dim_name: selected_point})
+                if idx_gui is not None:
+                    choice = idx_gui
+                    print(f"Choix fourni via GUI: {choice}")
+                elif is_gui:
+                    # In GUI mode, if method 3 was picked but no choice provided,
+                    # we default to the closest point (0) to avoid blocking.
+                    choice = 0
+                else:
+                    while True:
+                        try:
+                            choice = int(input("Sélectionner (0-4): ").strip())
+                            if 0 <= choice < 5: break
+                        except ValueError: print("Entrer un nombre.")
+                
+                idx = closest_indices[choice]
+                selected_point = ds.coords[coord_name].values[idx]
+                return ds.sel({dim_name: selected_point})
                         
             except (ValueError, IndexError):
                 print("Entrée invalide.")
@@ -230,6 +275,8 @@ def select_spatial_point(ds, spatial_dims, coord_names, method_gui: int = None, 
     elif 'grid' in spatial_dims:
         lat_dim, lon_dim = spatial_dims['grid']
         lat_coord, lon_coord = coord_names['grid']
+        
+        is_gui = any(p is not None for p in [method_gui, lat_gui, lon_gui])
 
         lat_min, lat_max = float(ds.coords[lat_coord].min()), float(ds.coords[lat_coord].max())
         lon_min, lon_max = float(ds.coords[lon_coord].min()), float(ds.coords[lon_coord].max())
@@ -239,8 +286,17 @@ def select_spatial_point(ds, spatial_dims, coord_names, method_gui: int = None, 
         print(f"Longitude : de {lon_min:.2f} à {lon_max:.2f}")
 
         try:
-            lat_val = float(input("Latitude souhaitée: ").strip())
-            lon_val = float(input("Longitude souhaitée: ").strip())
+            if lat_gui is not None and lon_gui is not None:
+                lat_val = lat_gui
+                lon_val = lon_gui
+                print(f"Coordonnées fournies via GUI: {lat_val}, {lon_val}")
+            elif is_gui:
+                # In GUI mode but no coord provided -> return unchanged or fail gracefully
+                print("GUI mode: no specific coordinates provided for grid point selection. Keeping all.")
+                return ds
+            else:
+                lat_val = float(input("Latitude souhaitée: ").strip())
+                lon_val = float(input("Longitude souhaitée: ").strip())
 
             # Sélection du point le plus proche
             selected = ds.sel({lat_coord: lat_val, lon_coord: lon_val}, method='nearest')
@@ -257,6 +313,8 @@ def select_spatial_region(ds, grid_dims, coord_names, region_gui: dict = None):
 
     lat_dim, lon_dim = grid_dims
     lat_coord, lon_coord = coord_names
+    
+    is_gui = (region_gui is not None)
 
     lat_min_ds, lat_max_ds = float(ds.coords[lat_coord].min()), float(ds.coords[lat_coord].max())
     lon_min_ds, lon_max_ds = float(ds.coords[lon_coord].min()), float(ds.coords[lon_coord].max())
@@ -269,7 +327,7 @@ def select_spatial_region(ds, grid_dims, coord_names, region_gui: dict = None):
         print("\nDéfinissez la région (laisser vide pour garder les limites):")
 
         # Région GUI bypass
-        if region_gui is not None:
+        if is_gui:
             lat_min = region_gui.get('lat_min', lat_min_ds)
             lat_max = region_gui.get('lat_max', lat_max_ds)
             lon_min = region_gui.get('lon_min', lon_min_ds)
@@ -302,7 +360,7 @@ def select_spatial_region(ds, grid_dims, coord_names, region_gui: dict = None):
         print("Coordonnées invalides. Conservation de toutes les données.")
         return ds
 
-def load_multiple_datasets(paths):
+def load_multiple_datasets(paths, spatial_gui: dict = None):
     """
     Charge plusieurs fichiers NetCDF et ajoute les dimensions
     model et scenario avant de les combiner.
@@ -336,7 +394,7 @@ def load_multiple_datasets(paths):
             ))
 
         # Gestion interactive des dimensions spatiales
-        ds = handle_spatial_dimensions(ds)
+        ds = handle_spatial_dimensions(ds, spatial_gui=spatial_gui)
 
         #Create attributes for model and scenario
         # récupération des métadonnées si elles existent
