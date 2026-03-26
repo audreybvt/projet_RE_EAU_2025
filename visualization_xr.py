@@ -752,32 +752,7 @@ def line_chart(ds: xr.Dataset):
                                 da_sel.isel(model=i).values,
                                 label=f"{label} (model {i+1})",
                                 alpha=0.7)
-            
-            '''
-            for sel, y_vals in results:
-                # y_vals now has shape (n_models, n_time_points)
-                # Calculate envelope statistics across models (axis=0)
-                y_min = np.nanmin(y_vals, axis=0)
-                y_max = np.nanmax(y_vals, axis=0)
-
-                # Create label
-                label = y_name
-                if sel:
-                    label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
-
-                # Plot envelope (min-max range)
-                ax.fill_between(x_vals, y_min, y_max, alpha=0.3, label=f"{label} (min-max)")
-
-                # Plot based on envelope type choice
-                if envelope_type == "average":
-                    y_mean = np.nanmean(y_vals, axis=0)
-                    ax.plot(x_vals, y_mean, label=f"{label} (mean)", linewidth=2)
-                else:  # individual
-                    # Plot individual model lines
-                    for i in range(y_vals.shape[0]):
-                        model_label = f"{label} (model {i+1})"
-                        ax.plot(x_vals, y_vals[i], label=model_label,linestyle='-', marker=None, alpha=0.7)
-            '''
+        
         else:
             # Normal plotting without envelope
             results = handle_xarray_dimensions(
@@ -794,7 +769,7 @@ def line_chart(ds: xr.Dataset):
                         f"{k}={v}" for k, v in sel.items()
                     )
 
-            ax.plot(x_vals, y_vals, label=label, linestyle='-', marker=None)
+                ax.plot(x_vals, y_vals, label=label, linestyle='-', marker=None)
 
     # Plot individual line
     ax.set_xlabel(x_label)
@@ -802,7 +777,7 @@ def line_chart(ds: xr.Dataset):
     ax.set_title(title)
 
     ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.2))
 
     return fig
 
