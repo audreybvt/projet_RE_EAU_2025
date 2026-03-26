@@ -68,24 +68,159 @@ PROJET_RE_EAU_2025/
 
 ## Supported Input Data
 
-### NetCDF
+## NetCDF Input Data Specification
 
-* Supports one or multiple `.nc` files
-* Ideal for climate, hydrology, or environmental datasets
-* Multidimensional data supported (time, space, model, etc.)
-* Loaded as `xarray.Dataset`
+The tool supports one or multiple NetCDF files (`.nc`) and converts them into a single multidimensional `xarray.Dataset`.
 
-Example dimensions:
-
-* `time`
-* `lat`, `lon`
-* `model`
-* `station`
-* any other accurate dimensions
+NetCDF is the recommended format for large hydrological or climate datasets.
 
 ---
 
-### CSV
+### Multiple Files Support
+
+Multiple NetCDF files can be provided simultaneously.
+
+Each file is:
+
+1. Opened individually
+2. Processed
+3. Augmented with model metadata
+4. Combined into a single dataset
+
+Combination is performed using `xarray.combine_by_coords`.
+
+---
+
+### Time Handling
+
+Time coordinates are decoded manually.
+
+If a `time` variable is present, it will be converted to datetime using its CF metadata:
+
+- `units`
+- `calendar`
+
+If no valid time coordinate exists, results may be incorrect or unusable.
+
+---
+
+### Spatial Dimension Handling (Interactive)
+
+The program automatically detects spatial dimensions and asks how to handle them.
+
+Two options are available:
+
+1. **Keep all spatial data**
+2. **Select a single entity (point/station/grid cell)**
+
+---
+
+#### Recognized Point Dimensions
+
+The following dimension names are treated as discrete entities:
+
+- piezometre  
+- station, stations  
+- site, sites  
+- location, locations  
+
+---
+
+#### Recognized Grid Dimensions
+
+If no point dimension is found, grid coordinates are searched:
+
+- latitude, longitude  
+- lat, lon  
+- x, y  
+
+---
+If a spatial dimension is detected:
+
+- The program displays available entities
+- The user may select one entity by index
+- The dataset is subset accordingly
+
+If no spatial dimension is detected, the dataset is used as-is.
+
+---
+
+### Required Metadata for Model Identification
+
+Each NetCDF file must contain specific global attributes describing the model chain.
+
+Recognized attributes:
+
+- `experiment_id` → scenario  
+- `driving_model_id` → GCM  
+- `model_id` → RCM  
+- `bc_method_id` → bias correction method  
+- `hy_model_id` → hydrological model  
+
+These attributes are used to construct new dimensions.
+
+If any of these attributes are missing, the file will be rejected.
+
+---
+
+### Automatic Creation of Dimensions
+
+Two new dimensions are automatically added to each dataset based on NetCDF metadata.
+
+---
+
+#### Scenario Dimension
+
+The **scenario** dimension is derived from the global attribute:
+
+```text
+experiment_id
+```
+scenario = "RCP85"
+
+#### Model Dimension
+
+A single combined model chain identifier is created from several metadata attributes:
+
+driving_model_id (GCM)
+model_id (RCM)
+bc_method_id (bias correction method)
+hy_model_id (hydrological model)
+
+These components are concatenated into one dimension:
+
+model = "GCM-RCM-BC-HY"
+
+Example:
+IPSL-CM5A-MR-RCA4-QM-GR4J
+
+---
+
+### Dataset Combination
+
+After preprocessing, all datasets are merged into one multidimensional dataset.
+
+Combination features:
+
+- Coordinate-based merging
+- Outer join (keeps all available data)
+- Attribute conflicts are dropped
+
+---
+
+### Not Supported
+
+The following cases may cause errors or incorrect results:
+
+- Missing required metadata attributes  
+- Inconsistent coordinate definitions between files  
+- Non-CF-compliant time variables  
+- Files without meaningful dimensions  
+- Extremely large datasets exceeding available disk space  
+
+---
+
+### CSV Input Data Specification
 
 - Single file only  
 - Must be a structured table (rows = observations, columns = variables)  
