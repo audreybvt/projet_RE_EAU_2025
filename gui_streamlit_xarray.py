@@ -627,7 +627,7 @@ with tab_ind:
                     if match:
                         dict_filters[dim] = match[0]
 
-    dict_filters_gui = dict_filters if dict_filters else None
+    dict_filters_gui = dict_filters
 
     # ── Paramètres spécifiques à chaque indicateur ─────────────────────────
     st.markdown("**Paramètres de l'indicateur**")
