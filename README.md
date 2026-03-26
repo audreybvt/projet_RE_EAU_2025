@@ -1,26 +1,25 @@
-# PROJET_RE_EAU_2025
+# PROJECT CENTRALESUPELEC-BRGM 2025-2026
 
-## 🌊 Hydrological Data Analysis and Visualization Tool
+## Hydrological Visualization Tool
 
-This project provides a command-line Python tool to analyze, process, and visualize hydrological datasets. It supports NetCDF and CSV inputs, computes indicators and statistics, and generates publication-ready plots.
+This project provides a command-line Python tool to analyze, process, and visualize hydrological datasets. It supports NetCDF and CSV inputs, computes indicators and statistics, and generates plots.
 
 The workflow is interactive: users select indicators, statistical operations, and visualization types step by step.
 
 ---
 
-## ✨ Features
+## Features
 
-* 📂 Supports **NetCDF (.nc)** and **CSV** files
-* 📊 Interactive data analysis pipeline
-* 🧮 Hydrological indicators computation
-* 📉 Statistical processing (mean, percentile, rolling, etc.)
-* 📈 Multiple visualization types
-* 🖼️ Automatic export of figures as PNG
-* 🧱 Built on **xarray**, ideal for multidimensional environmental data
+* Supports **NetCDF (.nc)** and **CSV** files
+* Interactive data analysis pipeline
+* Hydrological indicators computation
+* Statistical processing (mean, percentile, etc.)
+* Multiple visualization types
+* Built on **xarray**, ideal for multidimensional data
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 PROJET_RE_EAU_2025/
@@ -32,8 +31,8 @@ PROJET_RE_EAU_2025/
 ├── old/                     # Deprecated code
 │
 ├── data_formatting.py       # Data loading and formatting
-├── indicators_xr.py         # Hydrological indicators
-├── statistics_xr.py         # Statistical functions
+├── indicators_xr.py         # Compute hydrological indicators
+├── statistics_xr.py         # Compute statistical functions
 ├── visualization_xr.py      # Plotting functions
 ├── main_full_xarray.py      # Main CLI script
 │
@@ -43,9 +42,9 @@ PROJET_RE_EAU_2025/
 
 ---
 
-## 📥 Supported Input Data
+## Supported Input Data
 
-### ✔ NetCDF (Recommended)
+### NetCDF (Recommended)
 
 * Supports one or multiple `.nc` files
 * Ideal for climate, hydrology, or environmental datasets
@@ -62,7 +61,7 @@ Example dimensions:
 
 ---
 
-### ✔ CSV
+### CSV
 
 * Single file only
 * Must be convertible to structured tabular data
@@ -75,9 +74,9 @@ Typical structure:
 
 ---
 
-## 📤 Outputs
+## Outputs
 
-### 🖼️ Figures
+### Figures
 
 * Saved automatically in the `output/` directory
 * Format: **PNG**
@@ -93,7 +92,7 @@ Figures are also displayed interactively.
 
 ---
 
-## 📊 Available Visualizations
+## 📊Available Visualizations
 
 * Bar chart
 * Scatter plot
@@ -103,7 +102,7 @@ Figures are also displayed interactively.
 
 ---
 
-## 🧮 Available Statistical Operations
+## Available Statistical Operations
 
 * Flexible mean
 * Flexible maximum
@@ -114,7 +113,7 @@ Figures are also displayed interactively.
 
 ---
 
-## 🌊 Hydrological Indicators
+## Available Hydrological Indicators
 
 * IPS
 * Qmean
@@ -128,7 +127,7 @@ These indicators are computed directly on the dataset and can be chained with st
 
 ---
 
-## 📚 Required Libraries
+## 📚Required Libraries
 
 The project relies on scientific Python libraries commonly used for environmental data analysis.
 
@@ -146,37 +145,9 @@ The project relies on scientific Python libraries commonly used for environmenta
 
 ---
 
-### 📦 Installation with pip
+### Installation with pip
 
 Install all required packages:
-
-```bash
-pip install pandas xarray matplotlib netcdf4
-```
-
----
-
-### 🐍 Using a virtual environment (recommended)
-
-Create and activate a virtual environment:
-
-```bash
-python -m venv venv
-```
-
-#### Linux / macOS
-
-```bash
-source venv/bin/activate
-```
-
-#### Windows
-
-```bash
-venv\Scripts\activate
-```
-
-Then install dependencies:
 
 ```bash
 pip install pandas xarray matplotlib netcdf4
@@ -203,7 +174,7 @@ pip install -r requirements.txt
 
 ---
 
-## ▶️ How to Run
+## How to Run
 
 ### 1. Run the main script
 
@@ -226,7 +197,7 @@ You will be asked to:
 
 ---
 
-## 🔄 Workflow Overview
+## Workflow Overview
 
 ```
 Load data → Compute indicators → Apply statistics → Visualize → Save output
@@ -236,7 +207,7 @@ The process can be repeated multiple times on the same dataset.
 
 ---
 
-## ⚙️ Technical Stack
+## Technical Stack
 
 * Python 3.x
 * pandas
@@ -246,30 +217,13 @@ The process can be repeated multiple times on the same dataset.
 
 ---
 
-## 🎯 Target Use Cases
-
-* Hydrological analysis
-* Climate data exploration
-* Environmental research
-* Teaching and data analysis exercises
-* Multimodel dataset comparison
-
----
-
-## ⚠️ Notes
+## Notes
 
 * Multiple files are supported **only for NetCDF**
-* Large datasets may require significant memory
 * Input data must be properly formatted
 
 ---
 
-## 📄 License
-
-Specify your license here (MIT, GPL, etc.)
-
----
-
-## 👩‍💻 Author
+## Authors
 
 Project developed as part of the RE_EAU_2025 project.
