@@ -122,12 +122,12 @@ def get_time_freq():
             print("Please enter a valid integer.")
 
 
-# ---------------- IPS ----------------
-#   Soil Water Balance Index
+# ---------------- Soil Water Balance Index ----------------
 
-def IPS(ds):
+def soil_water_balance_index(ds):
     """
-    Return the Index of Soil Precipitation (IPS) based on the water balance.
+    Return the Soil Water Balance Index with the formula :
+    Index = P - ETR - ΔR, where P is precipitation, ETR is actual evapotranspiration, and ΔR is the change in storage.
 
     Args:
         ds: Input xarray Dataset with P, ETR, and ΔR variables.
@@ -211,15 +211,15 @@ def IPS(ds):
         except (ValueError, IndexError):
             print("Invalid variable indices. Try again.")
 
-    # IPS Calculation: IPS = P - ETR - ΔR
-    new_var_name = "IPS"
+    # Index Calculation: Index = P - ETR - ΔR
+    new_var_name = "Soil_Water_Balance_Index"
     try:
         # Vectorized calculation across all active dimensions
-        ips_result = active_ds[var_p] - active_ds[var_etr] - active_ds[var_dr]
+        index_result = active_ds[var_p] - active_ds[var_etr] - active_ds[var_dr]
         
         # Save to main dataset
-        ds[new_var_name] = ips_result
-        ds[new_var_name].attrs['description'] = f"IPS ({var_p} - {var_etr} - {var_dr})"
+        ds[new_var_name] = index_result
+        ds[new_var_name].attrs['description'] = f"Soil Water Balance Index ({var_p} - {var_etr} - {var_dr})"
         
     except Exception as e:
         print(f"Calculation Error: {e}")
@@ -227,7 +227,7 @@ def IPS(ds):
 
     # Summary of results
     
-    print("IPS calculation completed")
+    print("Soil Water Balance Index calculation completed")
     
     # Selection Log
     if selections_made:
@@ -258,6 +258,19 @@ def IPS(ds):
     # For example, if multiple models exist 
     # and the operator chooses to view the IPS over time at 'Piezometer 0', 
     # the values will be averaged across all models to produce a single time series.
+
+
+# ---------------- Standardised Piezometric Level Indicator ----------------
+
+def SPLI(ds):
+    """
+    Return the Standardised Piezometric Level Indicator (SPLI) for a chosen period.
+
+    Args:
+        ds: Input xarray Dataset with piezometric level variable.
+    """
+    print("Standardised Piezometric Level Indicator (SPLI) is not yet implemented.")
+    return ds
 
 
 # ---------------- Qmean/QA ----------------
