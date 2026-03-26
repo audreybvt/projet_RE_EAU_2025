@@ -182,16 +182,6 @@ The process can be repeated multiple times on the same dataset.
 
 ---
 
-## Technical Stack
-
-* Python 3.x
-* pandas
-* xarray
-* matplotlib
-* pathlib
-
----
-
 ## Notes
 
 * Multiple files are supported **only for NetCDF**
