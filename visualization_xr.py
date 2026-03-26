@@ -750,6 +750,8 @@ def line_chart(ds: xr.Dataset):
                         f"{k}={v}" for k, v in sel.items()
                     )
 
+            ax.plot(x_vals, y_vals, label=label, marker='o')
+
     # Plot individual line
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -1186,34 +1188,13 @@ def radar_chart(ds: xr.Dataset):
 
 # ---------------- Histogram Chart ----------------
 
-'''
 def histogram_chart(ds: xr.Dataset):
     """
     Plot a histogram from an xarray Dataset.
     """
     col_name = ask_variable(ds, prompt="Select variable to plot: ")
+    bins = int(input("Number of bins for histogram: ").strip())
 
-
-    default_bins = 10
-
-    while True:
-        bins_input = input(f"Number of bins for histogram (leave empty for {default_bins}): ").strip()
-
-        if bins_input == "":
-            bins = default_bins
-            break
-
-        try:
-            bins = int(bins_input)
-            if bins <= 0:
-                print("Number of bins must be positive.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a valid integer.")
-
-
-    
     # --- Period selection ---
     start_date, end_date = ask_time_period(ds)
     ds_period = subset_time(ds, start_date, end_date)
@@ -1231,9 +1212,6 @@ def histogram_chart(ds: xr.Dataset):
 
     y_min = 0
     y_max = counts.max()
-
-    if y_max == 0:
-        y_max = 1  # éviter axe plat
 
     labels = configure_plot(
             x_default=col_name,
@@ -1253,7 +1231,7 @@ def histogram_chart(ds: xr.Dataset):
 
     # -------- Loop over selected variable --------
 
-    da = ds_period[col_name]
+    da = ds[col_name]
 
     # Handle extra dimensions
     results = handle_xarray_dimensions(da, main_dims=["time"])
@@ -1284,128 +1262,4 @@ def histogram_chart(ds: xr.Dataset):
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.grid(True, linestyle='--', alpha=0.5)
-    return fig
-'''
-
-def histogram_chart(ds: xr.Dataset):
-    """
-    Plot a histogram from an xarray Dataset (robust + user-friendly).
-    """
-
-    # -------- Variable selection --------
-    col_name = ask_variable(ds, prompt="Select variable to plot: ")
-
-    # -------- Bins selection --------
-    default_bins = 10
-
-    while True:
-        bins_input = input(f"Number of bins for histogram (leave empty for {default_bins}): ").strip()
-
-        if bins_input == "":
-            bins = default_bins
-            break
-
-        try:
-            bins = int(bins_input)
-            if bins <= 0:
-                print("Number of bins must be positive.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a valid integer.")
-
-    # -------- Period selection WITH LOOP --------
-    while True:
-        start_date, end_date = ask_time_period(ds)
-        ds_period = subset_time(ds, start_date, end_date)
-
-        da = ds_period[col_name]
-
-        # Vérifie s’il existe AU MOINS une valeur valide
-        raw_data = np.array(da.values, dtype=float)
-        valid_data = raw_data[np.isfinite(raw_data)]
-
-        if len(valid_data) == 0:
-            print("No valid data in this period. Please choose another period.")
-            continue
-
-        break  # période valide
-
-    period_text = format_period_text(start_date, end_date)
-
-    # -------- Handle dimensions --------
-    results = handle_xarray_dimensions(da, main_dims=["time"])
-
-    # -------- Figure --------
-    fig, ax = plt.subplots(figsize=(10, 6))
-    colors = cm.viridis(np.linspace(0, 1, len(results)))
-
-    all_counts = []
-
-    # -------- Plot loop --------
-    for i, (sel, data) in enumerate(results):
-
-        # Nettoyage données
-        data = np.array(data, dtype=float)
-        data = data[np.isfinite(data)]
-
-        if len(data) == 0:
-            print(f"No valid data for selection {sel}, skipping.")
-            continue
-
-        # Histogram (pour y max)
-        counts, bin_edges = np.histogram(data, bins=bins)
-        all_counts.append(counts)
-
-        # Label
-        label = col_name
-        if sel:
-            label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
-
-        # Plot
-        ax.hist(
-            data,
-            bins=bins,
-            label=label,
-            linewidth=1,
-            color=colors[i],
-            edgecolor='black'
-        )
-
-    # -------- Sécurité --------
-    if len(all_counts) == 0:
-        print("No valid data after dimension filtering.")
-        return fig
-
-    # -------- Y limits --------
-    y_max = max(c.max() for c in all_counts)
-    if y_max == 0:
-        y_max = 1
-
-    # -------- Labels & config --------
-    labels = configure_plot(
-        x_default=col_name,
-        y_defaults="Frequency",
-        period_text=period_text,
-        x_limits=None,
-        y_limits=[0, y_max],
-        multiple_y=False
-    )
-
-    ax.set_title(labels["title"] or f"Histogram of {col_name}{period_text}")
-    ax.set_xlabel(labels["x_label"])
-    ax.set_ylabel(labels["y_label"])
-
-    ax.set_xticks(bin_edges)
-    # ax.set_xticks(bin_edges[::2])  # 1 tick sur 2
-
-    if labels["y_limits"] is not None:
-        ax.set_ylim(labels["y_limits"])
-
-
-    ax.grid(True, axis='x', linestyle='--', alpha=0.5)
-
-    if len(all_counts) > 1:
-        ax.legend()
-
     return fig

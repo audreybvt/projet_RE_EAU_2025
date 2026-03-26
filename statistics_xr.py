@@ -66,7 +66,7 @@ def ask_date(ds):
 
 #function to apply to check if a time dimension is selected and allow user to select a specific period for the calculation.
 # This function is called in the mean, max, min and percentile functions to avoid code repetition.
-
+'''
 def apply_time_selection(ds, active_da, dims_to_reduce):
     """
     Detects a time-related dimension, prompts the user for a period,
@@ -111,8 +111,57 @@ def apply_time_selection(ds, active_da, dims_to_reduce):
         break
 
     return active_da, period_label
+'''
+def apply_time_selection(ds, active_da, dims_to_reduce):
+    """
+    Detects a time-related dimension, prompts the user for a period,
+    and slices the DataArray accordingly.
+    """
 
+    period_label = ""
 
+    # Detect time dimension
+    time_dims = [d for d in dims_to_reduce if "time" in d]
+
+    # Si aucune dimension temporelle → rien à faire
+    if not time_dims:
+        return active_da, ""
+
+    t_dim = time_dims[0]
+
+    print(f"\n--- Period configuration (detected dimension: {t_dim}) ---")
+
+    while True:
+
+        start_date, end_date = ask_date(ds)
+
+        # Apply slicing
+        if start_date or end_date:
+            temp_da = active_da.sel({t_dim: slice(start_date, end_date)})
+        else:
+            temp_da = active_da
+
+        # Sécurité 1 : dimension toujours présente ?
+        if t_dim not in temp_da.dims:
+            print("Time dimension disappeared after operation. Please try again.")
+            continue
+
+        # Sécurité 2 : données non vides ?
+        if temp_da.sizes.get(t_dim, 0) == 0:
+            print("No data available in this period. Please try again.")
+            continue
+
+        # OK
+        active_da = temp_da
+
+        if start_date or end_date:
+            s = start_date.date() if start_date else "start"
+            e = end_date.date() if end_date else "end"
+            period_label = f"_{s}_{e}"
+
+        break
+
+    return active_da, period_label
 
 
 ### Mean value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
@@ -194,8 +243,6 @@ def mean_value_flexible(ds):
 
 
 
-
-
 ### Maximum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
 
 def maximum_value_flexible(ds):
@@ -266,19 +313,6 @@ def maximum_value_flexible(ds):
         print(f"Result shape: {max_val.shape}")
 
     return ds
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
