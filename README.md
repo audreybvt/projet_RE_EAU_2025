@@ -1,4 +1,31 @@
 # PROJECT CENTRALESUPELEC-BRGM 2025-2026
+## Table of Contents
+
+- [Hydrological Visualization Tool](#hydrological-visualization-tool)
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Supported Input Data](#supported-input-data)
+  - [NetCDF](#netcdf)
+  - [CSV](#csv)
+    - [Date Column (REQUIRED)](#date-column-required)
+    - [Optional Dimension Columns](#optional-dimension-columns)
+    - [Long Format for Multimodel Data](#long-format-for-multimodel-data)
+    - [Variable Columns](#variable-columns)
+    - [Not Supported](#not-supported)
+    - [Example Minimal Valid CSV](#example-minimal-valid-csv)
+    - [Example Multidimensional CSV](#example-multidimensional-csv)
+- [Outputs](#outputs)
+  - [Figures](#figures)
+- [Available Visualizations](#available-visualizations)
+- [Available Statistical Operations](#available-statistical-operations)
+- [Available Hydrological Indicators](#available-hydrological-indicators)
+- [Required Libraries](#required-libraries)
+  - [Core dependencies](#core-dependencies)
+  - [Installation with pip and requirements.txt](#installation-with-pip-and-requirementstxt)
+- [How to Run](#how-to-run)
+- [Workflow Overview](#workflow-overview)
+- [Notes](#notes)
+- [Authors](#authors)
 
 ## Hydrological Visualization Tool
 
