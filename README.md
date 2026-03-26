@@ -45,6 +45,47 @@ This project provides a command-line Python tool to analyze, process, and visual
 The workflow is interactive: users select indicators, statistical operations, and visualization types step by step.
 
 ---
+## For the Impatient Reader
+
+If you just want to quickly test the tool without reading all the details, here is what you need:
+
+**Main Requirements:**  
+- Python 3.8+  
+- pandas  
+- xarray  
+- matplotlib  
+- netCDF4  
+
+**Supported Input Data:**  
+- **NetCDF (.nc)** files – recommended for large datasets  
+- **CSV files (long format only)** – must be structured as a table, separated by semicolons (`;`)  
+
+**CSV Requirements:**  
+- Must have at least one **date/time column**. Accepted names (must match exactly, case-sensitive):  
+  - `Date`, `date`, `DATE`  
+  - `Time`, `time`, `TIME`  
+  - `Dates`, `dates`, `DATES`  
+  - `Times`, `times`, `TIMES`  
+- Optional additional dimension columns (must be spelled exactly as below, case-sensitive):  
+  - `model`, `scenario`  
+  - `station`, `stations`  
+  - `site`, `sites`  
+  - `piezometre`  
+  - `location`, `locations`  
+  - `latitude`, `longitude`  
+  - `lat`, `lon`  
+  - `x`, `y`  
+- Remaining columns are interpreted as numeric variables  
+- Long format only: each row represents one observation uniquely identified by time + dimensions  
+- Wide-format tables or multi-level headers are **not supported**  
+
+**Quick Start Commands:**  
+```bash
+pip install -r requirements.txt
+python main_full_xarray.py
+```
+
+---
 
 ## Features
 
