@@ -8,7 +8,7 @@ import os
 import matplotlib.dates as mdates
 import itertools
 
-# ---------------- Helper Functions ----------------
+# ---------------- Helping Functions ----------------
 def subset_time(ds, start, end):
 
     if start is not None:
@@ -752,32 +752,7 @@ def line_chart(ds: xr.Dataset):
                                 da_sel.isel(model=i).values,
                                 label=f"{label} (model {i+1})",
                                 alpha=0.7)
-            
-            '''
-            for sel, y_vals in results:
-                # y_vals now has shape (n_models, n_time_points)
-                # Calculate envelope statistics across models (axis=0)
-                y_min = np.nanmin(y_vals, axis=0)
-                y_max = np.nanmax(y_vals, axis=0)
-
-                # Create label
-                label = y_name
-                if sel:
-                    label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
-
-                # Plot envelope (min-max range)
-                ax.fill_between(x_vals, y_min, y_max, alpha=0.3, label=f"{label} (min-max)")
-
-                # Plot based on envelope type choice
-                if envelope_type == "average":
-                    y_mean = np.nanmean(y_vals, axis=0)
-                    ax.plot(x_vals, y_mean, label=f"{label} (mean)", linewidth=2)
-                else:  # individual
-                    # Plot individual model lines
-                    for i in range(y_vals.shape[0]):
-                        model_label = f"{label} (model {i+1})"
-                        ax.plot(x_vals, y_vals[i], label=model_label,linestyle='-', marker=None, alpha=0.7)
-            '''
+        
         else:
             # Normal plotting without envelope
             results = handle_xarray_dimensions(
@@ -794,7 +769,7 @@ def line_chart(ds: xr.Dataset):
                         f"{k}={v}" for k, v in sel.items()
                     )
 
-            ax.plot(x_vals, y_vals, label=label, linestyle='-', marker=None)
+                ax.plot(x_vals, y_vals, label=label, linestyle='-', marker=None)
 
     # Plot individual line
     ax.set_xlabel(x_label)
@@ -802,7 +777,7 @@ def line_chart(ds: xr.Dataset):
     ax.set_title(title)
 
     ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.2))
 
     return fig
 
@@ -932,157 +907,7 @@ def scatter_chart(ds: xr.Dataset):
 
 
 # ---------------- Radar Chart ----------------
-'''
-def radar_chart(ds: xr.Dataset):
-    """
-    Create a radar chart from an xarray Dataset.
-    
-    Interactive function that allows selection of:
-    - Category variable (for radar axes)
-    - Value variables (for the radar data)
-    - Time period
-    - Custom units, title, and legend
-    """
-    
-    if not isinstance(ds, xr.Dataset):
-        raise TypeError("Expected: xarray.Dataset")
-    
-    # -------- Variable selection --------
-    
-    cat_name = ask_variable(ds, prompt="Variable for category axis (radar axes): ")
-    
-    value_names = ask_variable(
-        ds,
-        multiple=True,
-        prompt="Variables for radar values (comma-separated): "
-    )
-    
-    # -------- Period selection --------
-    
-    start_date, end_date = ask_time_period(ds)
-    ds_period = subset_time(ds, start_date, end_date)
-    
-    period_text = format_period_text(start_date, end_date)
-    
-    # -------- Get category data --------
-    
-    cat_arr = ds_period[cat_name] if cat_name in ds_period else ds_period.coords[cat_name]
-    
-    if cat_arr.ndim != 1:
-        raise ValueError("Category variable must be 1D")
-    
-    cat_values = cat_arr.values
-    categories = [str(v) for v in cat_values if pd.notna(v)]
-    
-    N = len(categories)
-    if N < 3:
-        raise ValueError("A radar chart requires at least 3 categories")
-    
-    # -------- Units for radar values --------
-    
-    units_input = input("Units for radar variables (e.g.: kW, %, ms, leave empty if none): ").strip()
-    
-    if units_input != "":
-        units_text = f" ({units_input})"
-    else:
-        units_text = ""
-    
-    # -------- Title and legend configuration --------
-    
-    custom_title = input("Chart title (leave empty for automatic): ").strip()
-    
-    if custom_title == "":
-        custom_title = f"Radar chart: {', '.join(value_names)}{units_text}{period_text}"
-    else:
-        custom_title = f"{custom_title}{units_text}"
-    
-    legend_input = input("Legend names (comma-separated, leave empty for defaults): ").strip()
-    
-    if legend_input == "":
-        legend_labels = value_names
-    else:
-        legend_labels = [name.strip() for name in legend_input.split(",")]
-        if len(legend_labels) != len(value_names):
-            raise ValueError("Number of legend names must match number of value variables")
-    
-    # -------- Angle setup for radar --------
-    
-    angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
-    angles += angles[:1]
-    
-    # -------- Figure setup --------
-    
-    fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
-    
-    # Clockwise
-    ax.set_theta_direction(-1)
-    ax.set_theta_offset(np.pi / 2)
-    
-    # -------- Get radial limits --------
-    
-    all_values = []
-    for val_name in value_names:
-        da = ds_period[val_name]
-        all_values.extend(da.values.flatten())
-    all_values = np.array([v for v in all_values if np.isfinite(v)])
-    
-    if len(all_values) == 0:
-        raise ValueError("No valid numeric values found")
-    
-    val_min = all_values.min()
-    val_max = all_values.max()
-    margin = 0.05 * (val_max - val_min) if val_max != val_min else val_max * 0.1
-    ax.set_ylim(val_min - margin, val_max + margin)
-    
-    # -------- Color setup --------
-    
-    colors = cm.viridis(np.linspace(0, 1, len(value_names)))
-    
-    # -------- Plot loop --------
-    
-    for i, val_name in enumerate(value_names):
-        
-        da = ds_period[val_name]
-        
-        # Handle extra dimensions
-        results = handle_xarray_dimensions(
-            da,
-            main_dims=[]
-        )
-        
-        for sel, vals in results:
-            
-            # Convert to numeric, handle NaN, and truncate/pad to match categories
-            vals_numeric = pd.to_numeric(vals.flatten(), errors='coerce')
-            
-            # Extract valid values for categories
-            if len(vals_numeric) > N:
-                vals_numeric = vals_numeric[:N]
-            elif len(vals_numeric) < N:
-                # Pad with NaN if needed
-                vals_numeric = np.append(vals_numeric, np.repeat(np.nan, N - len(vals_numeric)))
-            
-            values_list = vals_numeric.tolist()
-            values_list += values_list[:1]  # Close the radar
-            
-            label = legend_labels[i] if i < len(legend_labels) else val_name
-            
-            if sel:
-                label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
-            
-            ax.plot(angles, values_list, label=label, color=colors[i])
-    
-    # -------- Styling --------
-    
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(categories)
-    ax.set_title(custom_title)
-    ax.legend(loc="upper right", bbox_to_anchor=(1.05, 1))
-    
-    return fig
-'''
 
-#
 def radar_chart(ds: xr.Dataset):
     """
     Create a radar chart from an xarray Dataset.
@@ -1224,7 +1049,6 @@ def radar_chart(ds: xr.Dataset):
     ax.legend(loc="upper right", bbox_to_anchor=(1.2, 1))
 
     return fig
-#
 
 
 # ---------------- Histogram Chart ----------------
