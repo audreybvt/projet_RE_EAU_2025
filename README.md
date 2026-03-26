@@ -152,20 +152,26 @@ All remaining columns are interpreted as data variables.
 #### Example Minimal Valid CSV
 
 
-Typical structure:
+Example of a valid CSV containing a single time series (no additional dimensions):
 
-| time | variable1 | variable2 |
-| ---- | --------- | --------- |
-
+```csv
+Date;flow
+01/01/2000;12.5
+02/01/2000;13.1
+03/01/2000;11.8
+```
 ---
 
 #### Example Multidimensional CSV
+
+Example of a valid CSV containing multiple models and stations (long format):
 
 ```csv
 Date;model;station;flow
 01/01/2000;M1;S1;12.5
 01/01/2000;M2;S1;13.2
 02/01/2000;M1;S1;12.9
+```
 
 
 ## Outputs
