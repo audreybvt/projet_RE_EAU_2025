@@ -50,7 +50,7 @@ The workflow is interactive: users select indicators, statistical operations, an
 If you just want to quickly test the tool without reading all the details, here is what you need:
 
 **Main Requirements:**  
-- Python 3.8+  
+- Python 3.8+ 
 - pandas  
 - xarray  
 - matplotlib  
