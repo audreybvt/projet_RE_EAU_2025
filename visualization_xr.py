@@ -349,6 +349,32 @@ def build_axis_label(label, unit):
     return f"{label} ({unit})"
 
 
+def apply_gui_filters(da: xr.DataArray, dim_selections_gui: dict) -> xr.DataArray:
+    """
+    Applies filters from dim_selections_gui to a DataArray.
+    Supports single values, lists of values, and "mean"
+    Ensuring that categorical filters are applied to the DataArray before statistical calculations.
+    """
+    if not dim_selections_gui:
+        return da
+        
+    for dim, selection in dim_selections_gui.items():
+        if dim in da.dims:
+            if selection == "mean":
+                da = da.mean(dim=dim, skipna=True)
+            elif isinstance(selection, (list, np.ndarray, pd.Index)):
+                # Slice but keep the dimension
+                da = da.sel({dim: selection})
+            else:
+                # Single value (reduces dimensionality)
+                try:
+                    da = da.sel({dim: selection})
+                except Exception:
+                    # In case of already sliced or mismatched types
+                    pass
+    return da
+
+
 def handle_xarray_dimensions(
     da: xr.DataArray,
     main_dims: list[str],
@@ -377,12 +403,12 @@ def handle_xarray_dimensions(
 
     selections = {}
     
-    # Identify which dimensions need to be handled (those not in main_dims)
-    dims = [d for d in da.dims if d not in main_dims]
-    
     # GUI mode: treat ANY non-None dim_selections_gui or auto_mean_gui=True as GUI mode
     # An empty dict {} is also GUI mode (no prompts)
     is_gui = (dim_selections_gui is not None or auto_mean_gui is True)
+
+    # Identify which dimensions need to be handled (those not in main_dims)
+    dims = [d for d in da.dims if d not in main_dims]
 
     for dim in dims:
         if dim_selections_gui is not None and dim in dim_selections_gui:
@@ -437,24 +463,16 @@ def handle_xarray_dimensions(
 
     # ---- Generate combinations
 
-    if len(selections) == 0:
+    combos = [dict(zip(selections.keys(), v)) for v in itertools.product(*selections.values())] if selections else [{}]
+    
+    results = []
+    for sel_dict in combos:
+        # Slicer but handle potential issues if dim was already reduced
+        actual_sel = {k: v for k, v in sel_dict.items() if k in da.dims}
+        da_sliced = da.sel(**actual_sel) if actual_sel else da
+        results.append((sel_dict, da_sliced))
 
-        return [({}, da.values)]
-
-    combos = list(itertools.product(*selections.values()))
-    dims_names = list(selections.keys())
-
-    outputs = []
-
-    for combo in combos:
-
-        sel = dict(zip(dims_names, combo))
-
-        da_sel = da.sel(**sel)
-
-        outputs.append((sel, da_sel.values))
-
-    return outputs
+    return results
 
 
 def get_sort_key_for_category(x_values):
@@ -623,7 +641,8 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
 
     colors = cm.viridis(np.linspace(0, 1, n_series))
 
-    for i, (sel, y_vals) in enumerate(results):
+    for i, (sel, da_sel) in enumerate(results):
+        y_vals = da_sel.values.ravel()
 
         # Alignement taille
         if len(y_vals) != len(x_vals):
@@ -738,6 +757,9 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
         ax.set_ylim(labels["y_limits"])
 
     # -------- Check for model dimension and envelope option --------
+    # First, apply GUI filters to the dataset
+    ds_period = apply_gui_filters(ds_period, dim_selections_gui)
+
     plot_envelope = False
     envelope_type = "average"  # "average" or "individual"
 
@@ -790,31 +812,29 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                 auto_mean_gui=auto_mean_gui
             )
 
-            for sel, y_vals in results:
-
-                # Recréer un DataArray avec les bonnes dims
-                da_sel = da.sel(**sel) if sel else da
-
+            for sel, da_sel in results:
+                # da_sel is already sliced and averaged by handle_xarray_dimensions
+                
                 y_min = da_sel.min(dim='model', skipna=True).values
                 y_max = da_sel.max(dim='model', skipna=True).values
                 y_mean = da_sel.mean(dim='model', skipna=True).values
-
-                # X correspondant
-                x_vals = da_sel[x_dim].values
+                
+                # X corresponding - ensure it's 1D
+                x_vals_local = da_sel[x_dim].values
 
                 # Create label
                 label = y_name
                 if sel:
                     label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items() if k != 'model')
-
-                ax.fill_between(x_vals, y_min, y_max, alpha=0.3,
+                    
+                ax.fill_between(x_vals_local, y_min, y_max, alpha=0.3,
                                 label=f"{label} (min-max)")
 
                 if envelope_type == "average":
-                    ax.plot(x_vals, y_mean, label=f"{label} (mean)", linewidth=2)
+                    ax.plot(x_vals_local, y_mean, label=f"{label} (mean)", linewidth=2)
                 else:
                     for i in range(da_sel.sizes['model']):
-                        ax.plot(x_vals,
+                        ax.plot(x_vals_local,
                                 da_sel.isel(model=i).values,
                                 label=f"{label} (model {i+1})",
                                 alpha=0.7)
@@ -828,8 +848,8 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                 auto_mean_gui=auto_mean_gui
             )
 
-            for sel, y_vals in results:
-
+            for sel, da_sel in results:
+                y_vals = da_sel.values.ravel()
                 label = y_name
 
                 if sel:
@@ -932,7 +952,7 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     x_numeric = pd.to_numeric(x_vals, errors='coerce')
     
     # Determine if we are in GUI mode
-    is_gui_scatter = any(p is not None for p in [var_gui, x_name_gui, y_names_gui, y_name_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
+    is_gui_scatter = any(p is not None for p in [var_gui, x_name_gui, y_names_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
 
     # -------- Y loop --------
     i_color = 0
@@ -952,9 +972,10 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
             auto_mean_gui=auto_mean_gui
         )
         
-        for sel, y_vals in results:
+        for i_res, (sel, da_sel) in enumerate(results):
+            y_vals = da_sel.values.ravel()
             
-            # Convert Y to numeric and handle NaN
+            # Convert to numeric and handle NaN
             y_numeric = pd.to_numeric(y_vals, errors='coerce')
             
             # Create mask for valid (non-NaN) points
@@ -1083,14 +1104,14 @@ def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui
 
         results = handle_xarray_dimensions(da, main_dims=[cat_dim], dim_selections_gui=dim_selections_gui, auto_mean_gui=auto_mean_gui)
 
-        for sel, vals in results:
+        for sel, da_sel in results:
+            y_vals = da_sel.values.ravel()
+            y_numeric = pd.to_numeric(y_vals, errors='coerce')
 
-            vals_numeric = pd.to_numeric(vals, errors='coerce')
-
-            if len(vals_numeric) != N:
+            if len(y_numeric) != N:
                 continue
 
-            vals_numeric = np.array(vals_numeric)
+            vals_numeric = np.array(y_numeric)
 
             if not np.any(np.isfinite(vals_numeric)):
                 continue
@@ -1221,7 +1242,8 @@ def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=
 
     colors = cm.viridis(np.linspace(0, 1, len(results)))
 
-    for i, (sel, data) in enumerate(results):
+    for i, (sel, da_sel) in enumerate(results):
+        data = da_sel.values.ravel()
 
         label = legend_labels
 

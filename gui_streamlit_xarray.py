@@ -788,6 +788,9 @@ with tab_viz:
     # ── Configuration commune ───────────────────────────────────────────────
     col_v1, col_v2 = st.columns(2)
     
+    # Filtres catégoriels (Multi-select)
+    viz_filters = render_categorical_filters(key_prefix="viz")
+    
     if chart_type == "Radar":
         vars_multi = st.multiselect("Variables (axes du radar)", vars_viz, key="viz_radar")
         var_x = None # Non utilisé pour le radar
@@ -805,9 +808,6 @@ with tab_viz:
 
         # Options spécifiques selon le type
         st.markdown("---")
-        
-        # Filtres catégoriels (Multi-select)
-        viz_filters = render_categorical_filters(key_prefix="viz")
 
         if chart_type == "Graphique en ligne":
             show_envelope = st.checkbox("Afficher les enveloppes (min-max)", value=False, help="Si une dimension 'model' est présente")
