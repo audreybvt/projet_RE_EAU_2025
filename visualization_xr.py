@@ -508,13 +508,17 @@ def apply_categorical_sort(x_data, sort_key):
 
 # ---------------- Bar Chart ----------------
 
-def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
+def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
     """
     Create a bar chart from an xarray Dataset.
     """
     
     if not isinstance(ds, xr.Dataset):
         raise TypeError("Expected: xarray.Dataset")
+
+    # Handle parameter name variations from GUI
+    if y_names_gui is not None and y_name_gui is None:
+        y_name_gui = y_names_gui[0] if isinstance(y_names_gui, list) and len(y_names_gui) > 0 else y_names_gui
 
     # ----------------------
     # Variable selection
@@ -849,7 +853,7 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
 
 # -------------- Scatter Plot ---------------
 
-def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, y_name_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
+def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
     """
     Create a scatter plot from an xarray Dataset.
     """
@@ -858,8 +862,6 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
         raise TypeError("Expected: xarray.Dataset")
     
     # Handle parameter name variations from GUI
-    if y_name_gui is not None and y_names_gui is None:
-        y_names_gui = [y_name_gui]
     if var_gui is not None and y_names_gui is None:
         y_names_gui = var_gui if isinstance(var_gui, list) else [var_gui]
 
@@ -932,10 +934,14 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     # Determine if we are in GUI mode
     is_gui_scatter = any(p is not None for p in [var_gui, x_name_gui, y_names_gui, y_name_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
 
+    # -------- Y loop --------
+    i_color = 0
+    # Determine number of series to generate enough colors
+    n_expected = len(y_names)
+    colors = cm.viridis(np.linspace(0, 1, n_expected))
+
     for i, y_name in enumerate(y_names):
-        
         da = ds_period[y_name]
-        
         if x_dim not in da.dims:
             continue
         
@@ -981,7 +987,7 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
 
 # ---------------- Radar Chart ----------------
 
-def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui=None, start_gui=None, end_gui=None, units_gui=None, title_gui=None, legend_gui=None, plot_config_gui=None):
+def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui=None, start_gui=None, end_gui=None, units_gui=None, title_gui=None, legend_gui=None, plot_config_gui=None, dim_selections_gui=None, auto_mean_gui: bool = False):
     """
     Create a radar chart from an xarray Dataset.
     """
@@ -1075,7 +1081,7 @@ def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui
         if cat_dim not in da.dims:
             continue
 
-        results = handle_xarray_dimensions(da, main_dims=[cat_dim], dim_selections_gui=dim_selections_gui)
+        results = handle_xarray_dimensions(da, main_dims=[cat_dim], dim_selections_gui=dim_selections_gui, auto_mean_gui=auto_mean_gui)
 
         for sel, vals in results:
 
@@ -1149,11 +1155,16 @@ def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui
 
 # ---------------- Histogram Chart ----------------
 
-def histogram_chart(ds: xr.Dataset, var_gui=None, bins_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
+def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=None, bins_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
     """
     Plot a histogram from an xarray Dataset.
     """
-    is_gui = any(p is not None for p in [var_gui, bins_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
+    is_gui = any(p is not None for p in [var_gui, col_name_gui, x_name_gui, bins_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
+
+    if col_name_gui is not None and var_gui is None:
+        var_gui = col_name_gui
+    if x_name_gui is not None and var_gui is None:
+        var_gui = x_name_gui
 
     col_name = ask_variable(ds, prompt="Select variable to plot: ", var_gui=var_gui)
 

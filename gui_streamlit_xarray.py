@@ -153,6 +153,42 @@ def ds_dims() -> list[str]:
         return []
     return list(st.session_state["ds"].dims.keys())
 
+def render_categorical_filters(key_prefix="filter"):
+    """
+    Renders an expander with select/multi-select for dimensions not in standard_dims.
+    Returns a dict {dim: selected_values}.
+    """
+    ds = st.session_state.get("ds")
+    if ds is None: return {}
+    
+    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y', 'station', 'piezometre']
+    cat_dims = [d for d in list(ds.dims.keys()) if d not in standard_dims and ds.dims[d] > 1]
+    
+    dict_filters = {}
+    if cat_dims:
+        with st.expander("🔎 Filtres catégoriels (scénarios, modèles…)"):
+            for dim in cat_dims:
+                vals = ds[dim].values.tolist()
+                options = [str(v) for v in vals]
+                
+                # In Viz tab (if key_prefix is 'viz'), use multiselect
+                if "viz" in key_prefix:
+                    selected_vals = st.multiselect(f"Filtre pour '{dim}'", options, default=[], key=f"{key_prefix}_{dim}")
+                    if selected_vals:
+                        # Map back to original values
+                        orig_vals = ds[dim].values
+                        matches = [v for v in orig_vals if str(v) in selected_vals]
+                        dict_filters[dim] = matches
+                else:
+                    # In Ind tab, stay with single select for now (standard behavior)
+                    selected_val = st.selectbox(f"Filtre pour '{dim}'", ["(Tout)"] + options, key=f"{key_prefix}_{dim}")
+                    if selected_val != "(Tout)":
+                        orig_vals = ds[dim].values
+                        match = [v for v in orig_vals if str(v) == selected_val]
+                        if match: dict_filters[dim] = match[0]
+                        
+    return dict_filters
+
 
 def time_like_dims() -> list[str]:
     return [d for d in ds_dims() if "time" in d.lower()]
@@ -251,79 +287,76 @@ with st.sidebar:
                             tmp.flush()
                             tmp_paths.append(tmp.name)
 
+                        # --- Detect dimensions and prepare spatial_gui ---
+                        # We open the first file to guess what kind of dimensions we have
+                        try:
+                            ds_first = xr.open_dataset(tmp_paths[0], decode_cf=False, engine='netcdf4')
+                        except Exception:
+                            try:
+                                ds_first = xr.open_dataset(tmp_paths[0], decode_cf=False, engine='h5netcdf')
+                            except Exception:
+                                ds_first = xr.open_dataset(tmp_paths[0], decode_cf=False, engine='scipy')
+
+                        if spatial_mode == "Conserver tout":
+                            spatial_gui_val = {"keep_all": True}
+                        else:
+                            # Calculate 'choice' according to dimensions
+                            has_grid = any(d in ds_first.dims for d in ['latitude', 'longitude', 'lat', 'lon', 'x', 'y'])
+                            has_pts  = any(d in ds_first.dims for d in ['piezometre', 'station', 'stations', 'site', 'sites'])
+                            
+                            option_num = 1
+                            options_map = {}
+                            if has_grid:
+                                options_map[option_num] = ('grid', 'keep'); option_num += 1
+                                options_map[option_num] = ('grid', 'point'); option_num += 1
+                                options_map[option_num] = ('grid', 'region'); option_num += 1
+                            if has_pts:
+                                options_map[option_num] = ('points', 'keep'); option_num += 1
+                                options_map[option_num] = ('points', 'select'); option_num += 1
+                            options_map[option_num] = ('all', 'keep')
+
+                            if spatial_mode == "Sélectionner un point par index" and has_pts:
+                                target = ('points', 'select')
+                            elif spatial_mode == "Sélectionner un point (lat/lon)" and has_grid:
+                                target = ('grid', 'point')
+                            elif spatial_mode == "Sélectionner une région (lat/lon)" and has_grid:
+                                target = ('grid', 'region')
+                            else:
+                                target = ('all', 'keep')
+
+                            choice_num = next((k for k, v in options_map.items() if v == target), option_num)
+                            spatial_gui_val = {"choice": choice_num}
+                            
+                            # Add extra parameters from spatial_gui_extra if they exist
+                            if "idx_gui" in spatial_gui_extra: spatial_gui_val["idx_gui"] = spatial_gui_extra["idx_gui"]
+                            if "lat_gui" in spatial_gui_extra: spatial_gui_val["lat_gui"] = spatial_gui_extra["lat_gui"]
+                            if "lon_gui" in spatial_gui_extra: spatial_gui_val["lon_gui"] = spatial_gui_extra["lon_gui"]
+                            if "region_gui" in spatial_gui_extra: spatial_gui_val["region_gui"] = spatial_gui_extra["region_gui"]
+
                         # Choisir mode de chargement (simple vs multi-fichiers)
                         if len(tmp_paths) == 1:
-                            try:
-                                ds_raw = xr.open_dataset(tmp_paths[0], engine='netcdf4')
-                            except Exception:
-                                try:
-                                    ds_raw = xr.open_dataset(tmp_paths[0], engine='h5netcdf')
-                                except Exception:
-                                    ds_raw = xr.open_dataset(tmp_paths[0], engine='scipy')
-
-                            # Gestion spatiale
-                            if spatial_mode == "Conserver tout":
-                                spatial_gui_val = {"keep_all": True}
-                            else:
-                                # Calculer le 'choice' selon le type de dims
-                                spatial_gui_val = {"choice": 6}  # fallback: conserver tout
-
-                                has_grid = any(d in ds_raw.dims for d in ['latitude', 'longitude', 'lat', 'lon', 'x', 'y'])
-                                has_pts  = any(d in ds_raw.dims for d in ['piezometre', 'station', 'stations', 'site'])
-                                option_num = 1
-                                options_map = {}
-                                if has_grid:
-                                    options_map[option_num] = ('grid', 'keep'); option_num += 1
-                                    options_map[option_num] = ('grid', 'point'); option_num += 1
-                                    options_map[option_num] = ('grid', 'region'); option_num += 1
-                                if has_pts:
-                                    options_map[option_num] = ('points', 'keep'); option_num += 1
-                                    options_map[option_num] = ('points', 'select'); option_num += 1
-                                options_map[option_num] = ('all', 'keep')
-
-                                if spatial_mode == "Sélectionner un point par index" and has_pts:
-                                    target = ('points', 'select')
-                                elif spatial_mode == "Sélectionner un point (lat/lon)" and has_grid:
-                                    target = ('grid', 'point')
-                                elif spatial_mode == "Sélectionner une région (lat/lon)" and has_grid:
-                                    target = ('grid', 'region')
-                                else:
-                                    target = ('all', 'keep')
-
-                                choice_num = next((k for k, v in options_map.items() if v == target), option_num)
-                                spatial_gui_val = {"choice": choice_num}
-
+                            ds_raw = ds_first # Reuse the one we opened
+                            
                             ds_loaded = df_mod.handle_spatial_dimensions(ds_raw, spatial_gui=spatial_gui_val)
 
-                            # Si point sur grille ou région, passer les arguments supplémentaires
-                            # (handle_spatial_dimensions appelle select_spatial_point/region en interne)
-                            # Pour les modes avancés, on refait la sélection manuellement
+                            # Handle advanced selection (re-selection on raw)
                             if spatial_mode == "Sélectionner un point par index" and "idx_gui" in spatial_gui_extra:
-                                has_pts  = any(d in ds_raw.dims for d in ['piezometre', 'station', 'stations', 'site'])
                                 if has_pts:
-                                    pt_dim = next(d for d in ['piezometre', 'station', 'stations', 'site'] if d in ds_raw.dims)
-                                    sdims = {'points': [pt_dim]}
-                                    cnames = {'points': [pt_dim]}
+                                    pt_dim = next(d for d in ['piezometre', 'station', 'stations', 'site', 'sites'] if d in ds_raw.dims)
                                     ds_loaded = df_mod.select_spatial_point(
-                                        ds_raw, sdims, cnames,
-                                        method_gui=1,
-                                        idx_gui=spatial_gui_extra["idx_gui"]
+                                        ds_raw, {'points': [pt_dim]}, {'points': [pt_dim]},
+                                        method_gui=1, idx_gui=spatial_gui_extra["idx_gui"]
                                     )
 
                             elif spatial_mode == "Sélectionner un point (lat/lon)" and "lat_gui" in spatial_gui_extra:
-                                has_grid = any(d in ds_raw.dims for d in ['latitude', 'longitude', 'lat', 'lon'])
                                 if has_grid:
                                     g = next((['latitude', 'longitude'] if 'latitude' in ds_raw.dims else None) or
                                              (['lat', 'lon'] if 'lat' in ds_raw.dims else None) or
                                              (['x', 'y']), None)
                                     if g:
                                         ds_loaded = df_mod.select_spatial_point(
-                                            ds_raw,
-                                            {'grid': [g[0], g[1]]},
-                                            {'grid': [g[0], g[1]]},
-                                            method_gui=2,
-                                            lat_gui=spatial_gui_extra["lat_gui"],
-                                            lon_gui=spatial_gui_extra["lon_gui"]
+                                            ds_raw, {'grid': [g[0], g[1]]}, {'grid': [g[0], g[1]]},
+                                            method_gui=2, lat_gui=spatial_gui_extra["lat_gui"], lon_gui=spatial_gui_extra["lon_gui"]
                                         )
 
                             elif spatial_mode == "Sélectionner une région (lat/lon)" and "region_gui" in spatial_gui_extra:
@@ -331,12 +364,9 @@ with st.sidebar:
                                 has_lon = next((d for d in ['longitude', 'lon'] if d in ds_raw.dims), None)
                                 if has_lat and has_lon:
                                     ds_loaded = df_mod.select_spatial_region(
-                                        ds_raw,
-                                        [has_lat, has_lon],
-                                        [has_lat, has_lon],
+                                        ds_raw, [has_lat, has_lon], [has_lat, has_lon],
                                         region_gui=spatial_gui_extra["region_gui"]
                                     )
-
                         else:
                             # Multi-fichiers
                             ds_loaded = df_mod.load_multiple_datasets(tmp_paths, spatial_gui=spatial_gui_val)
@@ -611,23 +641,7 @@ with tab_ind:
     vars_list_ind = ds_vars()
 
     # ── Filtres catégoriels ──────────────────────────────────────────────────
-    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y', 'station', 'piezometre']
-    cat_dims = [d for d in ds_dims() if d not in standard_dims and st.session_state["ds"].dims[d] > 1]
-
-    dict_filters: dict = {}
-    if cat_dims:
-        with st.expander("🔎 Filtres catégoriels (scénarios, modèles…)"):
-            for dim in cat_dims:
-                vals = st.session_state["ds"][dim].values.tolist()
-                selected_val = st.selectbox(f"Filtre pour '{dim}'", ["(Tout)"] + [str(v) for v in vals], key=f"filter_{dim}")
-                if selected_val != "(Tout)":
-                    # Retrouver la valeur originale
-                    orig_vals = st.session_state["ds"][dim].values
-                    match = [v for v in orig_vals if str(v) == selected_val]
-                    if match:
-                        dict_filters[dim] = match[0]
-
-    dict_filters_gui = dict_filters
+    dict_filters_gui = render_categorical_filters(key_prefix="ind")
 
     # ── Paramètres spécifiques à chaque indicateur ─────────────────────────
     st.markdown("**Paramètres de l'indicateur**")
@@ -657,7 +671,9 @@ with tab_ind:
 
     elif indicator == "Over threshold":
         var_q    = st.selectbox("Variable débit (Q)", vars_list_ind, key="ind_varq_ot")
-        threshold = st.number_input("Seuil", value=0.0, format="%.4f", key="ind_thresh")
+        c1, c2 = st.columns(2)
+        threshold = c1.number_input("Seuil", value=0.0, format="%.4f", key="ind_thresh")
+        tolerance = c2.number_input("Tolérance (%)", value=0.0, format="%.1f", key="ind_tol")
 
     # ── Bouton calcul indicateur ─────────────────────────────────────────────
     if st.button("▶️ Calculer l'indicateur", key="run_ind"):
@@ -724,6 +740,7 @@ with tab_ind:
                     time_coord_gui=time_coord_ind,
                     var_q_gui=var_q,
                     threshold_gui=float(threshold),
+                    tolerance_gui=float(tolerance),
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
                 )
@@ -788,6 +805,10 @@ with tab_viz:
 
         # Options spécifiques selon le type
         st.markdown("---")
+        
+        # Filtres catégoriels (Multi-select)
+        viz_filters = render_categorical_filters(key_prefix="viz")
+
         if chart_type == "Graphique en ligne":
             show_envelope = st.checkbox("Afficher les enveloppes (min-max)", value=False, help="Si une dimension 'model' est présente")
             env_type = "average"
@@ -867,7 +888,7 @@ with tab_viz:
                     y_names_gui=plot_vars,
                     plot_config_gui=gui_config,
                     auto_mean_gui=True,
-                    dim_selections_gui={},
+                    dim_selections_gui=viz_filters,
                     plot_envelope_gui=st.session_state.get("viz_envelope", False),
                     envelope_type_gui=st.session_state.get("viz_env_type", "average")
                 )
@@ -880,7 +901,7 @@ with tab_viz:
                     y_names_gui=plot_vars,
                     plot_config_gui=gui_config,
                     auto_mean_gui=True,
-                    dim_selections_gui={}
+                    dim_selections_gui=viz_filters
                 )
 
             elif chart_type == "Nuage de points":
@@ -890,14 +911,20 @@ with tab_viz:
                     y_names_gui=[var_y],
                     plot_config_gui=gui_config,
                     auto_mean_gui=True,
-                    dim_selections_gui={}
+                    dim_selections_gui=viz_filters
                 )
 
             elif chart_type == "Radar":
                 if not vars_multi:
                     st.warning("Sélectionnez au moins deux variables pour le radar.")
                 else:
-                    fig = viz.radar_chart(ds_plot, var_gui=vars_multi, plot_config_gui=gui_config)
+                    fig = viz.radar_chart(
+                        ds_plot, 
+                        var_gui=vars_multi, 
+                        plot_config_gui=gui_config,
+                        dim_selections_gui=viz_filters,
+                        auto_mean_gui=True
+                    )
 
             elif chart_type == "Histogramme":
                 fig = viz.histogram_chart(
@@ -905,7 +932,9 @@ with tab_viz:
                     x_name_gui=var_x,
                     col_name_gui=var_main,
                     bins_gui=st.session_state.get("viz_bins", 10),
-                    plot_config_gui=gui_config
+                    plot_config_gui=gui_config,
+                    dim_selections_gui=viz_filters,
+                    auto_mean_gui=True
                 )
 
             if fig is not None:

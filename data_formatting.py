@@ -103,6 +103,8 @@ def handle_spatial_dimensions(ds, filename="dataset", spatial_gui: dict = None, 
                 except ValueError:
                     print("Please enter a number.")
 
+
+
 def select_spatial_point(ds, spatial_dims, coords_names, method_gui=None, idx_gui=None, lat_gui=None, lon_gui=None, log_func=None):
     """
     Selects a specific spatial point from the dataset.
@@ -238,7 +240,6 @@ def select_spatial_region(ds, grid_dims, coord_names, region_gui=None, log_func=
     
     return selected
 
-
 def load_multiple_datasets(paths, spatial_gui: dict = None):
     """
     Load multiple NetCDF files and add model and scenario dimensions
@@ -292,9 +293,9 @@ def load_multiple_datasets(paths, spatial_gui: dict = None):
         hy_model = ds.attrs.get("hy_model_id", "unknown")
 
 
-        if "unknown" in (gcm, rcm, bc, hy_model, scenario) :
-            print("The file format is not appropriate")
-            return
+        if "unknown" in (gcm, rcm, bc, hy_model, scenario):
+            print(f"File {filename} is missing metadata. Skipping.")
+            continue
 
         # Create a single "model_chain" dimension
         model_chain = f"{gcm}-{rcm}-{bc}-{hy_model}"
@@ -335,10 +336,18 @@ def load_multiple_datasets(paths, spatial_gui: dict = None):
 
         datasets.append(ds)
 
+    if not datasets:
+        print("No valid datasets loaded.")
+        return None
+
     # combination with dask
-    combined = xr.combine_by_coords(datasets, combine_attrs='drop', join='outer', data_vars='all')
-    print(f"\nCombination completed. Dataset: {combined}")
-    return combined
+    try:
+        combined = xr.combine_by_coords(datasets, combine_attrs='drop', join='outer', data_vars='all')
+        print(f"\nCombination completed. Dataset: {combined}")
+        return combined
+    except Exception as e:
+        print(f"Error combining datasets: {e}")
+        return None
 
 
 # ---------------- CSV Formatting ----------------

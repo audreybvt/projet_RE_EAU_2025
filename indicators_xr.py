@@ -326,13 +326,13 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
         for i, coord in enumerate(coords_list):
             print(f" [{i}] {coord}")
     
-    while True:
-        try:
-            idx_t = int(input("Index of Date/Time coordinate: ").strip())
-            time_coord = coords_list[idx_t]
-            break
-        except (ValueError, IndexError):
-            print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
+        while True:
+            try:
+                idx_t = int(input("Index of Date/Time coordinate: ").strip())
+                time_coord = coords_list[idx_t]
+                break
+            except (ValueError, IndexError):
+                print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
     # Discharge variable selection
     if var_q_gui is not None:
@@ -511,7 +511,7 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
 # ---------------- VCN10 ----------------
 #   Minimum 10-day consecutive mean flow
 
-def VCN10(ds):
+def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
     Return the minimum 10-day consecutive mean flow (VCN10) for a chosen period (xarray version).
 
@@ -614,7 +614,7 @@ def VCN10(ds):
 # ---------------- Q10/Q05 ----------------
 #   Low flow indicators (flow exceeded only 10% or 5% of the time)
 
-def Q10_05(ds):
+def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
     Return the flow rates exceeded 10% and 5% of the time for a chosen period (xarray version).
 
@@ -826,15 +826,20 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
 # ---------------- Over-threshold Indicator ----------------
 #   Count of occurrences above a threshold with tolerance, and episode statistics
 
-def over_threshold(ds):
+def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, threshold_gui=None, tolerance_gui=None, unite_gui=None, nb_gui=None):
     """
     Identify and count exceedance episodes above a threshold with tolerance.
     Computes episode statistics (duration and Peak Over Threshold (POT)).
 
     Inputs:
-- ds: xarray Dataset containing the variable to analyze.
-outputs: 
-- ds: dataset + column of the variable minus the threshold (for visualization)
+    - ds: xarray Dataset containing the variable to analyze.
+    - dict_filters_gui: Dict for categorical filters.
+    - time_coord_gui: Time coordinate to use.
+    - var_q_gui: Variable to analyze.
+    - threshold_gui: Absolute threshold value.
+    - tolerance_gui: Tolerance percentage (optional).
+    - unite_gui: Time unit (e.g., 'm').
+    - nb_gui: Time step (e.g., 1).
     """
 
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
@@ -843,8 +848,8 @@ outputs:
     active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
     # Variable selection
-    if var_name_gui is not None:
-        var_name = var_name_gui
+    if var_q_gui is not None:
+        var_name = var_q_gui
     else:
         vars_list = list(active_ds.data_vars)
         print("Over-threshold indicator: available variables")
@@ -860,48 +865,61 @@ outputs:
                 print("Invalid index.")
 
     # Threshold and tolerance inputs
-    while True:
-        try:
-            threshold = float(input("Enter threshold value: "))
-            break
-        except ValueError:
-            print("Threshold must be a number.")
+    if threshold_gui is not None:
+        threshold = float(threshold_gui)
+        tolerance = float(tolerance_gui) if tolerance_gui is not None else 0.0
+    else:
+        while True:
+            try:
+                threshold = float(input("Enter threshold value: "))
+                break
+            except ValueError:
+                print("Threshold must be a number.")
 
-    while True:
-        try:
-            tolerance = float(input("Tolerance percentage (%) around threshold: "))
-            if tolerance < 0:
-                print("Tolerance must be positive.")
-                continue
-            break
-        except ValueError:
-            print("Tolerance must be a number.")
+        while True:
+            try:
+                tolerance = float(input("Tolerance percentage (%) around threshold: "))
+                if tolerance < 0:
+                    print("Tolerance must be positive.")
+                    continue
+                break
+            except ValueError:
+                print("Tolerance must be a number.")
+
+    # Time config
+    frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
     effective_threshold = threshold * (1 + tolerance / 100)
     print(f"Effective threshold used: {effective_threshold:.3f}")
 
     # Add Visualization Variable (Magnitude)
-    # This creates a new variable: Value - Threshold
     new_var_magnitude = f"POT_magnitude_{var_name}"
     ds[new_var_magnitude] = ds[var_name] - effective_threshold
     ds[new_var_magnitude].attrs['description'] = f"Exceedance magnitude above {effective_threshold} for {var_name}"
     
-    # Episode Detection Logic
-    da = active_ds[var_name]
-    exceed = da > effective_threshold
-    
-    # Global counts
-    total_obs = da.size
-    total_exceed = int(exceed.sum())
-    
-    print(f"Global Results:")
-    print(f"Total occurrences above threshold: {total_exceed}")
-    print(f"Total observations: {total_obs}")
-    print(f"Global percentage of exceedance: {100 * total_exceed / total_obs:.2f}%")
+    # Calculation
+    new_time_dim = f"{time_coord_gui or 'time'}_Group_{nb}{unite}"
+    new_var_name = f"Over_{threshold}_{var_name}"
 
-    # Detect episodes using flattened values for statistics
+    try:
+        # Group detection could be more complex, but we'll stick to basic counting for now
+        # per resampled period if unite provided
+        da = active_ds[var_name]
+        exceed = (da > effective_threshold).astype(int)
+        
+        if unite_gui:
+            resampled_exceed = exceed.resample({time_coord_gui or 'time': frequence}).sum()
+            resampled_exceed = resampled_exceed.rename({time_coord_gui or 'time': new_time_dim})
+            ds[new_var_name] = resampled_exceed
+            ds[new_var_name].attrs['description'] = f"Count of occurrences above {effective_threshold} for {var_name}"
+        
+    except Exception as e:
+        print(f"Calculation Error: {e}")
+        return ds
+
+    # Episode Detection Logic (for terminal summary)
     values = da.values.flatten()
-    exceed_flat = exceed.values.flatten()
+    exceed_flat = (values > effective_threshold)
 
     episodes = []
     pot_values = []
@@ -927,14 +945,15 @@ outputs:
         pot_values.append(current_peak)
 
     # Summary Statistics Output
+    print(f"Global Results for {var_name}:")
     if len(episodes) > 0:
-        print("Episode Statistics: ")
+        print(f"Total occurrences above threshold: {int(np.sum(exceed_flat))}")
         print(f"Number of independent episodes: {len(episodes)}")
         print(f"Mean episode duration: {np.mean(episodes):.2f} time steps")
         print(f"Highest Peak Over Threshold (POT): {np.max(pot_values):.3f}")
     else:
         print("No exceedance episodes detected.")
 
-    print(f"New visualization variable added: '{new_var_magnitude}'")
+    print(f"New variables added: '{new_var_magnitude}' and optionally '{new_var_name}'")
     
-    return ds
+    return ds
