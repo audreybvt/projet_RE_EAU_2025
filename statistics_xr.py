@@ -1,15 +1,14 @@
-
 #Set of statistics functions to treat variables from netCDF files
-#Called in the "# netCDF case" part of the main file
 
+# Import of the packages needed
 import xarray as xr
 import pandas as pd
 import numpy as np
 import calendar
 from utils_xr import show_info
 
-
-# functiun to ask for a date with error handling and support for multiple formats
+# ---------------- Helping Functions ----------------
+#   Function to ask for a date with error handling and support for multiple formats
 def ask_date(ds, start_input_gui=None, end_input_gui=None, log_func=None, is_gui=False):
     """
     Ask the user for a start and end date within the dataset time range.
@@ -19,24 +18,22 @@ def ask_date(ds, start_input_gui=None, end_input_gui=None, log_func=None, is_gui
     min_date = time_values.min()
     max_date = time_values.max()
 
+    # GUI mode: bypass all input() calls
     if is_gui or start_input_gui is not None or end_input_gui is not None:
         start_date = pd.to_datetime(start_input_gui) if start_input_gui else None
         end_date = pd.to_datetime(end_input_gui) if end_input_gui else None
         return start_date, end_date
 
-    # Detect if we should skip interactive input (e.g. if we are in a GUI environment)
-    # We can't always know, so we'll check if any gui params were meant to be passed
-    # In Streamlit, this function should generally NOT be called without gui params
-    # but for safety let's assume if it is, we might block. 
-    # Better: the calling functions in statistics_xr already have _gui params.
+    print("\nAvailable period:")
+    print(f" From {min_date.date()} to {max_date.date()}")
 
-    show_info("\nPériode disponible :", log_func=log_func)
-    show_info(f" Du {min_date.date()} au {max_date.date()}", log_func=log_func)
-    show_info("\nDéfinition de la période (laisser vide pour tout afficher)", log_func=log_func)
+    print("\nDefine period (leave blank for full range)")
 
     while True:
-        start_input = input("Date de début (YYYY-MM-DD) : ").strip()
-        end_input = input("Date de fin (YYYY-MM-DD) : ").strip()
+
+        start_input = input("Start date (YYYY-MM-DD): ").strip()
+        end_input = input("End date (YYYY-MM-DD): ").strip()
+
         try:
             start_date = pd.to_datetime(start_input) if start_input else None
         except:
@@ -47,29 +44,44 @@ def ask_date(ds, start_input_gui=None, end_input_gui=None, log_func=None, is_gui
         except:
             print("Invalid date format.")
             continue
+
+        
+
+        # --- verify consistency ---
         if start_date and end_date and start_date > end_date:
-            print("La date de début doit être antérieure à la date de fin.")
+            print("Start date must be before end date.")
             continue
+
+        # --- verify range ---
         if start_date and start_date < min_date:
-            print("La date de début est avant la période disponible.")
+            print("Start date is before available period.")
             continue
         if end_date and end_date > max_date:
-            print("La date de fin est après la période disponible.")
+            print("End date is after available period.")
             continue
         break
     return start_date, end_date
 
-
-# Function to apply to check if a time dimension is selected and allow user to select a specific period for the calculation.
-# This function is called in the mean, max, min and percentile functions to avoid code repetition.
+#   Function to apply to check if a time dimension is selected and allow user to select a specific period for the calculation.
+#   This function is called in the mean, max, min and percentile functions to avoid code repetition.
 def apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui=None, end_input_gui=None, log_func=None, is_gui=False):
+    """
+    Detects a time-related dimension, prompts the user for a period,
+    and slices the DataArray accordingly.
+    """
+
     period_label = ""
-    time_dims = [d for d in active_da.dims if "time" in d]
+
+    # Detect time dimension among the ones we plan to reduce
+    time_dims = [d for d in dims_to_reduce if "time" in d]
+
+    # No time dimension → nothing to do
     if not time_dims:
         return active_da, ""
+
     t_dim = time_dims[0]
-    
-    # If GUI params are provided or flag set, skip interactive loop
+
+    # GUI mode: bypass all input() calls - handles None dates (= full range)
     if is_gui or start_input_gui is not None or end_input_gui is not None:
         start_date, end_date = ask_date(ds, start_input_gui, end_input_gui, log_func=log_func, is_gui=is_gui)
         if start_date or end_date:
@@ -83,64 +95,55 @@ def apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui=None, en
             else:
                 slice_dict[t_dim] = slice(None, end_date)
                 period_label = f"_until_{end_date.date()}"
-            
             temp_da = active_da.sel(slice_dict)
-            # Safety check: ensure the selection isn't empty
-            if temp_da[t_dim].size == 0:
-                # If GUI input leads to empty selection, return original and no label
+            if temp_da.sizes.get(t_dim, 0) == 0:
                 return active_da, ""
             return temp_da, period_label
-        return active_da, "" # If GUI params are provided but result in no date, return original da
+        return active_da, ""  # No dates = full range, no label
 
-    show_info(f"\n--- Period configuration (detected dimension: {t_dim}) ---", log_func=log_func)
+    # Terminal-only path
+    print(f"\n--- Period configuration (detected dimension: {t_dim}) ---")
+
     while True:
-        start_date, end_date = ask_date(ds, start_input_gui, end_input_gui, log_func=log_func, is_gui=is_gui)
+
+        start_date, end_date = ask_date(ds, is_gui=False)
+
+        # Apply slicing
         if start_date or end_date:
-            slice_dict = {}
-            if start_date and end_date:
-                slice_dict[t_dim] = slice(start_date, end_date)
-                period_label = f"_{start_date.date()}_{end_date.date()}"
-            elif start_date:
-                slice_dict[t_dim] = slice(start_date, None)
-                period_label = f"_from_{start_date.date()}"
-            else:
-                slice_dict[t_dim] = slice(None, end_date)
-                period_label = f"_until_{end_date.date()}"
-            temp_da = active_da.sel(slice_dict)
+            temp_da = active_da.sel({t_dim: slice(start_date, end_date)})
         else:
-            # If no dates entered, use the full range
             temp_da = active_da
 
-        # Safety check: ensure the selection isn't empty
-        if temp_da[t_dim].size == 0:
-            print(f"No data available in this range for '{t_dim}'. Please try again.")
-            if start_input_gui is not None:
-                break
+        # Safety 1: dimension still present?
+        if t_dim not in temp_da.dims:
+            print("Time dimension disappeared after operation. Please try again.")
             continue
 
-        # Update the DataArray and create the label
+        # Safety 2: non-empty data?
+        if temp_da.sizes.get(t_dim, 0) == 0:
+            print("No data available in this period. Please try again.")
+            continue
+
+        # OK
         active_da = temp_da
+
         if start_date or end_date:
             s = start_date.date() if start_date else "start"
             e = end_date.date() if end_date else "end"
             period_label = f"_{s}_{e}"
-        
+
         break
 
     return active_da, period_label
 
 
-
-
-
-
-
-
-### Mean value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
-
+# ---------------- Mean ----------------
+#   Mean value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset
 
 def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
+
+    is_gui = any(p is not None for p in [var_name_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
     
     if var_name_gui is not None:
         var_name = var_name_gui
@@ -162,19 +165,17 @@ def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_in
 
     # Identification of available dimensions
     available_dims = list(active_da.dims)
-    is_gui = any(p is not None for p in [var_name_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
-    
+
     if dims_to_reduce_gui is not None:
         dims_to_reduce = dims_to_reduce_gui
     elif is_gui:
-        dims_to_reduce = [d for d in available_dims if "time" not in d.lower()]
-        if not dims_to_reduce: dims_to_reduce = available_dims
+        dims_to_reduce = available_dims
     else:
         dims_to_reduce = []
         print("\nWhich dimensions do you want to average across?")
         print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
         for i, d in enumerate(available_dims):
-            print(f" [{i}] {d}")
+            print(f" [{i}] {d} ({ds.dims[d]} values)")
 
         while True:
             choice_dims = input("Your choice: ").strip()
@@ -188,6 +189,7 @@ def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_in
             except (ValueError, IndexError):
                 print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions.")
 
+        
     # Handling of time period if 'time' is contained in the selected dimensions
     active_da, period_label = apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui, is_gui=is_gui)
 
@@ -202,27 +204,36 @@ def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_in
     new_var_name = f"{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
-    # Inject the mean value. Xarray will automatically align/broadcast it across the remaining dimensions.
-    ds[new_var_name] = xr.where(ds[var_name].isnull(), np.nan, mean_val)
+    # Direct assignment: do NOT use xr.where here because when reducing 
+    # dimensions (e.g. 'model'), mean_val has fewer dimensions than ds[var_name].
+    if 'time' in dims_to_reduce and 'time' in ds.dims:
+        # broadcast mean_val to have the same time dimension as ds for consistent handling in future operations
+        mean_val, _ = xr.broadcast(mean_val, ds['time'])
 
-    # Display results
-    print(f"\n Variable added: {new_var_name}")
-    if mean_val.size == 1:
-        print(f"Unique mean value: {float(mean_val.values):.2f}")
-    else:
-        print(f"Remaining dimensions after mean: {list(mean_val.dims)}")
-        print(f"Result shape: {mean_val.shape}")
+    ds[new_var_name] = mean_val
+
+    # Summary
+    if not is_gui:
+        print("\nMean calculation summary:")
+        print(f"Dimensions reduced: {dims_to_reduce}")
+        if period_label:
+            print(f"Time period: {period_label.lstrip('_')}")
+        else:
+            print("Time period: full range")
+        print(f"New Variable added: '{new_var_name}'")
+        print(f"Dimensions: {list(ds[new_var_name].dims)}")
+        print(f"Shape: {ds[new_var_name].shape}")
 
     return ds
 
 
-
-
-
-### Maximum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
+# ---------------- Maximum ----------------
+#   Maximum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset
 
 def maximum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
+
+    is_gui = any(p is not None for p in [var_name_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
     
     if var_name_gui is not None:
         var_name = var_name_gui
@@ -244,13 +255,11 @@ def maximum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
 
     # Identification of available dimensions
     available_dims = list(active_da.dims)
-    is_gui = any(p is not None for p in [var_name_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
-    
+
     if dims_to_reduce_gui is not None:
         dims_to_reduce = dims_to_reduce_gui
     elif is_gui:
-        dims_to_reduce = [d for d in available_dims if "time" not in d.lower()]
-        if not dims_to_reduce: dims_to_reduce = available_dims
+        dims_to_reduce = available_dims
     else:
         dims_to_reduce = []
         print("\nAcross which dimensions do you want to find the maximum?")
@@ -283,38 +292,34 @@ def maximum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
     new_var_name = f"max_{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
+    if 'time' in dims_to_reduce and 'time' in ds.dims:
+        # broadcast max_val to have the same time dimension as ds for consistent handling in future operations
+        max_val, _ = xr.broadcast(max_val, ds['time'])
+
     ds[new_var_name] = max_val
 
-    # 7. Display results
-    print(f"\n Variable added: {new_var_name}")
-    if max_val.size == 1:
-        print(f"Unique maximum value: {float(max_val.values):.2f}")
-    else:
-        print(f"Remaining dimensions after calculation: {list(max_val.dims)}")
-        print(f"Result shape: {max_val.shape}")
+    # Summary
+    if not is_gui:
+        print("\nMaximum calculation summary:")
+        print(f"Dimensions reduced: {dims_to_reduce}")
+        if period_label:
+            print(f"Time period: {period_label.lstrip('_')}")
+        else:
+            print("Time period: full range")
+        print(f"New Variable added: '{new_var_name}'")
+        print(f"Dimensions: {list(ds[new_var_name].dims)}")
+        print(f"Shape: {ds[new_var_name].shape}")
 
     return ds
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-### Minimum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
+# ---------------- Minimum ----------------
+#   Minimum value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset
 
 def minimum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
+
+    is_gui = any(p is not None for p in [var_name_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
     
     if var_name_gui is not None:
         var_name = var_name_gui
@@ -336,13 +341,11 @@ def minimum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
 
     # Identification of available dimensions
     available_dims = list(active_da.dims)
-    is_gui = any(p is not None for p in [var_name_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
-    
+
     if dims_to_reduce_gui is not None:
         dims_to_reduce = dims_to_reduce_gui
     elif is_gui:
-        dims_to_reduce = [d for d in available_dims if "time" not in d.lower()]
-        if not dims_to_reduce: dims_to_reduce = available_dims
+        dims_to_reduce = available_dims
     else:
         dims_to_reduce = []
         print("\nAcross which dimensions do you want to find the minimum?")
@@ -362,6 +365,7 @@ def minimum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
             except (ValueError, IndexError):
                 print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
 
+    
     # Handling of time period if 'time' is contained in the selected dimensions
     active_da, period_label = apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui, is_gui=is_gui)
 
@@ -375,105 +379,34 @@ def minimum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
     new_var_name = f"min_{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
+    if 'time' in dims_to_reduce and 'time' in ds.dims:
+        # broadcast min_val to have the same time dimension as ds for consistent handling in future operations
+        min_val, _ = xr.broadcast(min_val, ds['time'])
+
     ds[new_var_name] = min_val
 
-    # Display results
-    print(f"\n Variable added: {new_var_name}")
-    if min_val.size == 1:
-        print(f"Unique minimum value: {float(min_val.values):.2f}")
-    else:
-        print(f"Remaining dimensions after calculation: {list(min_val.dims)}")
-        print(f"Result shape: {min_val.shape}")
-
-    return ds
-
-
-
-
-
-
-### Median value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
-
-def median_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
-    vars_list = list(ds.data_vars)
-    
-    if var_name_gui is not None:
-        var_name = var_name_gui
-    else:
-        # Variable selection
-        print("\nAvailable variables:")
-        for i, var in enumerate(vars_list):
-            print(f" [{i}] {var}")
-
-        while True:
-            try:
-                var_idx = int(input("\nIndex of the variable to find the median: ").strip())
-                var_name = vars_list[var_idx]
-                break
-            except (ValueError, IndexError):
-                print("Invalid index. Please try again.")
-
-    active_da = ds[var_name]
-
-    # Identification of available dimensions
-    available_dims = list(active_da.dims)
-    is_gui = any(p is not None for p in [var_name_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
-    
-    if dims_to_reduce_gui is not None:
-        dims_to_reduce = dims_to_reduce_gui
-    elif is_gui:
-        # Default in GUI mode if not specified: reduce all dimensions except 'time' if possible, or just all
-        dims_to_reduce = [d for d in available_dims if "time" not in d.lower()]
-        if not dims_to_reduce: dims_to_reduce = available_dims
-    else:
-        dims_to_reduce = []
-        print("\nAcross which dimensions do you want to find the median?")
-        print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
-        for i, d in enumerate(available_dims):
-            print(f" [{i}] {d} ({ds.dims[d]} values)")
-
-        while True:
-            choice_dims = input("Your choice: ").strip()
-            if choice_dims == "":
-                dims_to_reduce = available_dims
-                break
-            try:
-                indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
-                dims_to_reduce = [available_dims[i] for i in indices]
-                break
-            except (ValueError, IndexError):
-                print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
-
-    # Handling of time period if 'time' is involved
-    active_da, period_label = apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui, is_gui=is_gui)
-
-    # Median calculation
+    # Summary
     if not is_gui:
-        print(f"\nCalculating median across: {dims_to_reduce}...")
-    median_val = active_da.median(dim=dims_to_reduce, skipna=True)
-
-    # Variable naming
-    dims_suffix = "_median_on_" + "_".join(dims_to_reduce)
-    new_var_name = f"median_{var_name}{dims_suffix}{period_label}"
-
-    # Add to Dataset
-    ds[new_var_name] = median_val
-
-    # Display results
-    print(f"\nVariable added: {new_var_name}")
-    if median_val.size == 1:
-        print(f"Unique median value: {float(median_val.values):.2f}")
-    else:
-        print(f"Remaining dimensions after calculation: {list(median_val.dims)}")
-        print(f"Result shape: {median_val.shape}")
+        print("\nMinimum calculation summary:")
+        print(f"Dimensions reduced: {dims_to_reduce}")
+        if period_label:
+            print(f"Time period: {period_label.lstrip('_')}")
+        else:
+            print("Time period: full range")
+        print(f"New Variable added: '{new_var_name}'")
+        print(f"Dimensions: {list(ds[new_var_name].dims)}")
+        print(f"Shape: {ds[new_var_name].shape}")
 
     return ds
 
 
-### Percentile value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
+# ---------------- Percentile ----------------
+#   Percentile value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset
 
 def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
+
+    is_gui = any(p is not None for p in [var_name_gui, q_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
     
     if var_name_gui is not None:
         var_name = var_name_gui
@@ -508,13 +441,11 @@ def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_
 
     # Identification of available dimensions
     available_dims = list(active_da.dims)
-    is_gui = any(p is not None for p in [var_name_gui, q_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
-    
+
     if dims_to_reduce_gui is not None:
         dims_to_reduce = dims_to_reduce_gui
     elif is_gui:
-        dims_to_reduce = [d for d in available_dims if "time" not in d.lower()]
-        if not dims_to_reduce: dims_to_reduce = available_dims
+        dims_to_reduce = available_dims
     else:
         dims_to_reduce = []
         print("\nAcross which dimensions do you want to calculate the percentile?")
@@ -534,6 +465,7 @@ def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_
             except (ValueError, IndexError):
                 print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions .")
 
+    
     # Handling of time period if 'time' is contained in the selected dimensions
     active_da, period_label = apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui, is_gui=is_gui)
 
@@ -541,6 +473,9 @@ def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_
     if not is_gui:
         print(f"\nCalculating {int(q*100)}th percentile across: {dims_to_reduce}...")
     # Note: quantile() in xarray uses the 0-1 scale for q
+    # FIX dask pour percentile
+    active_da = active_da.chunk({dim: -1 for dim in dims_to_reduce})
+
     perc_val = active_da.quantile(q, dim=dims_to_reduce, skipna=True)
 
     # Variable naming
@@ -548,31 +483,29 @@ def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_
     new_var_name = f"perc{int(q*100)}_{var_name}{dims_suffix}{period_label}"
 
     # Add to Dataset
+    if 'time' in dims_to_reduce and 'time' in ds.dims:
+        # broadcast perc_val to have the same time dimension as ds for consistent handling in future operations
+        perc_val, _ = xr.broadcast(perc_val, ds['time'])
+
     ds[new_var_name] = perc_val
 
-    # Display results
-    print(f"\nVariable added: {new_var_name}")
-    if perc_val.size == 1:
-        print(f"Unique percentile value: {float(perc_val.values):.2f}")
-    else:
-        print(f"Remaining dimensions after calculation: {list(perc_val.dims)}")
-        print(f"Result shape: {perc_val.shape}")
+    # Summary
+    if not is_gui:
+        print(f"\nPercentile ({int(q*100)}th) calculation summary:")
+        print(f"Dimensions reduced: {dims_to_reduce}")
+        if period_label:
+            print(f"Time period: {period_label.lstrip('_')}")
+        else:
+            print("Time period: full range")
+        print(f"New Variable added: '{new_var_name}'")
+        print(f"Dimensions: {list(ds[new_var_name].dims)}")
+        print(f"Shape: {ds[new_var_name].shape}")
 
     return ds
 
 
-
-
-
-
-
-
-
-
-
-
-
-### rolling mean value of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
+# ---------------- Rolling Mean ----------------
+#   Rolling mean value of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset
 
 def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=None, end_input_gui=None):
     vars_list = list(ds.data_vars)
@@ -611,21 +544,21 @@ def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=N
             else:
                 temp_da = active_da
 
-            # vérifier s'il y a des données
+            # verify that data exists
             if temp_da.time.size == 0:
                 print("No data available in this time range. Please choose another period.")
-                if start_input_gui is not None:
-                    break # Break if using GUI because we cannot prompt again
+                if is_gui:
+                    break  # Break if using GUI because we cannot prompt again
                 continue
 
-            # si la sélection est valide
+            # selection is valid
             active_da = temp_da
 
             if start_date or end_date:
+                s = start_date.date() if start_date else "start"
+                e = end_date.date() if end_date else "end"
+                period_label = f"_{s}_{e}"
 
-            # In GUI mode, if no date provided or if already applied, just break
-                if any(p is not None for p in [var_name_gui, window_gui, start_input_gui, end_input_gui]):
-                    break
             break
 
     if window_gui is not None:
@@ -652,29 +585,27 @@ def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=N
     # Add to Dataset
     ds[new_var_name] = rolling_val
 
-    # Display results
-    print(f"\nVariable added: {new_var_name}")
-    print(f"Result shape: {rolling_val.shape}")
+    # Summary
+    if not is_gui:
+        print(f"\nRolling Mean (window={window}) calculation summary:")
+        if period_label:
+            print(f"Time period: {period_label.lstrip('_')}")
+        else:
+            print("Time period: full range")
+        print(f"New Variable added: '{new_var_name}'")
+        print(f"Dimensions: {list(ds[new_var_name].dims)}")
+        print(f"Shape: {ds[new_var_name].shape}")
 
     return ds
 
 
-
-
-
-
-
-
-
-
-
-
-
-### Interannual grouping by month of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset _____________________________________________
-
+# ---------------- Interannual Monthly Averages ----------------
+#   Interannual grouping by month of a variable (along time), with optional period selection, and explicit naming of the new variable in the dataset
 
 def monthly_interannual_average_xr(ds, var_name_gui=None, time_dim_gui=None):
     vars_list = list(ds.data_vars)
+    is_gui = any(p is not None for p in [var_name_gui, time_dim_gui])
+
     if var_name_gui is not None:
         var_name = var_name_gui
     else:
@@ -695,16 +626,16 @@ def monthly_interannual_average_xr(ds, var_name_gui=None, time_dim_gui=None):
 
     if time_dim_gui is not None:
         time_dim = time_dim_gui
-    elif any(p is not None for p in [var_name_gui, time_dim_gui]):
-        # Default to 'time' or first dimension in GUI mode
+    elif is_gui:
+        # Default to 'time' or first time-like dimension
         time_dim = next((d for d in active_da.dims if "time" in d.lower()), active_da.dims[0])
     else:
-        # list of dimensions to identify the time dimension 
+        # list of dimensions to identify the time dimension
         dims_list = list(active_da.dims)
         print(f"\nDimensions for '{var_name}':")
         for i, d in enumerate(dims_list):
-            print(f" [{i}] {d} ({active_da.dims[d]} values)")
-
+            # Utiliser active_da.sizes[d] au lieu de active_da.dims[d]
+            print(f" [{i}] {d} ({active_da.sizes[d]} values)")
         while True:
             try:
                 dim_idx = int(input("Which time dimension do you want to use for grouping ? "))
@@ -714,7 +645,7 @@ def monthly_interannual_average_xr(ds, var_name_gui=None, time_dim_gui=None):
                 print("Invalid index. Please choose an existing dimension.")
 
     # Calculation of monthly means (1 to 12)
-    if not any(p is not None for p in [var_name_gui, time_dim_gui]):
+    if not is_gui:
         print(f"\nCalculating interannual monthly averages for '{var_name}'...")
     
     try:
@@ -740,21 +671,12 @@ def monthly_interannual_average_xr(ds, var_name_gui=None, time_dim_gui=None):
     # Add to Dataset
     ds[new_var_name] = monthly_stats
 
-    # Display results
-    print(f"\nVariable added: {new_var_name}")
-    print(f"Resulting Shape: {monthly_stats.shape} (Dimensions: {list(monthly_stats.dims)})")
-    
-    # Preview
-    print("\nPreview of January averages:")
-    try:
-        # Since we assigned coords, we select by the new 'month' coordinate
-        jan_preview = monthly_stats.sel(month="January")
-        print(jan_preview.head())
-        fev_preview = monthly_stats.sel(month="February")
-        print(fev_preview.head())
-        mar_preview = monthly_stats.sel(month="March")
-        print(mar_preview.head())
-    except Exception:
-        pass
+    # Summary
+    if not is_gui:
+        print("\nInterannual monthly average summary:")
+        print(f"Grouped by : {time_dim}")
+        print(f"New Variable added: '{new_var_name}'")
+        print(f"Dimensions: {list(ds[new_var_name].dims)}")
+        print(f"Shape: {ds[new_var_name].shape}")
 
     return ds

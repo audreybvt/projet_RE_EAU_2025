@@ -1,9 +1,7 @@
 # Hydrological Indicators Calculation Functions
-import pandas as pd
 import numpy as np
-#from numpy import true
 
-# set up functions 
+# ---------------- Set Up Functions ----------------
 
 def categorical_filter(ds, standard_dims, filter_choice_gui=None, dict_filters_gui=None):
     """
@@ -61,7 +59,7 @@ def categorical_filter(ds, standard_dims, filter_choice_gui=None, dict_filters_g
                 break
             
         
-            # Sélection dimension
+            # Select dimension
             while True:
                 dim_idx_input = input(f"Which category? Index (0-{len(selectable_dims)-1}): ").strip()
                 if not dim_idx_input.isdigit(): 
@@ -74,7 +72,7 @@ def categorical_filter(ds, standard_dims, filter_choice_gui=None, dict_filters_g
                 dim_name = selectable_dims[dim_idx]
                 break
 
-            # Sélection valeur
+            # Select value
             vals = ds[dim_name].values
             print(f"\nValues in '{dim_name}':")
             for j, v in enumerate(vals):
@@ -100,9 +98,6 @@ def categorical_filter(ds, standard_dims, filter_choice_gui=None, dict_filters_g
 
                 
     return active_ds, selections_made
-
-
-
 
 def get_time_freq(unite_gui=None, nb_gui=None):
     """
@@ -147,12 +142,12 @@ def get_time_freq(unite_gui=None, nb_gui=None):
             print("Please enter a valid integer.")
 
 
+# ---------------- Soil Water Balance Index ----------------
 
-
-# IPS (Soil Water Balance Index)
-def IPS(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=None):
+def soil_water_balance_index(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=None):
     """
-    Return the Index of Soil Precipitation (IPS) based on the water balance.
+    Return the Soil Water Balance Index with the formula :
+    Index = P - ETR - ΔR, where P is precipitation, ETR is actual evapotranspiration, and ΔR is the change in storage.
 
     Args:
         ds: Input xarray Dataset with P, ETR, and ΔR variables.
@@ -161,7 +156,7 @@ def IPS(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=
         var_etr_gui: Variable name for ETR.
         var_dr_gui: Variable name for Storage Change.
     Returns:
-        ds: Original dataset with added IPS variable.
+        ds: Original dataset with added Soil_Water_Balance_Index variable.
     """
     #Possibility to filter categorical dimensions (scenarios, models...) if they exist
     coords_list = list(ds.coords)
@@ -223,7 +218,7 @@ def IPS(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=
             if len(selections_made) == len(extra_dims):
                 break
 
-    # Variable selection for IPS calculation
+    # Variable selection for index calculation
     if var_p_gui is not None and var_etr_gui is not None and var_dr_gui is not None:
         var_p, var_etr, var_dr = var_p_gui, var_etr_gui, var_dr_gui
     else:
@@ -242,15 +237,15 @@ def IPS(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=
             except (ValueError, IndexError):
                 print("Invalid variable indices. Try again.")
 
-    # IPS Calculation: IPS = P - ETR - ΔR
-    new_var_name = "IPS"
+    # Index Calculation: Index = P - ETR - ΔR
+    new_var_name = "Soil_Water_Balance_Index"
     try:
         # Vectorized calculation across all active dimensions
-        ips_result = active_ds[var_p] - active_ds[var_etr] - active_ds[var_dr]
+        index_result = active_ds[var_p] - active_ds[var_etr] - active_ds[var_dr]
         
         # Save to main dataset
-        ds[new_var_name] = ips_result
-        ds[new_var_name].attrs['description'] = f"IPS ({var_p} - {var_etr} - {var_dr})"
+        ds[new_var_name] = index_result
+        ds[new_var_name].attrs['description'] = f"Soil Water Balance Index ({var_p} - {var_etr} - {var_dr})"
         
     except Exception as e:
         print(f"Calculation Error: {e}")
@@ -258,7 +253,7 @@ def IPS(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=
 
     # Summary of results
     
-    print("IPS calculation completed")
+    print("Soil Water Balance Index calculation completed")
     
     # Selection Log
     if selections_made:
@@ -290,7 +285,22 @@ def IPS(ds, dict_filters_gui=None, var_p_gui=None, var_etr_gui=None, var_dr_gui=
     # and the operator chooses to view the IPS over time at 'Piezometer 0', 
     # the values will be averaged across all models to produce a single time series.
 
-# Qmean/QA (mean discharge over a chosen period)
+
+# ---------------- Standardised Piezometric Level Indicator ----------------
+
+def SPLI(ds):
+    """
+    Return the Standardised Piezometric Level Indicator (SPLI) for a chosen period.
+
+    Args:
+        ds: Input xarray Dataset with piezometric level variable.
+    """
+    print("Standardised Piezometric Level Indicator (SPLI) is not yet implemented.")
+    return ds
+
+
+# ---------------- Qmean/QA ----------------
+#   Mean discharge over a chosen period
 
 def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
@@ -387,7 +397,9 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
     
     return ds
 
-## Q90/Q95 High-flow Indicators (flow exceeded only 10% or 5% of the time)
+
+# ---------------- Q90/Q95 ----------------
+#   High-flow Indicators (flow exceeded only 10% or 5% of the time)
 
 def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
@@ -495,9 +507,11 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
     
     return ds
 
-# VCN10 (Minimum 10-day consecutive mean flow)
 
-def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
+# ---------------- VCN10 ----------------
+#   Minimum 10-day consecutive mean flow
+
+def VCN10(ds):
     """
     Return the minimum 10-day consecutive mean flow (VCN10) for a chosen period (xarray version).
 
@@ -596,9 +610,11 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
     
     return ds
 
-## Q10/Q05 (flow exceeded only 10% or 5% of the time): low flow indicators
 
-def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
+# ---------------- Q10/Q05 ----------------
+#   Low flow indicators (flow exceeded only 10% or 5% of the time)
+
+def Q10_05(ds):
     """
     Return the flow rates exceeded 10% and 5% of the time for a chosen period (xarray version).
 
@@ -704,7 +720,8 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
     return ds
 
 
-## VCX3 (Maximum 3-day consecutive mean flow)
+# ---------------- VCX3 ----------------
+#   Maximum 3-day consecutive mean flow
 
 def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
     """
@@ -805,9 +822,11 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
     
     return ds
 
-## Over-threshold indicator (count of occurrences above a threshold with tolerance, and episode statistics)
 
-def over_threshold(ds, dict_filters_gui=None, var_name_gui=None, seuil_gui=None, tol_gui=None):
+# ---------------- Over-threshold Indicator ----------------
+#   Count of occurrences above a threshold with tolerance, and episode statistics
+
+def over_threshold(ds):
     """
     Identify and count exceedance episodes above a threshold with tolerance.
     Computes episode statistics (duration and Peak Over Threshold (POT)).
@@ -840,42 +859,36 @@ outputs:
             except (ValueError, IndexError):
                 print("Invalid index.")
 
-    # Threshold and Tolerance inputs
-    if seuil_gui is not None and tol_gui is not None:
-        seuil = float(seuil_gui)
-        tol = float(tol_gui)
-    else:
-        while True:
-            try:
-                seuil = float(input("Enter threshold value: ").strip())
-                break
-            except ValueError:
-                print("Threshold must be a number.")
+    # Threshold and tolerance inputs
+    while True:
+        try:
+            threshold = float(input("Enter threshold value: "))
+            break
+        except ValueError:
+            print("Threshold must be a number.")
 
-        while True:
-            try:
-                tol_input = input("Tolerance percentage (%) around threshold: ").strip()
-                if not tol_input: continue
-                tol = float(tol_input)
-                if tol < 0:
-                    print("Tolerance must be positive.")
-                    continue
-                break
-            except ValueError:
-                print("Tolerance must be a number.")
+    while True:
+        try:
+            tolerance = float(input("Tolerance percentage (%) around threshold: "))
+            if tolerance < 0:
+                print("Tolerance must be positive.")
+                continue
+            break
+        except ValueError:
+            print("Tolerance must be a number.")
 
-    seuil_effectif = seuil * (1 + tol / 100)
-    print(f"Effective threshold used: {seuil_effectif:.3f}")
+    effective_threshold = threshold * (1 + tolerance / 100)
+    print(f"Effective threshold used: {effective_threshold:.3f}")
 
     # Add Visualization Variable (Magnitude)
     # This creates a new variable: Value - Threshold
     new_var_magnitude = f"POT_magnitude_{var_name}"
-    ds[new_var_magnitude] = ds[var_name] - seuil_effectif
-    ds[new_var_magnitude].attrs['description'] = f"Exceedance magnitude above {seuil_effectif} for {var_name}"
+    ds[new_var_magnitude] = ds[var_name] - effective_threshold
+    ds[new_var_magnitude].attrs['description'] = f"Exceedance magnitude above {effective_threshold} for {var_name}"
     
     # Episode Detection Logic
     da = active_ds[var_name]
-    exceed = da > seuil_effectif
+    exceed = da > effective_threshold
     
     # Global counts
     total_obs = da.size
