@@ -213,6 +213,16 @@ def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_in
     ds[new_var_name] = mean_val
 
     # Summary
+    summary = {
+        "method": "Mean",
+        "var_name": var_name,
+        "reduced_dims": dims_to_reduce,
+        "period": period_label.lstrip('_') if period_label else "full range",
+        "new_var": new_var_name,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_stat_summary'] = summary
+
     if not is_gui:
         print("\nMean calculation summary:")
         print(f"Dimensions reduced: {dims_to_reduce}")
@@ -299,6 +309,16 @@ def maximum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
     ds[new_var_name] = max_val
 
     # Summary
+    summary = {
+        "method": "Maximum",
+        "var_name": var_name,
+        "reduced_dims": dims_to_reduce,
+        "period": period_label.lstrip('_') if period_label else "full range",
+        "new_var": new_var_name,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_stat_summary'] = summary
+
     if not is_gui:
         print("\nMaximum calculation summary:")
         print(f"Dimensions reduced: {dims_to_reduce}")
@@ -386,6 +406,16 @@ def minimum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
     ds[new_var_name] = min_val
 
     # Summary
+    summary = {
+        "method": "Minimum",
+        "var_name": var_name,
+        "reduced_dims": dims_to_reduce,
+        "period": period_label.lstrip('_') if period_label else "full range",
+        "new_var": new_var_name,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_stat_summary'] = summary
+
     if not is_gui:
         print("\nMinimum calculation summary:")
         print(f"Dimensions reduced: {dims_to_reduce}")
@@ -490,6 +520,16 @@ def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_
     ds[new_var_name] = perc_val
 
     # Summary
+    summary = {
+        "method": f"Percentile ({int(q*100)}th)",
+        "var_name": var_name,
+        "reduced_dims": dims_to_reduce,
+        "period": period_label.lstrip('_') if period_label else "full range",
+        "new_var": new_var_name,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_stat_summary'] = summary
+
     if not is_gui:
         print(f"\nPercentile ({int(q*100)}th) calculation summary:")
         print(f"Dimensions reduced: {dims_to_reduce}")
@@ -586,6 +626,15 @@ def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=N
     ds[new_var_name] = rolling_val
 
     # Summary
+    summary = {
+        "method": f"Rolling Mean (w={window})",
+        "var_name": var_name,
+        "period": period_label.lstrip('_') if period_label else "full range",
+        "new_var": new_var_name,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_stat_summary'] = summary
+
     if not is_gui:
         print(f"\nRolling Mean (window={window}) calculation summary:")
         if period_label:
@@ -672,6 +721,15 @@ def monthly_interannual_average_xr(ds, var_name_gui=None, time_dim_gui=None):
     ds[new_var_name] = monthly_stats
 
     # Summary
+    summary = {
+        "method": "Monthly Interannual Average",
+        "var_name": var_name,
+        "grouped_by": time_dim,
+        "new_var": new_var_name,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_stat_summary'] = summary
+
     if not is_gui:
         print("\nInterannual monthly average summary:")
         print(f"Grouped by : {time_dim}")

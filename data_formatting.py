@@ -293,9 +293,9 @@ def load_multiple_datasets(paths, spatial_gui: dict = None):
         hy_model = ds.attrs.get("hy_model_id", "unknown")
 
 
-        if "unknown" in (gcm, rcm, bc, hy_model, scenario):
-            print(f"File {filename} is missing metadata. Skipping.")
-            continue
+        if "unknown" in (gcm, rcm, bc, hy_model, scenario) :
+            print("The file format is not appropriate")
+            return
 
         # Create a single "model_chain" dimension
         model_chain = f"{gcm}-{rcm}-{bc}-{hy_model}"

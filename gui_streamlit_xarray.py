@@ -190,6 +190,35 @@ def render_categorical_filters(key_prefix="filter"):
     return dict_filters
 
 
+def render_temporal_filters(key_prefix="time_filter"):
+    """
+    Renders an expander with date inputs for the time dimension.
+    Returns (start_date_str, end_date_str) or (None, None).
+    """
+    ds = st.session_state.get("ds")
+    if ds is None: return None, None
+    
+    t_coord = next((d for d in ds.dims if "time" in d.lower()), "time")
+    if t_coord not in ds.dims:
+        return None, None
+        
+    try:
+        # Convert to pandas Timestamps to find min/max
+        time_values = pd.to_datetime(ds[t_coord].values)
+        min_dt = time_values.min().date()
+        max_dt = time_values.max().date()
+        
+        with st.expander("📅 Filtrage temporel (période d'analyse)"):
+            st.info(f"Période disponible : {min_dt} au {max_dt}")
+            c1, c2 = st.columns(2)
+            start_date = c1.date_input("Date de début", min_dt, min_value=min_dt, max_value=max_dt, key=f"{key_prefix}_start")
+            end_date = c2.date_input("Date de fin", max_dt, min_value=min_dt, max_value=max_dt, key=f"{key_prefix}_end")
+            
+        return str(start_date), str(end_date)
+    except Exception:
+        return None, None
+
+
 def time_like_dims() -> list[str]:
     return [d for d in ds_dims() if "time" in d.lower()]
 
@@ -337,6 +366,15 @@ with st.sidebar:
                         if len(tmp_paths) == 1:
                             ds_raw = ds_first # Reuse the one we opened
                             
+                            if 'time' in ds_raw:
+                                try:
+                                    ds_raw = ds_raw.assign_coords(time=xr.coding.times.decode_cf_datetime(
+                                        ds_raw['time'], ds_raw['time'].attrs.get('units', 'days since 1900-01-01'),
+                                        calendar=ds_raw['time'].attrs.get('calendar', 'standard')
+                                    ))
+                                except Exception as e:
+                                    pass
+
                             ds_loaded = df_mod.handle_spatial_dimensions(ds_raw, spatial_gui=spatial_gui_val)
 
                             # Handle advanced selection (re-selection on raw)
@@ -433,15 +471,48 @@ if has_dataset():
 
         col_a, col_b = st.columns(2)
         with col_a:
-            st.markdown("**Dimensions**")
-            dim_df = pd.DataFrame({"Dimension": list(ds.dims.keys()), "Taille": list(ds.dims.values())})
-            st.dataframe(dim_df, hide_index=True, use_container_width=True)
+            st.markdown("**Dimensions / Catégories**")
+            dim_rows = []
+            for d, size in ds.dims.items():
+                extrait = ""
+                if d in ds.coords:
+                    c_vals = ds[d].values
+                    if size <= 10 or str(c_vals.dtype).startswith('<U') or str(c_vals.dtype) == 'object':
+                        # Petites listes ou texte : on affiche le contenu
+                        extrait = str(list(c_vals[:min(5, size)]))
+                        if size > 5: extrait = extrait.rstrip("]") + ", ...]"
+                    elif np.issubdtype(c_vals.dtype, np.number):
+                        extrait = f"Min: {float(c_vals.min()):.2g} | Max: {float(c_vals.max()):.2g}"
+                    elif np.issubdtype(c_vals.dtype, np.datetime64) or "datetime" in str(c_vals.dtype).lower() or "cftime" in str(type(c_vals[0] if size>0 else None)):
+                        try:
+                            extrait = f"{pd.to_datetime(c_vals.min()).date()} → {pd.to_datetime(c_vals.max()).date()}"
+                        except:
+                            extrait = "..."
+                else:
+                    extrait = "Pas de coord."
+                dim_rows.append({"Dimension": d, "Nb Valeurs": size, "Extrait / Plage": extrait})
+            st.dataframe(pd.DataFrame(dim_rows), hide_index=True, use_container_width=True)
+
         with col_b:
             st.markdown("**Variables**")
             rows = []
             for v in ds.data_vars:
                 da = ds[v]
-                rows.append({"Variable": v, "Dims": str(da.dims), "Type": str(da.dtype)})
+                flat_vals = da.values.flatten()
+                
+                # Chercher les 5 premières valeurs (non-NaN si numériques)
+                try:
+                    if np.issubdtype(da.dtype, np.number):
+                        non_nans = flat_vals[~np.isnan(flat_vals)]
+                        extrait = str(list(np.round(non_nans[:min(5, len(non_nans))], 3)))
+                    else:
+                        extrait = str(list(flat_vals[:min(5, len(flat_vals))]))
+                    if flat_vals.size > 5:
+                        extrait = extrait.rstrip("]") + ", ...]"
+                except:
+                    extrait = "..."
+
+                rows.append({"Variable": v, "Dims": str(da.dims), "Aperçu (5 val)": extrait})
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
 else:
@@ -606,9 +677,30 @@ with tab_stat:
             log(f"Statistique '{stat_func}' calculée → {new_vars}", "success")
             st.success(f"✅ Calcul terminé. Nouvelles variables : {new_vars}")
 
-            # Aperçu de la nouvelle variable
+            # --- Affichage du résumé statistique ---
+            if "last_stat_summary" in ds_work.attrs:
+                summary = ds_work.attrs["last_stat_summary"]
+                st.markdown("---")
+                st.subheader(f"📊 Résumé : {summary.get('method', stat_func)}")
+                
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Variable source", summary.get("var_name", "N/A"))
+                c2.metric("Période", summary.get("period", "Complète"))
+                if "reduced_dims" in summary:
+                    c3.metric("Dim. réduites", str(summary["reduced_dims"]))
+                elif "grouped_by" in summary:
+                    c3.metric("Groupé par", summary["grouped_by"])
+
+                # Affichage des 5 premières valeurs
+                if "first_5_vals" in summary and summary["first_5_vals"]:
+                    with st.expander("👁️ Voir les 5 premières valeurs"):
+                        st.table(pd.DataFrame({"Valeur": summary["first_5_vals"]}))
+                
+                st.markdown("---")
+
+            # Aperçu de la nouvelle variable (existant)
             if new_vars:
-                with st.expander("👁️ Aperçu de la variable calculée"):
+                with st.expander("🔍 Détails techniques des nouvelles variables"):
                     for nv in new_vars:
                         da_new = ds_work[nv]
                         st.markdown(f"**{nv}** — dims: `{da_new.dims}`, shape: `{da_new.shape}`")
@@ -619,7 +711,7 @@ with tab_stat:
                             c1.metric("Min", f"{float(vals_flat.min()):.3f}")
                             c2.metric("Moy", f"{float(vals_flat.mean()):.3f}")
                             c3.metric("Max", f"{float(vals_flat.max()):.3f}")
-                            c4.metric("N valides", f"{vals_flat.size:,}")
+                            c4.metric("Données (hors NaN)", f"{vals_flat.size:,}", help="Nombre de valeurs réelles non-nulles résultant du calcul stat.")
 
         except Exception as e:
             log(f"Erreur statistique : {e}", "error")
@@ -640,8 +732,9 @@ with tab_ind:
 
     vars_list_ind = ds_vars()
 
-    # ── Filtres catégoriels ──────────────────────────────────────────────────
+    # ── Filtres catégoriels et temporels ────────────────────────────────────
     dict_filters_gui = render_categorical_filters(key_prefix="ind")
+    start_gui_ind, end_gui_ind = render_temporal_filters(key_prefix="ind_time")
 
     # ── Paramètres spécifiques à chaque indicateur ─────────────────────────
     st.markdown("**Paramètres de l'indicateur**")
@@ -743,11 +836,52 @@ with tab_ind:
                     tolerance_gui=float(tolerance),
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
+                    start_gui=start_gui_ind,
+                    end_gui=end_gui_ind,
                 )
 
             st.session_state["ds"] = ds_work
             new_vars = [v for v in ds_work.data_vars if v not in prev_vars]
             log(f"Indicateur '{indicator}' calculé → {new_vars}", "success")
+            
+            # --- Affichage des résultats détaillés (Summary) ---
+            if "last_ind_summary" in ds_work.attrs:
+                summary = ds_work.attrs["last_ind_summary"]
+                st.markdown("---")
+                st.subheader(f"📊 Résultats : {summary.get('method', indicator)}")
+                
+                if indicator == "Over threshold":
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Occurrences", summary.get("total_exceedances", 0))
+                    c2.metric("Épisodes", summary.get("n_episodes", 0))
+                    c3.metric("Durée moy.", f"{summary.get('mean_duration', 0):.1f}")
+                    c4.metric("Pic Max (POT)", f"{summary.get('max_pot', 0):.3f}")
+                    st.info(f"💡 Seuil effectif : **{summary.get('threshold', 0):.3f}** sur **{summary.get('var_name', 'N/A')}**")
+                
+                elif indicator == "IPS":
+                    st.metric("Valeur Moyenne IPS", f"{summary.get('mean_val', 0):.3f}")
+                    st.info(f"Variable créée : **{summary.get('var_name', 'N/A')}**")
+                
+                elif indicator == "Qmean":
+                    st.metric("Débit Moyen Global", f"{summary.get('mean_val', 0):.3f}")
+                    st.info(f"Variable créée : **{summary.get('var_name', 'N/A')}**")
+                
+                elif indicator in ["Q90/Q95", "Q10/Q05"]:
+                    vars_ind = summary.get("vars", [])
+                    st.info(f"Variables créées : **{', '.join(vars_ind)}**")
+                
+                else:
+                    # Fallback générique
+                    st.write(f"Indicateur : **{summary.get('method', indicator)}**")
+                    if "var_name" in summary: st.info(f"Variable : **{summary['var_name']}**")
+
+                # Affichage des 5 premières valeurs (commun à tous)
+                if "first_5_vals" in summary and summary["first_5_vals"]:
+                    with st.expander("👁️ Voir les 5 premières valeurs"):
+                        st.table(pd.DataFrame({"Valeur": summary["first_5_vals"]}))
+                
+                st.markdown("---")
+
             st.success(f"✅ Indicateur calculé. Nouvelles variables : {new_vars}")
 
             if new_vars:
@@ -886,6 +1020,8 @@ with tab_viz:
                     ds_plot,
                     x_name_gui=var_x,
                     y_names_gui=plot_vars,
+                    start_gui=start_viz,
+                    end_gui=end_viz,
                     plot_config_gui=gui_config,
                     auto_mean_gui=True,
                     dim_selections_gui=viz_filters,
@@ -899,6 +1035,8 @@ with tab_viz:
                     ds_plot,
                     x_name_gui=var_x,
                     y_names_gui=plot_vars,
+                    start_gui=start_viz,
+                    end_gui=end_viz,
                     plot_config_gui=gui_config,
                     auto_mean_gui=True,
                     dim_selections_gui=viz_filters
@@ -909,6 +1047,8 @@ with tab_viz:
                     ds_plot,
                     x_name_gui=var_x,
                     y_names_gui=[var_y],
+                    start_gui=start_viz,
+                    end_gui=end_viz,
                     plot_config_gui=gui_config,
                     auto_mean_gui=True,
                     dim_selections_gui=viz_filters
@@ -920,7 +1060,9 @@ with tab_viz:
                 else:
                     fig = viz.radar_chart(
                         ds_plot, 
-                        var_gui=vars_multi, 
+                        var_gui=vars_multi,
+                        start_gui=start_viz,
+                        end_gui=end_viz,
                         plot_config_gui=gui_config,
                         dim_selections_gui=viz_filters,
                         auto_mean_gui=True
@@ -932,6 +1074,8 @@ with tab_viz:
                     x_name_gui=var_x,
                     col_name_gui=var_main,
                     bins_gui=st.session_state.get("viz_bins", 10),
+                    start_gui=start_viz,
+                    end_gui=end_viz,
                     plot_config_gui=gui_config,
                     dim_selections_gui=viz_filters,
                     auto_mean_gui=True

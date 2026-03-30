@@ -1,5 +1,6 @@
 # Hydrological Indicators Calculation Functions
 import numpy as np
+import pandas as pd
 
 # ---------------- Set Up Functions ----------------
 
@@ -252,8 +253,9 @@ def soil_water_balance_index(ds, dict_filters_gui=None, var_p_gui=None, var_etr_
         return ds
 
     # Summary of results
-    
-    print("Soil Water Balance Index calculation completed")
+    final_shape = ds[new_var_name].shape
+    final_dims = ds[new_var_name].dims
+    mean_val = float(ds[new_var_name].mean(skipna=True))
     
     # Selection Log
     if selections_made:
@@ -264,19 +266,26 @@ def soil_water_balance_index(ds, dict_filters_gui=None, var_p_gui=None, var_etr_
         print("Selection: none.")
 
     # Shape and Dimension explanation
-    final_shape = ds[new_var_name].shape
-    final_dims = ds[new_var_name].dims
     print(f"New Variable: '{new_var_name}'")
     print(f"Dimensions: {final_dims}")
     print(f"Shape: {final_shape}")
     
     # Global Mean (Spatial + Temporal + Categorical)
-    mean_val = float(ds[new_var_name].mean(skipna=True))
-    print(f"Global Mean on the selection): {mean_val:.2f}")
+    print(f"Global Mean on the selection: {mean_val:.2f}")
+
+    # Summary for GUI
+    summary = {
+        "method": "Soil Water Balance Index (IPS)",
+        "var_name": new_var_name,
+        "mean_val": mean_val,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_ind_summary'] = summary
     
     # Reminder for visualization
     if len([d for d in final_shape if d > 1]) > 1:
-         print("Note: The IPS was calculated for each {final_dims}")
+         print(f"Note: The indicator was calculated for each {final_dims}")
+    
     return ds
     # Note: If the result is multidimensional,
     # the operator must select the specific dimension they wish to visualize. 
@@ -392,6 +401,23 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
     print("Variable Preview (First 5 values):")
     print(ds[new_var_name].values[:5])
     
+    # Summary for GUI
+    summary = {
+        "method": "Mean Discharge (Qmean)",
+        "var_name": new_var_name,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_ind_summary'] = summary
+    
+    # Summary for GUI
+    summary = {
+        "method": "Mean Discharge (Qmean)",
+        "var_name": new_var_name,
+        "mean_val": mean_val,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_ind_summary'] = summary
+    
     print("Date Preview (First 5 dates):")
     print(ds[new_time_dim].values[:5])
     
@@ -497,6 +523,14 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
     print(f"New Variables added: '{new_var_q90}' and '{new_var_q95}'")
     print(f"Dimensions: {ds[new_var_q90].dims}")
     print(f"Shape: {ds[new_var_q90].shape}")
+
+    # Summary for GUI
+    summary = {
+        "method": "Q90/Q95",
+        "vars": [new_var_q90, new_var_q95],
+        "first_5_vals": [float(v) for v in ds[new_var_q90].values.flatten()[:5]] if ds[new_var_q90].size > 0 else []
+    }
+    ds.attrs['last_ind_summary'] = summary
     
     # Previews
     print(f"\nQ90 Preview (First 5 values):")
@@ -604,6 +638,14 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
     # Previews
     print(f"\nVCN10 Preview (First 5 values):")
     print(ds[new_var_name].values[:5])
+
+    # Summary for GUI
+    summary = {
+        "method": "Minimum 10-day mean (VCN10)",
+        "var_name": new_var_name,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_ind_summary'] = summary
     
     print("Date Preview (First 5 dates):")
     print(ds[new_time_dim].values[:5])
@@ -709,6 +751,14 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
     print(f"New Variables added: '{new_var_q10}' and '{new_var_q05}'")
     print(f"Dimensions: {ds[new_var_q10].dims}")
     print(f"Shape: {ds[new_var_q10].shape}")
+
+    # Summary for GUI
+    summary = {
+        "method": "Q10/Q05 (Low flows)",
+        "vars": [new_var_q10, new_var_q05],
+        "first_5_vals": [float(v) for v in ds[new_var_q10].values.flatten()[:5]] if ds[new_var_q10].size > 0 else []
+    }
+    ds.attrs['last_ind_summary'] = summary
     
     # Preview Q10
     print(f"\nQ10 Preview (First 5 values):")
@@ -816,6 +866,14 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
     # Previews
     print(f"\nVCX3 Preview (First 5 values):")
     print(ds[new_var_name].values[:5])
+
+    # Summary for GUI
+    summary = {
+        "method": "Maximum 3-day mean (VCX3)",
+        "var_name": new_var_name,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+    }
+    ds.attrs['last_ind_summary'] = summary
     
     print("Date Preview (First 5 dates):")
     print(ds[new_time_dim].values[:5])
@@ -826,7 +884,7 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
 # ---------------- Over-threshold Indicator ----------------
 #   Count of occurrences above a threshold with tolerance, and episode statistics
 
-def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, threshold_gui=None, tolerance_gui=None, unite_gui=None, nb_gui=None):
+def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, threshold_gui=None, tolerance_gui=None, unite_gui=None, nb_gui=None, start_gui=None, end_gui=None):
     """
     Identify and count exceedance episodes above a threshold with tolerance.
     Computes episode statistics (duration and Peak Over Threshold (POT)).
@@ -840,12 +898,24 @@ def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=Non
     - tolerance_gui: Tolerance percentage (optional).
     - unite_gui: Time unit (e.g., 'm').
     - nb_gui: Time step (e.g., 1).
+    - start_gui/end_gui: Start and end dates for the analysis (YYYY-MM-DD strings).
     """
 
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
     
     # Categorical Filtering
     active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
+
+    # Time Filtering (Period selection)
+    t_coord = time_coord_gui or 'time'
+    if (start_gui or end_gui) and t_coord in active_ds.dims:
+        try:
+            start_val = pd.to_datetime(start_gui) if start_gui else active_ds[t_coord].min().values
+            end_val   = pd.to_datetime(end_gui)   if end_gui   else active_ds[t_coord].max().values
+            active_ds = active_ds.sel({t_coord: slice(start_val, end_val)})
+            print(f"-> Period filtering applied: {start_val.date()} to {end_val.date()}")
+        except Exception as e:
+            print(f"-> Warning: Period filtering failed: {e}")
 
     # Variable selection
     if var_q_gui is not None:
@@ -945,15 +1015,26 @@ def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=Non
         pot_values.append(current_peak)
 
     # Summary Statistics Output
+    summary = {
+        "var_name": var_name,
+        "threshold": effective_threshold,
+        "total_exceedances": int(np.sum(exceed_flat)),
+        "n_episodes": len(episodes),
+        "mean_duration": float(np.mean(episodes)) if episodes else 0.0,
+        "max_pot": float(np.max(pot_values)) if pot_values else 0.0,
+        "first_5_vals": [float(v) for v in ds[new_var_magnitude].values.flatten()[:5]] if ds[new_var_magnitude].size > 0 else []
+    }
+    ds.attrs['last_ind_summary'] = summary
+
     print(f"Global Results for {var_name}:")
     if len(episodes) > 0:
-        print(f"Total occurrences above threshold: {int(np.sum(exceed_flat))}")
-        print(f"Number of independent episodes: {len(episodes)}")
-        print(f"Mean episode duration: {np.mean(episodes):.2f} time steps")
-        print(f"Highest Peak Over Threshold (POT): {np.max(pot_values):.3f}")
+        print(f"Total occurrences above threshold: {summary['total_exceedances']}")
+        print(f"Number of independent episodes: {summary['n_episodes']}")
+        print(f"Mean episode duration: {summary['mean_duration']:.2f} time steps")
+        print(f"Highest Peak Over Threshold (POT): {summary['max_pot']:.3f}")
     else:
         print("No exceedance episodes detected.")
 
     print(f"New variables added: '{new_var_magnitude}' and optionally '{new_var_name}'")
     
-    return ds
+    return ds

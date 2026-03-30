@@ -76,7 +76,9 @@ def ask_time_period(ds, start_gui=None, end_gui=None):
     """
     
     if start_gui is not None or end_gui is not None:
-        return start_gui, end_gui
+        start_date = pd.to_datetime(start_gui) if start_gui else None
+        end_date   = pd.to_datetime(end_gui)   if end_gui   else None
+        return start_date, end_date
 
     time_values = pd.to_datetime(ds["time"].values)
 
@@ -948,8 +950,9 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     x_dim = x_arr.dims[0]
     x_vals = x_arr.values
     
-    # Convert X to numeric and handle NaN
-    x_numeric = pd.to_numeric(x_vals, errors='coerce')
+    # Convert X to numeric (preserve datetimes)
+    is_x_dt = np.issubdtype(x_vals.dtype, np.datetime64) or "datetime" in str(x_vals.dtype).lower() or (len(x_vals)>0 and "cftime" in str(type(x_vals[0])))
+    x_numeric = x_vals if is_x_dt else pd.to_numeric(x_vals, errors='coerce')
     
     # Determine if we are in GUI mode
     is_gui_scatter = any(p is not None for p in [var_gui, x_name_gui, y_names_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
@@ -975,11 +978,12 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
         for i_res, (sel, da_sel) in enumerate(results):
             y_vals = da_sel.values.ravel()
             
-            # Convert to numeric and handle NaN
-            y_numeric = pd.to_numeric(y_vals, errors='coerce')
+            # Convert Y (preserve datetimes)
+            is_y_dt = np.issubdtype(da_sel.dtype, np.datetime64) or "datetime" in str(da_sel.dtype).lower() or (len(y_vals)>0 and "cftime" in str(type(y_vals[0])))
+            y_numeric = y_vals if is_y_dt else pd.to_numeric(y_vals, errors='coerce')
             
-            # Create mask for valid (non-NaN) points
-            valid_mask = ~(np.isnan(x_numeric) | np.isnan(y_numeric))
+            # Create mask for valid (non-NaN/NaT) points
+            valid_mask = ~(pd.isna(x_numeric) | pd.isna(y_numeric))
             
             # Filter to valid points only
             x_plot = x_numeric[valid_mask]
