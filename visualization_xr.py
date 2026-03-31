@@ -729,9 +729,29 @@ def line_chart(ds: xr.Dataset):
                 # Recréer un DataArray avec les bonnes dims
                 da_sel = da.sel(**sel) if sel else da
 
+                ''''
                 y_min = da_sel.min(dim='model', skipna=True).values
                 y_max = da_sel.max(dim='model', skipna=True).values
                 y_mean = da_sel.mean(dim='model', skipna=True).values
+                '''
+
+                # --- Reduce ALL remaining dims except time ---
+                dims_to_reduce = [d for d in da_sel.dims if d not in [x_dim, 'model']]
+
+                da_reduced = da_sel
+                if dims_to_reduce:
+                    da_reduced = da_sel.mean(dim=dims_to_reduce, skipna=True)
+
+                # --- Compute envelope ---
+                y_min = da_reduced.min(dim='model', skipna=True).values
+                y_max = da_reduced.max(dim='model', skipna=True).values
+                y_mean = da_reduced.mean(dim='model', skipna=True).values
+
+                # --- Ensure 1D ---
+                y_min = np.squeeze(y_min)
+                y_max = np.squeeze(y_max)
+                y_mean = np.squeeze(y_mean)
+
 
                 # X correspondant
                 x_vals = da_sel[x_dim].values
