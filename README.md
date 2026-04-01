@@ -2,7 +2,6 @@
 ## Table of Contents
 
 - [Hydrological Visualization Tool](#hydrological-visualization-tool)
-- [Features](#features)
 - [Project Structure](#project-structure)
 - [Supported Input Data](#supported-input-data)
   - [NetCDF](#netcdf-input-data-specification)
@@ -84,19 +83,6 @@ If you just want to quickly test the tool without reading all the details, here 
 pip install -r requirements.txt
 python main_full_xarray.py
 ```
-
----
-
-## Features
-
-* Supports **NetCDF (.nc)** and **CSV** files
-* Interactive data analysis pipeline
-* Hydrological indicators computation
-* Statistical processing (mean, percentile, etc.)
-* Multiple visualization types
-* Built on **xarray**, ideal for multidimensional data
-
----
 
 ## Project Structure
 
