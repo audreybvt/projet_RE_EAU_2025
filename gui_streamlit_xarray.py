@@ -760,7 +760,16 @@ with tab_ind:
 
     indicator = st.selectbox(
         "Indicateur",
-        ["IPS", "Qmean", "Q90/Q95", "Q10/Q05", "VCN10", "VCX3", "Over threshold"],
+        [
+            "Soil_Water_Balance_Index", 
+            "Standardised Piezometric Level Indicator", 
+            "Qmean", 
+            "Q90/95", 
+            "Q10/05", 
+            "VCN10", 
+            "VCX3", 
+            "over_threshold"
+        ],
         key="ind_select",
     )
 
@@ -779,7 +788,7 @@ with tab_ind:
     unite_gui_val = None
     nb_gui_val    = None
 
-    if indicator in ("Qmean", "Q90/Q95", "Q10/Q05", "VCN10", "VCX3", "Over threshold"):
+    if indicator in ("Qmean", "Q90/95", "Q10/05", "VCN10", "VCX3", "over_threshold"):
         col_tc, col_unit, col_nb = st.columns(3)
         if t_dims_ind:
             time_coord_ind = col_tc.selectbox("Coordonnée temporelle", t_dims_ind, key="ind_tc")
@@ -787,16 +796,19 @@ with tab_ind:
                                             format_func=lambda x: {"d": "Jours", "m": "Mois", "y": "Années"}[x], key="ind_unite")
         nb_gui_val = col_nb.number_input("Pas de temps", min_value=1, value=1, step=1, key="ind_nb")
 
-    if indicator == "IPS":
+    if indicator == "Soil_Water_Balance_Index":
         col_p, col_etr, col_dr = st.columns(3)
         var_p   = col_p.selectbox("Variable P (précipitations)", vars_list_ind, key="ips_p")
         var_etr = col_etr.selectbox("Variable ETR", vars_list_ind, key="ips_etr")
         var_dr  = col_dr.selectbox("Variable ΔR (variation stock)", vars_list_ind, key="ips_dr")
+    
+    elif indicator == "Standardised Piezometric Level Indicator":
+        var_q = st.selectbox("Variable Niveau Piézométrique", vars_list_ind, key="ind_varspli")
 
-    elif indicator in ("Qmean", "Q90/Q95", "Q10/Q05", "VCN10", "VCX3"):
+    elif indicator in ("Qmean", "Q90/95", "Q10/05", "VCN10", "VCX3"):
         var_q = st.selectbox("Variable débit (Q)", vars_list_ind, key="ind_varq")
 
-    elif indicator == "Over threshold":
+    elif indicator == "over_threshold":
         var_q    = st.selectbox("Variable débit (Q)", vars_list_ind, key="ind_varq_ot")
         c1, c2 = st.columns(2)
         threshold = c1.number_input("Seuil", value=0.0, format="%.4f", key="ind_thresh")
@@ -807,7 +819,7 @@ with tab_ind:
         ds_work = st.session_state["ds"]
         prev_vars = set(ds_work.data_vars)
         try:
-            if indicator == "IPS":
+            if indicator == "Soil_Water_Balance_Index":
                 ds_work = ind.IPS(
                     ds_work,
                     dict_filters_gui=dict_filters_gui,
@@ -824,7 +836,7 @@ with tab_ind:
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
                 )
-            elif indicator == "Q90/Q95":
+            elif indicator == "Q90/95":
                 ds_work = ind.Q90_95(
                     ds_work,
                     dict_filters_gui=dict_filters_gui,
@@ -833,7 +845,7 @@ with tab_ind:
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
                 )
-            elif indicator == "Q10/Q05":
+            elif indicator == "Q10/05":
                 ds_work = ind.Q10_05(
                     ds_work,
                     dict_filters_gui=dict_filters_gui,
@@ -860,7 +872,11 @@ with tab_ind:
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
                 )
-            elif indicator == "Over threshold":
+            elif indicator == "Standardised Piezometric Level Indicator":
+                st.warning("SPLI n'est pas encore implémenté dans le moteur de calcul.")
+                ds_work = ind.SPLI(ds_work)
+
+            elif indicator == "over_threshold":
                 ds_work = ind.over_threshold(
                     ds_work,
                     dict_filters_gui=dict_filters_gui,
@@ -985,7 +1001,7 @@ with tab_viz:
         
         if chart_type == "Nuage de points":
             var_y = col_v2.selectbox("Axe Y (ordonnée)", vars_viz, key="viz_y")
-            plot_vars_ui = [var_y]
+            plot_vars_ui = [var_x, var_y]
         elif chart_type == "Histogramme":
             var_main = col_v2.selectbox("Variable à analyser", ds_vars(), key="viz_main")
             plot_vars_ui = [var_main]
@@ -1122,6 +1138,8 @@ with tab_viz:
                 "xlabel": plot_config_gui.get("xlabel") or "",
                 "ylabel": plot_config_gui.get("ylabel") or "",
                 "title": plot_config_gui.get("title") or "",
+                "x_limits": plot_config_gui.get("x_limits"),
+                "y_limits": plot_config_gui.get("y_limits"),
             }
 
             if chart_type == "Graphique en ligne":
@@ -1149,7 +1167,9 @@ with tab_viz:
                     end_gui=end_viz,
                     plot_config_gui=gui_config,
                     auto_mean_gui=True,
-                    dim_selections_gui=viz_filters
+                    dim_selections_gui=viz_filters,
+                    plot_envelope_gui=st.session_state.get("viz_envelope", False),
+                    envelope_type_gui=st.session_state.get("viz_env_type", "average")
                 )
 
             elif chart_type == "Nuage de points":

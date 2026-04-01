@@ -11,6 +11,7 @@ import matplotlib.dates as mdates
 import itertools
 
 _GUI_CALL = "_GUI_CALL"
+colors_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 # ---------------- Helping Functions ----------------
 def subset_time(ds, start, end):
@@ -369,26 +370,34 @@ def build_axis_label(label, unit):
 def apply_gui_filters(da: xr.DataArray, dim_selections_gui: dict) -> xr.DataArray:
     """
     Applies filters from dim_selections_gui to a DataArray.
-    Supports single values, lists of values, and "mean"
-    Ensuring that categorical filters are applied to the DataArray before statistical calculations.
+    Supports single values, lists of values, and "mean".
+    Automatically handles both flat dictionaries {dim: val} 
+    and nested dictionaries {var: {dim: val}}.
     """
     if not dim_selections_gui:
         return da
         
     for dim, selection in dim_selections_gui.items():
+        if isinstance(selection, dict):
+            # Nested dict: handle inner dimension selections
+            for d, s in selection.items():
+                if d in da.dims:
+                    if s == "mean":
+                        da = da.mean(dim=d, skipna=True)
+                    else:
+                        try: da = da.sel({d: s})
+                        except: pass
+            continue
+            
         if dim in da.dims:
             if selection == "mean":
                 da = da.mean(dim=dim, skipna=True)
             elif isinstance(selection, (list, np.ndarray, pd.Index)):
-                # Slice but keep the dimension
-                da = da.sel({dim: selection})
+                try: da = da.sel({dim: selection})
+                except: pass
             else:
-                # Single value (reduces dimensionality)
-                try:
-                    da = da.sel({dim: selection})
-                except Exception:
-                    # In case of already sliced or mismatched types
-                    pass
+                try: da = da.sel({dim: selection})
+                except: pass
     return da
 
 
@@ -543,7 +552,7 @@ def apply_categorical_sort(x_data, sort_key):
 
 # ---------------- Bar Chart ----------------
 
-def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
+def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False, plot_envelope_gui=None, envelope_type_gui=None):
     """
     Create a bar chart from an xarray Dataset.
     """
@@ -621,27 +630,26 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
     # ----------------------
     
     da_y = ds_period[y_name]
-    
     x_dim = x_arr.dims[0]
-    other_dims = [d for d in da_y.dims if d != x_dim]
     
-    if other_dims:
-        results = handle_xarray_dimensions(
-            da_y, 
-            main_dims=[x_dim],
-            dim_selections_gui=dim_selections_gui,
-            auto_mean_gui=auto_mean_gui
-        )
-    else:
-        results = [({}, da_y.values)]
+    # Get filters for this variable
+    var_filters = _get_var_filters(dim_selections_gui, y_name) or {}
+    
+    # Envelope logic for Bar Chart
+    plot_envelope = plot_envelope_gui if plot_envelope_gui is not None else False
+    envelope_type = envelope_type_gui if envelope_type_gui is not None else "average"
+
+    # Define base for background envelope
+    da_envelope_base = da_y.copy()
+    for d, s in var_filters.items():
+        if not isinstance(s, (list, np.ndarray, pd.Index)) and s != "mean" and d in da_envelope_base.dims:
+            da_envelope_base = da_envelope_base.sel({d: s})
 
     # ----------------------
-    # Sort data if months/seasons detected
+    # Sort setup
     # ----------------------
-    
     x_str_array = pd.Series([str(v) for v in x_vals])
     sort_key = get_sort_key_for_category(x_str_array)
-    
     if sort_key:
         categorical = apply_categorical_sort(x_str_array, sort_key)
         sort_idx = np.argsort(categorical)
@@ -649,62 +657,81 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
         sort_idx = np.arange(len(x_vals))
 
     # ----------------------
-    # Plot (FIXED VERSION)
+    # Envelope plotting (background)
     # ----------------------
-    
-    n_series = len(results)
-    x = np.arange(len(x_vals))  # positions de base
-    width = 0.8 / n_series      # largeur des barres
+    if plot_envelope:
+        # Identify the dimension causing variability (e.g. 'model' or 'scenario')
+        variability_dim = next((d for d in da_envelope_base.dims if d != x_dim and da_envelope_base.sizes[d] > 1), None)
+        
+        if variability_dim:
+            y_min_env = da_envelope_base.min(dim=variability_dim, skipna=True).values.ravel()
+            y_max_env = da_envelope_base.max(dim=variability_dim, skipna=True).values.ravel()
+            
+            if len(y_min_env) != len(x_vals):
+                y_min_env = y_min_env[:len(x_vals)]
+                y_max_env = y_max_env[:len(x_vals)]
+            
+            y_min_env = y_min_env[sort_idx]
+            y_max_env = y_max_env[sort_idx]
+            
+            ax.fill_between(np.arange(len(x_vals)), y_min_env, y_max_env, color='gray', alpha=0.15, label="Global Range")
 
-    colors = cm.viridis(np.linspace(0, 1, n_series))
+    # ----------------------
+    # Foreground filtering and multi-series logic
+    # ----------------------
+    da_y_filtered = apply_gui_filters(da_y, dim_selections_gui)
+    results = handle_xarray_dimensions(da_y_filtered, main_dims=[x_dim], dim_selections_gui=var_filters, auto_mean_gui=auto_mean_gui)
+
+    # Force split if multiple categories are selected in GUI
+    if len(results) == 1:
+        s0, d0 = results[0]
+        split_dims = [d for d in d0.dims if d != x_dim and d0.sizes[d] > 1]
+        if split_dims:
+            d_split = split_dims[0]
+            new_results = []
+            for val in d0[d_split].values:
+                ns = s0.copy(); ns[d_split] = val
+                new_results.append((ns, d0.sel({d_split: val})))
+            results = new_results
+
+    # ----------------------
+    # Plotting loop
+    # ----------------------
+    n_series = len(results)
+    x_base = np.arange(len(x_vals))
+    width = 0.8 / n_series if n_series > 1 else 0.4
+    colors = cm.viridis(np.linspace(0, 1, n_series)) if n_series > 1 else [plt.cm.viridis(0)]
 
     for i, (sel, da_sel) in enumerate(results):
         y_vals = da_sel.values.ravel()
-
-        # Alignement taille
         if len(y_vals) != len(x_vals):
-            if len(y_vals) == 1:
-                y_vals = np.full_like(x_vals, y_vals[0], dtype=float)
-            else:
-                y_vals = y_vals[:len(x_vals)]
+            y_vals = y_vals[:len(x_vals)] if len(y_vals) > len(x_vals) else np.pad(y_vals, (0, len(x_vals)-len(y_vals)), 'constant', constant_values=np.nan)
 
-        # Conversion float
-        y_vals = pd.to_numeric(y_vals, errors='coerce')
-
-        # Tri
-        y_sorted = y_vals[sort_idx]
-
-        # Label
+        y_num = pd.to_numeric(y_vals, errors='coerce')
+        y_sorted = y_num[sort_idx]
+        
+        all_info = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
         label = y_name
-        if sel:
-            label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
+        if all_info:
+            label += " (" + ", ".join(f"{v}" for v in all_info.values()) + ")"
 
-        # Décalage
-        offset = (i - (n_series - 1)/2) * width
-
-        ax.bar(
-            x + offset,
-            y_sorted,
-            width=width,
-            label=label,
-            color=colors[i]
-        )
+        offset = (i - (n_series - 1)/2) * width if n_series > 1 else 0
+        ax.bar(x_base + offset, y_sorted, width=width, label=label, color=colors[i % len(colors)])
 
     # ----------------------
     # Styling
     # ----------------------
-    
-    ax.set_xticks(x)
+    ax.set_xticks(x_base)
     ax.set_xticklabels(x_str_array.iloc[sort_idx], rotation=45, ha='right')
-
     ax.set_title(title)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+    if labels.get("x_limits") is not None:
+        ax.set_xlim(labels["x_limits"])
+    if labels.get("y_limits") is not None:
+        ax.set_ylim(labels["y_limits"])
     ax.grid(axis='y', linestyle='--', alpha=0.6)
-
-    if n_series > 1:
-        ax.legend()
-
+    if n_series > 1: ax.legend()
     plt.tight_layout()
 
     return fig
@@ -774,8 +801,7 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
         ax.set_ylim(labels["y_limits"])
 
     # -------- Check for model dimension and envelope option --------
-    # First, apply GUI filters to the dataset
-    ds_period = apply_gui_filters(ds_period, dim_selections_gui)
+    # Filtering will be handled per variable in the loop below.
 
     plot_envelope = False
     envelope_type = "average"  # "average" or "individual"
@@ -820,68 +846,80 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
             continue
 
         # -------- Case: model dimension exists and ensemble plot is requested --------
-        var_filters = _get_var_filters(dim_selections_gui, y_name)
+        var_filters = _get_var_filters(dim_selections_gui, y_name) or {}
+        
+        # Apply non-model filters to get the background envelope data
+        non_model_filters = {k: v for k, v in var_filters.items() if k != 'model'}
+        da_envelope = apply_gui_filters(da, non_model_filters)
 
-        if plot_envelope and 'model' in da.dims:
-            # For envelope plotting, handle extra dimensions interactively
-            results = handle_xarray_dimensions(
-                da,
-                main_dims=[x_dim, 'model'],  # Keep both time and model dimensions
+        if plot_envelope and 'model' in da_envelope.dims:
+            # calculate global min/max for the background envelope
+            main_dims_env = [x_dim, 'model']
+            results_env = handle_xarray_dimensions(da_envelope, main_dims=main_dims_env, dim_selections_gui=non_model_filters, auto_mean_gui=auto_mean_gui)
+            
+            # Find a consistent color for this variable (to match its lines)
+            i_var = y_names.index(y_name)
+            c_env = colors_cycle[i_var % len(colors_cycle)]
+
+            for sel_env, y_da_env in results_env:
+                y_min = y_da_env.min(dim='model', skipna=True).values
+                y_max = y_da_env.max(dim='model', skipna=True).values
+                x_vals_local = y_da_env[x_dim].values
+                
+                # Plot global envelope with variable-specific color
+                ax.fill_between(x_vals_local, y_min, y_max, alpha=0.15,
+                                color=c_env, label=f"{y_name} (Enveloppe globale)")
+
+            # Foreground: Selective models
+            da_selected = apply_gui_filters(da_envelope, {'model': var_filters.get('model')})
+            results_plot = handle_xarray_dimensions(
+                da_selected,
+                main_dims=[x_dim, 'model'] if envelope_type != "average" else [x_dim],
                 dim_selections_gui=var_filters,
                 auto_mean_gui=auto_mean_gui
             )
 
-            for sel, da_sel in results:
-                # da_sel is already sliced and averaged by handle_xarray_dimensions
-                
-                y_min = da_sel.min(dim='model', skipna=True).values
-                y_max = da_sel.max(dim='model', skipna=True).values
-                y_mean = da_sel.mean(dim='model', skipna=True).values
-                
-                # X corresponding - ensure it's 1D
+            for sel, da_sel in results_plot:
                 x_vals_local = da_sel[x_dim].values
-
-                # Create label
-                label = y_name
-                if sel:
-                    label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items() if k != 'model')
-                    
-                ax.fill_between(x_vals_local, y_min, y_max, alpha=0.3,
-                                label=f"{label} (min-max)")
+                label_prefix = y_name
+                # Merge current selection and fixed filters for labeling
+                all_info = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
+                if all_info:
+                    label_desc = ", ".join(f"{v}" for k, v in all_info.items())
+                    label_prefix += f" ({label_desc})"
 
                 if envelope_type == "average":
-                    ax.plot(x_vals_local, y_mean, label=f"{label} (mean)", linewidth=2)
+                    did_average = 'model' in da_sel.dims and da_sel.sizes['model'] > 1
+                    y_mean = da_sel.mean(dim='model', skipna=True).values if 'model' in da_sel.dims else da_sel.values
+                    label_final = label_prefix + (" (moyenne)" if did_average else "")
+                    ax.plot(x_vals_local, y_mean, label=label_final, linewidth=2.5)
                 else:
-                    for i in range(da_sel.sizes['model']):
-                        ax.plot(x_vals_local,
-                                da_sel.isel(model=i).values,
-                                label=f"{label} (model {i+1})",
-                                alpha=0.7)
-        
+                    if 'model' in da_sel.dims:
+                        for m_idx in range(da_sel.sizes['model']):
+                            m_name = str(da_sel['model'].values[m_idx])
+                            y_v = da_sel.isel(model=m_idx).values
+                            ax.plot(x_vals_local, y_v, label=f"{label_prefix} | {m_name}", alpha=0.8)
+                    else:
+                        ax.plot(x_vals_local, da_sel.values, label=label_prefix)
         else:
-            # Normal plotting without envelope
-            results = handle_xarray_dimensions(
-                da,
-                main_dims=[x_dim],
-                dim_selections_gui=var_filters,
-                auto_mean_gui=auto_mean_gui
-            )
-
+            da_filtered = apply_gui_filters(da, var_filters)
+            results = handle_xarray_dimensions(da_filtered, main_dims=[x_dim], dim_selections_gui=var_filters, auto_mean_gui=auto_mean_gui)
             for sel, da_sel in results:
-                y_vals = da_sel.values.ravel()
+                x_vals_local = da_sel[x_dim].values
+                all_info = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
                 label = y_name
-
-                if sel:
-                    label += " | " + ", ".join(
-                        f"{k}={v}" for k, v in sel.items()
-                    )
-
-                ax.plot(x_vals, y_vals, label=label, linestyle='-', marker=None)
+                if all_info:
+                    label += " (" + ", ".join(f"{v}" for v in all_info.values()) + ")"
+                ax.plot(x_vals_local, da_sel.values, label=label)
 
     # Plot individual line
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title)
+    if labels.get("x_limits") is not None:
+        ax.set_xlim(labels["x_limits"])
+    if labels.get("y_limits") is not None:
+        ax.set_ylim(labels["y_limits"])
 
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
@@ -981,105 +1019,97 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     
     # -------- Y loop --------
     i_color = 0
-    colors_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     for i, y_name in enumerate(y_names):
         da = ds_period[y_name]
         if x_dim not in da.dims:
             continue
         
-        var_filters = _get_var_filters(dim_selections_gui, y_name)
+        var_filters = _get_var_filters(dim_selections_gui, y_name) or {}
         
-        main_dims_y = [x_dim, 'model'] if plot_envelope and 'model' in da.dims else [x_dim]
-        results = handle_xarray_dimensions(
-            da,
-            main_dims=main_dims_y,
-            dim_selections_gui=var_filters,
-            auto_mean_gui=auto_mean_gui
-        )
-        
-        for i_res, (sel, y_da_sel) in enumerate(results):
-            sel_key = frozenset({k: v for k, v in sel.items() if k != 'model'}.items()) if sel else frozenset()
+        # Apply non-model filters for global envelope
+        non_model_filters = {k: v for k, v in var_filters.items() if k != 'model'}
+        da_envelope = apply_gui_filters(da, non_model_filters)
+
+        if plot_envelope and 'model' in da_envelope.dims:
+            # calculate global min/max for scatter envelope (errorbars)
+            results_env = handle_xarray_dimensions(da_envelope, main_dims=[x_dim, 'model'], dim_selections_gui=non_model_filters, auto_mean_gui=auto_mean_gui)
+            for sel_env, y_da_env in results_env:
+                sel_key_env = frozenset(sel_env.items()) if sel_env else frozenset()
+                x_da_env = x_dict.get(sel_key_env)
+                if x_da_env is None:
+                    x_da_env = list(x_dict.values())[0]
+
+                y_min_v = y_da_env.min(dim='model', skipna=True).values.ravel()
+                y_max_v = y_da_env.max(dim='model', skipna=True).values.ravel()
+                x_min_v = x_da_env.min(dim='model', skipna=True).values.ravel()
+                x_max_v = x_da_env.max(dim='model', skipna=True).values.ravel()
+                # Background: Point cloud for ALL available data
+                i_var = y_names.index(y_name)
+                c_env = colors_cycle[i_var % len(colors_cycle)]
+                
+                x_all = x_da_env.values.ravel()
+                y_all = y_da_env.values.ravel()
+                ax.scatter(x_all, y_all, color=c_env, alpha=0.1, s=10, zorder=0, label=f"{y_name} (Tous modèles)")
+
+            # Foreground: Selective models
+            da_selected = apply_gui_filters(da_envelope, {'model': var_filters.get('model')})
+            results_plot = handle_xarray_dimensions(da_selected, main_dims=[x_dim, 'model'] if envelope_type != "average" else [x_dim],
+                                                   dim_selections_gui=var_filters, auto_mean_gui=auto_mean_gui)
             
-            # Find the corresponding X based on filters (excluding model since it's now a retained dimension)
-            best_x_key = None
-            for xk in x_dict.keys():
-                if all(k in sel_key and sel_key.get(k) == v for k, v in dict(xk).items()):
-                    best_x_key = xk
-                    
-            if best_x_key is not None:
-                x_da_sel = x_dict[best_x_key]
-            else:
-                if frozenset() in x_dict and len(x_dict) == 1:
-                    x_da_sel = x_dict[frozenset()]
-                elif len(x_dict) == 1:
+            for sel, y_da_sel in results_plot:
+                # Include model and other filters in the label
+                all_sel = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
+                label_m = f"{y_name}"
+                if all_sel:
+                    label_m += " (" + ", ".join(f"{v}" for k, v in all_sel.items()) + ")"
+
+                sel_key = frozenset({k: v for k, v in sel.items() if k != 'model'}.items())
+                x_da_sel = x_dict.get(sel_key)
+                if x_da_sel is None:
                     x_da_sel = list(x_dict.values())[0]
-                else:
-                    x_da_sel = x_dict.get(sel_key, None)
-                    if x_da_sel is None:
-                        continue
-            
-            # Form clean label string excluding 'model' if plotting envelope
-            label = legend_labels[i] if i < len(legend_labels) else y_name
-            if sel:
-                label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items() if not (plot_envelope and k == 'model'))
-            
-            c = colors_cycle[i_color % len(colors_cycle)]
-            i_color += 1
-
-            if plot_envelope and 'model' in y_da_sel.dims and 'model' in x_da_sel.dims:
-                y_min = y_da_sel.min(dim='model', skipna=True).values.ravel()
-                y_max = y_da_sel.max(dim='model', skipna=True).values.ravel()
-                y_mean = y_da_sel.mean(dim='model', skipna=True).values.ravel()
+                c = colors_cycle[i_color % len(colors_cycle)]
+                i_color += 1
                 
-                x_min = x_da_sel.min(dim='model', skipna=True).values.ravel()
-                x_max = x_da_sel.max(dim='model', skipna=True).values.ravel()
-                x_mean = x_da_sel.mean(dim='model', skipna=True).values.ravel()
-                
-                # Align X and Y (incase of different masking)
-                valid_mask = ~(np.isnan(x_mean) | np.isnan(y_mean))
-                x_mean, y_mean = x_mean[valid_mask], y_mean[valid_mask]
-                x_min, x_max = x_min[valid_mask], x_max[valid_mask]
-                y_min, y_max = y_min[valid_mask], y_max[valid_mask]
-
                 if envelope_type == "average":
-                    ax.scatter(x_mean, y_mean, label=f"{label} (mean)", color=c, s=50)
-                    ax.errorbar(x_mean, y_mean, 
-                                xerr=[x_mean - x_min, x_max - x_mean], 
-                                yerr=[y_mean - y_min, y_max - y_mean], 
-                                fmt='none', color=c, alpha=0.3, zorder=0)
-                else: # individual
-                    # Plot all points faintly
-                    model_size_x = x_da_sel.sizes['model']
-                    model_size_y = y_da_sel.sizes['model']
-                    for m in range(min(model_size_x, model_size_y)):
-                        x_m = x_da_sel.isel(model=m).values.ravel()
-                        y_m = y_da_sel.isel(model=m).values.ravel()
-                        v_m = ~(np.isnan(x_m) | np.isnan(y_m))
-                        ax.scatter(x_m[v_m], y_m[v_m], color=c, alpha=0.3, s=20)
-                    # Bold mean
-                    ax.scatter(x_mean, y_mean, label=f"{label} (mean)", color=c, s=50, edgecolor='black')
-                    
-            else:
-                x_vals = x_da_sel.values.ravel()
-                y_vals = y_da_sel.values.ravel()
+                    did_average = 'model' in y_da_sel.dims and y_da_sel.sizes['model'] > 1
+                    y_m = y_da_sel.mean(dim='model').values.ravel() if 'model' in y_da_sel.dims else y_da_sel.values.ravel()
+                    x_m = x_da_sel.mean(dim='model').values.ravel() if 'model' in x_da_sel.dims else x_da_sel.values.ravel()
+                    label_final = label_m + (" (moyenne)" if did_average else "")
+                    ax.scatter(x_m, y_m, color=c, s=60, label=label_final, edgecolor='black')
+                else:
+                    if 'model' in y_da_sel.dims:
+                        for m_idx_s in range(y_da_sel.sizes['model']):
+                            m_name = y_da_sel.model.values[m_idx_s]
+                            label_ind = f"{y_name} ({m_name})"
+                            ax.scatter(x_da_sel.isel(model=m_idx_s).values, y_da_sel.isel(model=m_idx_s).values, color=c, alpha=0.8, label=label_ind)
+                    else:
+                        ax.scatter(x_da_sel.values, y_da_sel.values, color=c, alpha=0.8, label=label_m)
+        else:
+            da_filtered = apply_gui_filters(da, var_filters)
+            results = handle_xarray_dimensions(da_filtered, main_dims=[x_dim], dim_selections_gui=var_filters, auto_mean_gui=auto_mean_gui)
+            for sel, y_da_sel in results:
+                sel_key = frozenset(sel.items())
+                x_da_sel = x_dict.get(sel_key)
+                if x_da_sel is None:
+                    x_da_sel = list(x_dict.values())[0]
                 
-                is_x_dt = np.issubdtype(x_da_sel.dtype, np.datetime64) or "datetime" in str(x_da_sel.dtype).lower() or (len(x_vals)>0 and "cftime" in str(type(x_vals[0])))
-                x_numeric = x_vals if is_x_dt else pd.to_numeric(x_vals, errors='coerce')
+                all_info = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
+                label_p = y_name
+                if all_info:
+                    label_p += " (" + ", ".join(f"{v}" for v in all_info.values()) + ")"
 
-                is_y_dt = np.issubdtype(y_da_sel.dtype, np.datetime64) or "datetime" in str(y_da_sel.dtype).lower() or (len(y_vals)>0 and "cftime" in str(type(y_vals[0])))
-                y_numeric = y_vals if is_y_dt else pd.to_numeric(y_vals, errors='coerce')
-                
-                valid_mask = ~(pd.isna(x_numeric) | pd.isna(y_numeric))
-                x_plot = x_numeric[valid_mask]
-                y_plot = y_numeric[valid_mask]
-                
-                ax.scatter(x_plot, y_plot, label=label, color=c, s=50)
+                ax.scatter(x_da_sel.values, y_da_sel.values, color=colors_cycle[i_color % len(colors_cycle)], label=label_p)
+                i_color += 1
     
     # -------- Styling --------
     
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+    if labels.get("x_limits") is not None:
+        ax.set_xlim(labels["x_limits"])
+    if labels.get("y_limits") is not None:
+        ax.set_ylim(labels["y_limits"])
     ax.set_title(title)
     ax.grid(True, linestyle='--', alpha=0.5)
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
@@ -1329,7 +1359,13 @@ def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=
     for i, (sel, da_sel) in enumerate(results):
         data = da_sel.values.ravel()
 
-        label = legend_labels
+        # Handle label
+        if isinstance(legend_labels, list) and len(legend_labels) > 0:
+            label = legend_labels[0]
+        elif isinstance(legend_labels, str):
+            label = legend_labels
+        else:
+            label = col_name
 
         if sel:
             label += " | " + ", ".join(
@@ -1350,5 +1386,9 @@ def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=
     ax.set_title(title)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+    if labels.get("x_limits") is not None:
+        ax.set_xlim(labels["x_limits"])
+    if labels.get("y_limits") is not None:
+        ax.set_ylim(labels["y_limits"])
     ax.grid(True, linestyle='--', alpha=0.5)
     return fig
