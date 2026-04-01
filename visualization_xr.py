@@ -892,7 +892,7 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
 
 # -------------- Scatter Plot ---------------
 
-def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
+def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False, plot_envelope_gui=None, envelope_type_gui=None):
     """
     Create a scatter plot from an xarray Dataset.
     """
@@ -970,17 +970,18 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
         if not x_dim:
             raise ValueError(f"No shared point dimension found between X ({x_name}) and Y ({y_names[0]})")
             
+    # GUI modes for envelope
+    plot_envelope = plot_envelope_gui if plot_envelope_gui is not None else False
+    envelope_type = envelope_type_gui if envelope_type_gui is not None else "average"
+
     x_var_filters = _get_var_filters(dim_selections_gui, x_name)
-    x_results = handle_xarray_dimensions(x_arr, main_dims=[x_dim], dim_selections_gui=x_var_filters, auto_mean_gui=auto_mean_gui)
+    main_dims_x = [x_dim, 'model'] if plot_envelope and 'model' in x_arr.dims else [x_dim]
+    x_results = handle_xarray_dimensions(x_arr, main_dims=main_dims_x, dim_selections_gui=x_var_filters, auto_mean_gui=auto_mean_gui)
     x_dict = {frozenset(sel.items()) if sel else frozenset(): da_sel for sel, da_sel in x_results}
     
-    # Determine if we are in GUI mode
-    is_gui_scatter = any(p is not None for p in [var_gui, x_name_gui, y_names_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
-
     # -------- Y loop --------
     i_color = 0
-    n_expected = len(y_names)
-    colors = cm.viridis(np.linspace(0, 1, max(n_expected, 3)))
+    colors_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     for i, y_name in enumerate(y_names):
         da = ds_period[y_name]
@@ -989,52 +990,91 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
         
         var_filters = _get_var_filters(dim_selections_gui, y_name)
         
+        main_dims_y = [x_dim, 'model'] if plot_envelope and 'model' in da.dims else [x_dim]
         results = handle_xarray_dimensions(
             da,
-            main_dims=[x_dim],
+            main_dims=main_dims_y,
             dim_selections_gui=var_filters,
             auto_mean_gui=auto_mean_gui
         )
         
         for i_res, (sel, y_da_sel) in enumerate(results):
-            sel_key = frozenset(sel.items()) if sel else frozenset()
+            sel_key = frozenset({k: v for k, v in sel.items() if k != 'model'}.items()) if sel else frozenset()
             
-            x_da_sel = x_dict.get(sel_key)
-            if x_da_sel is None:
-                # Fallback if x has no filters or is a simple coordinate
+            # Find the corresponding X based on filters (excluding model since it's now a retained dimension)
+            best_x_key = None
+            for xk in x_dict.keys():
+                if all(k in sel_key and sel_key.get(k) == v for k, v in dict(xk).items()):
+                    best_x_key = xk
+                    
+            if best_x_key is not None:
+                x_da_sel = x_dict[best_x_key]
+            else:
                 if frozenset() in x_dict and len(x_dict) == 1:
                     x_da_sel = x_dict[frozenset()]
                 elif len(x_dict) == 1:
                     x_da_sel = list(x_dict.values())[0]
                 else:
-                    continue
+                    x_da_sel = x_dict.get(sel_key, None)
+                    if x_da_sel is None:
+                        continue
             
-            x_vals = x_da_sel.values.ravel()
-            y_vals = y_da_sel.values.ravel()
-            
-            # Convert X to numeric (preserve datetimes)
-            is_x_dt = np.issubdtype(x_da_sel.dtype, np.datetime64) or "datetime" in str(x_da_sel.dtype).lower() or (len(x_vals)>0 and "cftime" in str(type(x_vals[0])))
-            x_numeric = x_vals if is_x_dt else pd.to_numeric(x_vals, errors='coerce')
-
-            # Convert Y (preserve datetimes)
-            is_y_dt = np.issubdtype(y_da_sel.dtype, np.datetime64) or "datetime" in str(y_da_sel.dtype).lower() or (len(y_vals)>0 and "cftime" in str(type(y_vals[0])))
-            y_numeric = y_vals if is_y_dt else pd.to_numeric(y_vals, errors='coerce')
-            
-            # Create mask for valid (non-NaN/NaT) points
-            valid_mask = ~(pd.isna(x_numeric) | pd.isna(y_numeric))
-            
-            # Filter to valid points only
-            x_plot = x_numeric[valid_mask]
-            y_plot = y_numeric[valid_mask]
-            
-            # Create label for legend
+            # Form clean label string excluding 'model' if plotting envelope
             label = legend_labels[i] if i < len(legend_labels) else y_name
-            
             if sel:
-                label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
+                label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items() if not (plot_envelope and k == 'model'))
             
-            # Plot scatter
-            ax.scatter(x_plot, y_plot, label=label, color=colors[i], s=50)
+            c = colors_cycle[i_color % len(colors_cycle)]
+            i_color += 1
+
+            if plot_envelope and 'model' in y_da_sel.dims and 'model' in x_da_sel.dims:
+                y_min = y_da_sel.min(dim='model', skipna=True).values.ravel()
+                y_max = y_da_sel.max(dim='model', skipna=True).values.ravel()
+                y_mean = y_da_sel.mean(dim='model', skipna=True).values.ravel()
+                
+                x_min = x_da_sel.min(dim='model', skipna=True).values.ravel()
+                x_max = x_da_sel.max(dim='model', skipna=True).values.ravel()
+                x_mean = x_da_sel.mean(dim='model', skipna=True).values.ravel()
+                
+                # Align X and Y (incase of different masking)
+                valid_mask = ~(np.isnan(x_mean) | np.isnan(y_mean))
+                x_mean, y_mean = x_mean[valid_mask], y_mean[valid_mask]
+                x_min, x_max = x_min[valid_mask], x_max[valid_mask]
+                y_min, y_max = y_min[valid_mask], y_max[valid_mask]
+
+                if envelope_type == "average":
+                    ax.scatter(x_mean, y_mean, label=f"{label} (mean)", color=c, s=50)
+                    ax.errorbar(x_mean, y_mean, 
+                                xerr=[x_mean - x_min, x_max - x_mean], 
+                                yerr=[y_mean - y_min, y_max - y_mean], 
+                                fmt='none', color=c, alpha=0.3, zorder=0)
+                else: # individual
+                    # Plot all points faintly
+                    model_size_x = x_da_sel.sizes['model']
+                    model_size_y = y_da_sel.sizes['model']
+                    for m in range(min(model_size_x, model_size_y)):
+                        x_m = x_da_sel.isel(model=m).values.ravel()
+                        y_m = y_da_sel.isel(model=m).values.ravel()
+                        v_m = ~(np.isnan(x_m) | np.isnan(y_m))
+                        ax.scatter(x_m[v_m], y_m[v_m], color=c, alpha=0.3, s=20)
+                    # Bold mean
+                    ax.scatter(x_mean, y_mean, label=f"{label} (mean)", color=c, s=50, edgecolor='black')
+                    
+            else:
+                x_vals = x_da_sel.values.ravel()
+                y_vals = y_da_sel.values.ravel()
+                
+                is_x_dt = np.issubdtype(x_da_sel.dtype, np.datetime64) or "datetime" in str(x_da_sel.dtype).lower() or (len(x_vals)>0 and "cftime" in str(type(x_vals[0])))
+                x_numeric = x_vals if is_x_dt else pd.to_numeric(x_vals, errors='coerce')
+
+                is_y_dt = np.issubdtype(y_da_sel.dtype, np.datetime64) or "datetime" in str(y_da_sel.dtype).lower() or (len(y_vals)>0 and "cftime" in str(type(y_vals[0])))
+                y_numeric = y_vals if is_y_dt else pd.to_numeric(y_vals, errors='coerce')
+                
+                valid_mask = ~(pd.isna(x_numeric) | pd.isna(y_numeric))
+                x_plot = x_numeric[valid_mask]
+                y_plot = y_numeric[valid_mask]
+                
+                ax.scatter(x_plot, y_plot, label=label, color=c, s=50)
     
     # -------- Styling --------
     

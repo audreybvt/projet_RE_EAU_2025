@@ -976,8 +976,8 @@ with tab_viz:
     
     # Selection of variables based on chart type
     if chart_type == "Radar":
-        vars_multi = st.multiselect("Variables (axes du radar)", vars_viz, key="viz_radar")
-        var_x = None # Non utilisé pour le radar
+        vars_multi = col_v2.multiselect("Variables (valeurs)", ds_vars(), key="viz_radar")
+        var_x = col_v1.selectbox("Variable catégorielle (rayons du radar)", vars_viz, key="viz_radar_x")
         plot_vars_ui = vars_multi
     else:
         # Pour tous les autres types, on peut choisir X et Y
@@ -1039,8 +1039,8 @@ with tab_viz:
         # Options spécifiques selon le type
         st.markdown("---")
 
-        if chart_type == "Graphique en ligne":
-            show_envelope = st.checkbox("Afficher les enveloppes (min-max)", value=False, help="Si une dimension 'model' est présente")
+        if chart_type in ["Graphique en ligne", "Nuage de points"]:
+            show_envelope = st.checkbox("Afficher les enveloppes (min-max) / Dispersion", value=False, help="Si une dimension 'model' est présente")
             env_type = "average"
             if show_envelope:
                 env_type = st.radio("Type d'enveloppe", ["average", "individual"], index=0, horizontal=True)
@@ -1104,14 +1104,13 @@ with tab_viz:
         ds_work = st.session_state["ds"]
 
         # Sous-ensemble temporel si demandé
+        ds_plot = ds_work
         if t_dims_viz and start_viz and end_viz:
-            try:
-                ds_plot = df_mod.handle_spatial_dimensions.__module__ and ds_work  # just alias
-                ds_plot = ds_work.sel({t_dims_viz[0]: slice(start_viz, end_viz)})
-            except Exception:
-                ds_plot = ds_work
-        else:
-            ds_plot = ds_work
+            for dim in t_dims_viz:
+                try:
+                    ds_plot = ds_plot.sel({dim: slice(start_viz, end_viz)})
+                except Exception:
+                    pass
 
         try:
             fig = None
@@ -1162,7 +1161,9 @@ with tab_viz:
                     end_gui=end_viz,
                     plot_config_gui=gui_config,
                     auto_mean_gui=True,
-                    dim_selections_gui=viz_filters
+                    dim_selections_gui=viz_filters,
+                    plot_envelope_gui=st.session_state.get("viz_envelope", False),
+                    envelope_type_gui=st.session_state.get("viz_env_type", "average")
                 )
 
             elif chart_type == "Radar":
@@ -1172,6 +1173,7 @@ with tab_viz:
                     fig = viz.radar_chart(
                         ds_plot, 
                         var_gui=vars_multi,
+                        cat_name_gui=var_x,
                         start_gui=start_viz,
                         end_gui=end_viz,
                         plot_config_gui=gui_config,
