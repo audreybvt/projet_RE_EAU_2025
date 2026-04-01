@@ -162,7 +162,7 @@ def render_categorical_filters(key_prefix="filter"):
     if ds is None: return {}
     
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y', 'station', 'piezometre']
-    cat_dims = [d for d in list(ds.dims.keys()) if d not in standard_dims and ds.dims[d] > 1]
+    cat_dims = [d for d in list(ds.dims.keys()) if d not in standard_dims and not str(d).startswith('time_') and ds.dims[d] > 1]
     
     dict_filters = {}
     if cat_dims:
@@ -1003,7 +1003,7 @@ with tab_viz:
         has_cat = False
         for v in plot_vars_ui:
             if v in ds_viz:
-                if any(d not in standard_dims and ds_viz.dims.get(d, 0) > 1 for d in ds_viz[v].dims):
+                if any(d not in standard_dims and not str(d).startswith('time_') and ds_viz.dims.get(d, 0) > 1 for d in ds_viz[v].dims):
                     has_cat = True
                     break
                     
@@ -1014,7 +1014,7 @@ with tab_viz:
                 for i, var_n in enumerate(plot_vars_ui):
                     if var_n not in ds_viz: continue
                     da_viz = ds_viz[var_n]
-                    cat_dims = [d for d in list(da_viz.dims) if d not in standard_dims and ds_viz.dims.get(d, 0) > 1]
+                    cat_dims = [d for d in list(da_viz.dims) if d not in standard_dims and not str(d).startswith('time_') and ds_viz.dims.get(d, 0) > 1]
                     
                     if not cat_dims: continue
                     
@@ -1065,11 +1065,21 @@ with tab_viz:
             end_viz   = str(d_e)
 
     # Options de style
-    with st.expander("🎨 Options de style"):
+    with st.expander("🎨 Options de style & 🔍 Zoom Manuel"):
         col_t, col_xl, col_yl = st.columns(3)
         p_title  = col_t.text_input("Titre", "")
         p_xlabel = col_xl.text_input("Axe X", "")
         p_ylabel = col_yl.text_input("Axe Y", "")
+        
+        st.markdown("---")
+        st.markdown("**🔍 Zoom Manuel (Limites des axes)**", help="Laissez vide pour le mode automatique. L'Axe X temporel est géré par l'outil de filtrage temporel juste au-dessus.")
+        col_zx1, col_zx2, col_zy1, col_zy2 = st.columns(4)
+        z_xmin = col_zx1.number_input("X min (si num.)", value=None)
+        z_xmax = col_zx2.number_input("X max (si num.)", value=None)
+        z_ymin = col_zy1.number_input("Y min", value=None)
+        z_ymax = col_zy2.number_input("Y max", value=None)
+
+        st.markdown("---")
         col_save, col_fmt = st.columns(2)
         save_fig = col_save.checkbox("Sauvegarder la figure", value=False)
         save_fmt = col_fmt.selectbox("Format", ["png", "pdf", "svg"], key="save_fmt")
@@ -1077,11 +1087,16 @@ with tab_viz:
         if save_fig:
             save_path = st.text_input("Chemin de sauvegarde (ex: output/fig.png)", "output/figure.png", key="save_path")
 
+    x_lim_val = [z_xmin, z_xmax] if (z_xmin is not None or z_xmax is not None) else None
+    y_lim_val = [z_ymin, z_ymax] if (z_ymin is not None or z_ymax is not None) else None
+
     plot_config_gui = {
         "title":    p_title  or None,
         "xlabel":   p_xlabel or None,
         "ylabel":   p_ylabel or None,
         "save_path": save_path if save_fig else None,
+        "x_limits": x_lim_val,
+        "y_limits": y_lim_val,
     }
 
     # ── Bouton tracer ────────────────────────────────────────────────────────

@@ -961,24 +961,26 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     
     x_arr = ds_period[x_name] if x_name in ds_period else ds_period.coords[x_name]
     
-    if x_arr.ndim != 1:
-        raise ValueError("X variable must be 1D")
-    
-    x_dim = x_arr.dims[0]
-    x_vals = x_arr.values
-    
-    # Convert X to numeric (preserve datetimes)
-    is_x_dt = np.issubdtype(x_vals.dtype, np.datetime64) or "datetime" in str(x_vals.dtype).lower() or (len(x_vals)>0 and "cftime" in str(type(x_vals[0])))
-    x_numeric = x_vals if is_x_dt else pd.to_numeric(x_vals, errors='coerce')
+    y_arr_first = ds_period[y_names[0]]
+    if x_arr.ndim == 1:
+        x_dim = x_arr.dims[0]
+    else:
+        shared_dims = list(set(x_arr.dims) & set(y_arr_first.dims))
+        x_dim = next((d for d in shared_dims if any(s in d.lower() for s in ['time', 'date', 'station', 'piezometre'])), shared_dims[0] if shared_dims else None)
+        if not x_dim:
+            raise ValueError(f"No shared point dimension found between X ({x_name}) and Y ({y_names[0]})")
+            
+    x_var_filters = _get_var_filters(dim_selections_gui, x_name)
+    x_results = handle_xarray_dimensions(x_arr, main_dims=[x_dim], dim_selections_gui=x_var_filters, auto_mean_gui=auto_mean_gui)
+    x_dict = {frozenset(sel.items()) if sel else frozenset(): da_sel for sel, da_sel in x_results}
     
     # Determine if we are in GUI mode
     is_gui_scatter = any(p is not None for p in [var_gui, x_name_gui, y_names_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
 
     # -------- Y loop --------
     i_color = 0
-    # Determine number of series to generate enough colors
     n_expected = len(y_names)
-    colors = cm.viridis(np.linspace(0, 1, n_expected))
+    colors = cm.viridis(np.linspace(0, 1, max(n_expected, 3)))
 
     for i, y_name in enumerate(y_names):
         da = ds_period[y_name]
@@ -994,11 +996,28 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
             auto_mean_gui=auto_mean_gui
         )
         
-        for i_res, (sel, da_sel) in enumerate(results):
-            y_vals = da_sel.values.ravel()
+        for i_res, (sel, y_da_sel) in enumerate(results):
+            sel_key = frozenset(sel.items()) if sel else frozenset()
             
+            x_da_sel = x_dict.get(sel_key)
+            if x_da_sel is None:
+                # Fallback if x has no filters or is a simple coordinate
+                if frozenset() in x_dict and len(x_dict) == 1:
+                    x_da_sel = x_dict[frozenset()]
+                elif len(x_dict) == 1:
+                    x_da_sel = list(x_dict.values())[0]
+                else:
+                    continue
+            
+            x_vals = x_da_sel.values.ravel()
+            y_vals = y_da_sel.values.ravel()
+            
+            # Convert X to numeric (preserve datetimes)
+            is_x_dt = np.issubdtype(x_da_sel.dtype, np.datetime64) or "datetime" in str(x_da_sel.dtype).lower() or (len(x_vals)>0 and "cftime" in str(type(x_vals[0])))
+            x_numeric = x_vals if is_x_dt else pd.to_numeric(x_vals, errors='coerce')
+
             # Convert Y (preserve datetimes)
-            is_y_dt = np.issubdtype(da_sel.dtype, np.datetime64) or "datetime" in str(da_sel.dtype).lower() or (len(y_vals)>0 and "cftime" in str(type(y_vals[0])))
+            is_y_dt = np.issubdtype(y_da_sel.dtype, np.datetime64) or "datetime" in str(y_da_sel.dtype).lower() or (len(y_vals)>0 and "cftime" in str(type(y_vals[0])))
             y_numeric = y_vals if is_y_dt else pd.to_numeric(y_vals, errors='coerce')
             
             # Create mask for valid (non-NaN/NaT) points
@@ -1046,7 +1065,8 @@ def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui
     
     # For radar, we need a category dimension (like 'time' or 'model')
     if cat_name_gui is None:
-        cat_name_gui = next((d for d in ds.dims if any(s in d.lower() for s in ['time', 'date', 'model', 'scenario'])), list(ds.dims)[0])
+        search_dims = ds[value_names_gui[0]].dims if value_names_gui and value_names_gui[0] in ds else ds.dims
+        cat_name_gui = next((d for d in search_dims if any(s in d.lower() for s in ['time', 'date', 'model', 'scenario'])), list(search_dims)[0])
 
     cat_name = ask_variable(ds, prompt="Variable for category axis (radar axes): ", var_gui=cat_name_gui)
     
@@ -1125,7 +1145,8 @@ def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui
         if cat_dim not in da.dims:
             continue
 
-        results = handle_xarray_dimensions(da, main_dims=[cat_dim], dim_selections_gui=dim_selections_gui, auto_mean_gui=auto_mean_gui)
+        var_filters = _get_var_filters(dim_selections_gui, val_name)
+        results = handle_xarray_dimensions(da, main_dims=[cat_dim], dim_selections_gui=var_filters, auto_mean_gui=auto_mean_gui)
 
         for sel, da_sel in results:
             y_vals = da_sel.values.ravel()
