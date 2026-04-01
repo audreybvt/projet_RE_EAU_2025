@@ -219,7 +219,10 @@ def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_in
         "reduced_dims": dims_to_reduce,
         "period": period_label.lstrip('_') if period_label else "full range",
         "new_var": new_var_name,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "dims": ds[new_var_name].dims,
+        "shape": ds[new_var_name].shape,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
+        "first_5_dates": [str(d) for d in ds["time"].values[:5]] if 'time' in ds[new_var_name].dims else None
     }
     ds.attrs['last_stat_summary'] = summary
 
@@ -315,7 +318,10 @@ def maximum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
         "reduced_dims": dims_to_reduce,
         "period": period_label.lstrip('_') if period_label else "full range",
         "new_var": new_var_name,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "dims": ds[new_var_name].dims,
+        "shape": ds[new_var_name].shape,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
+        "first_5_dates": [str(d) for d in ds["time"].values[:5]] if 'time' in ds[new_var_name].dims else None
     }
     ds.attrs['last_stat_summary'] = summary
 
@@ -412,7 +418,10 @@ def minimum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
         "reduced_dims": dims_to_reduce,
         "period": period_label.lstrip('_') if period_label else "full range",
         "new_var": new_var_name,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "dims": ds[new_var_name].dims,
+        "shape": ds[new_var_name].shape,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
+        "first_5_dates": [str(d) for d in ds["time"].values[:5]] if 'time' in ds[new_var_name].dims else None
     }
     ds.attrs['last_stat_summary'] = summary
 
@@ -521,12 +530,15 @@ def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_
 
     # Summary
     summary = {
-        "method": f"Percentile ({int(q*100)}th)",
+        "method": f"Percentile {int(q*100)}%",
         "var_name": var_name,
         "reduced_dims": dims_to_reduce,
         "period": period_label.lstrip('_') if period_label else "full range",
         "new_var": new_var_name,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "dims": ds[new_var_name].dims,
+        "shape": ds[new_var_name].shape,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
+        "first_5_dates": [str(d) for d in ds["time"].values[:5]] if 'time' in ds[new_var_name].dims else None
     }
     ds.attrs['last_stat_summary'] = summary
 

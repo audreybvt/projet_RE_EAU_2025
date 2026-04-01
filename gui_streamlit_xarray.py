@@ -236,7 +236,7 @@ with st.sidebar:
 
     # ── Format ──────────────────────────────────────────────────────────────
     st.markdown("### 📁 Chargement des données")
-    file_format = st.radio("Format du fichier", ["NetCDF (.nc)", "CSV (.csv)"], horizontal=True)
+    file_format = st.radio("Format du fichier", ["NetCDF (.nc)", "CSV (.csv)", "Excel (.xlsx)"], horizontal=True)
 
     # ── Uploader ─────────────────────────────────────────────────────────────
     if file_format.startswith("NetCDF"):
@@ -246,7 +246,7 @@ with st.sidebar:
             accept_multiple_files=True,
             key="nc_uploader",
         )
-    else:
+    elif file_format.startswith("CSV"):
         uploaded_files = st.file_uploader(
             "Glissez-déposez un fichier CSV",
             type=["csv"],
@@ -254,6 +254,13 @@ with st.sidebar:
             key="csv_uploader",
         )
         skip_n = st.number_input("Lignes de métadonnées à ignorer", min_value=0, value=0, step=1)
+    else:  # Excel
+        uploaded_files = st.file_uploader(
+            "Glissez-déposez un fichier Excel",
+            type=["xlsx", "xls"],
+            accept_multiple_files=False,
+            key="excel_uploader",
+        )
 
     st.markdown("---")
 
@@ -411,13 +418,30 @@ with st.sidebar:
 
                         st.session_state["ds"] = ds_loaded
 
-                    else:
+                    elif file_format.startswith("CSV"):
                         # CSV
                         f = uploaded_files
                         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
                         tmp.write(f.read())
                         tmp.flush()
                         ds_loaded = df_mod.csv_to_xarray(tmp.name, skip_n_gui=int(skip_n))
+                        st.session_state["ds"] = ds_loaded
+                        
+                    elif file_format.startswith("Excel"):
+                        # Excel
+                        st.info("Conversion de l'Excel en format long en cours...")
+                        f = uploaded_files
+                        tmp_excel = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+                        tmp_excel.write(f.read())
+                        tmp_excel.flush()
+                        
+                        tmp_csv = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+                        
+                        # existing function call
+                        df_mod.excel_to_long_csv(tmp_excel.name, tmp_csv.name)
+                        
+                        # read format
+                        ds_loaded = df_mod.csv_to_xarray(tmp_csv.name, skip_n_gui=0)
                         st.session_state["ds"] = ds_loaded
 
                     log("Dataset chargé avec succès.", "success")
@@ -681,19 +705,29 @@ with tab_stat:
             if "last_stat_summary" in ds_work.attrs:
                 summary = ds_work.attrs["last_stat_summary"]
                 st.markdown("---")
-                st.subheader(f"📊 Résumé : {summary.get('method', stat_func)}")
+                st.subheader(f"📊 Résultats : {summary.get('method', stat_func)}")
                 
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Variable source", summary.get("var_name", "N/A"))
-                c2.metric("Période", summary.get("period", "Complète"))
+                # Selection / Time period
+                st.markdown(f"**Variable source:** `{summary.get('var_name', 'N/A')}`")
+                st.markdown(f"**Time period:** `{summary.get('period', 'full range')}`")
+                
                 if "reduced_dims" in summary:
-                    c3.metric("Dim. réduites", str(summary["reduced_dims"]))
+                    st.markdown(f"**Dimensions reduced:** `{summary['reduced_dims']}`")
                 elif "grouped_by" in summary:
-                    c3.metric("Groupé par", summary["grouped_by"])
+                    st.markdown(f"**Grouped by:** `{summary['grouped_by']}`")
+
+                # New Variable Info
+                nv = summary.get('new_var', 'N/A')
+                st.markdown(f"**New Variable added:** `{nv}`")
+                if nv in ds_work:
+                    da_new = ds_work[nv]
+                    st.markdown(f"**Dimensions:** `{da_new.dims}`")
+                    st.markdown(f"**Shape:** `{da_new.shape}`")
 
                 # Affichage des 5 premières valeurs
                 if "first_5_vals" in summary and summary["first_5_vals"]:
-                    with st.expander("👁️ Voir les 5 premières valeurs"):
+                    with st.expander("👁️ Variable Preview (First 5 values)"):
+                        st.markdown("**Variables Preview:**")
                         st.table(pd.DataFrame({"Valeur": summary["first_5_vals"]}))
                 
                 st.markdown("---")
@@ -848,38 +882,56 @@ with tab_ind:
             if "last_ind_summary" in ds_work.attrs:
                 summary = ds_work.attrs["last_ind_summary"]
                 st.markdown("---")
-                st.subheader(f"📊 Résultats : {summary.get('method', indicator)}")
+                st.subheader(f"📊 Summary : {summary.get('method', indicator)}")
                 
+                # Selection
+                if summary.get("selections"):
+                    st.markdown("**Selection:**")
+                    for sel in summary["selections"]:
+                        st.markdown(f"- `{sel}`")
+                else:
+                    st.markdown("**Selection:** none (calculated across all categories).")
+
+                # Temps et Variables
+                if summary.get("new_time_dim"):
+                    st.markdown(f"**New Temporal Coordinate added:** `{summary['new_time_dim']}`")
+
+                new_vars = summary.get("new_vars", [summary.get("var_name")] if summary.get("var_name") else [])
+                if new_vars and new_vars != [None]:
+                    st.markdown(f"**New Variable(s) added:** {', '.join([f'`{v}`' for v in new_vars])}")
+
+                # Dimensions et Shape
+                if summary.get("dims"):
+                    st.markdown(f"**Dimensions:** `{summary['dims']}`")
+                if summary.get("shape"):
+                    st.markdown(f"**Shape:** `{summary['shape']}`")
+
+                if summary.get("global_mean") is not None:
+                    st.markdown(f"**Global Mean on the selection:** `{summary['global_mean']:.3f}`")
+
+                # Specific to "Over threshold"
                 if indicator == "Over threshold":
                     c1, c2, c3, c4 = st.columns(4)
-                    c1.metric("Occurrences", summary.get("total_exceedances", 0))
-                    c2.metric("Épisodes", summary.get("n_episodes", 0))
-                    c3.metric("Durée moy.", f"{summary.get('mean_duration', 0):.1f}")
-                    c4.metric("Pic Max (POT)", f"{summary.get('max_pot', 0):.3f}")
-                    st.info(f"💡 Seuil effectif : **{summary.get('threshold', 0):.3f}** sur **{summary.get('var_name', 'N/A')}**")
-                
-                elif indicator == "IPS":
-                    st.metric("Valeur Moyenne IPS", f"{summary.get('mean_val', 0):.3f}")
-                    st.info(f"Variable créée : **{summary.get('var_name', 'N/A')}**")
-                
-                elif indicator == "Qmean":
-                    st.metric("Débit Moyen Global", f"{summary.get('mean_val', 0):.3f}")
-                    st.info(f"Variable créée : **{summary.get('var_name', 'N/A')}**")
-                
-                elif indicator in ["Q90/Q95", "Q10/Q05"]:
-                    vars_ind = summary.get("vars", [])
-                    st.info(f"Variables créées : **{', '.join(vars_ind)}**")
-                
-                else:
-                    # Fallback générique
-                    st.write(f"Indicateur : **{summary.get('method', indicator)}**")
-                    if "var_name" in summary: st.info(f"Variable : **{summary['var_name']}**")
+                    c1.metric("Total exceedances", summary.get("total_exceedances", 0))
+                    c2.metric("Number of episodes", summary.get("n_episodes", 0))
+                    c3.metric("Mean episode duration", f"{summary.get('mean_duration', 0):.2f}")
+                    c4.metric("Highest POT", f"{summary.get('max_pot', 0):.3f}")
+                    st.info(f"💡 Effective threshold : **{summary.get('threshold', 0):.3f}**")
 
-                # Affichage des 5 premières valeurs (commun à tous)
-                if "first_5_vals" in summary and summary["first_5_vals"]:
-                    with st.expander("👁️ Voir les 5 premières valeurs"):
-                        st.table(pd.DataFrame({"Valeur": summary["first_5_vals"]}))
-                
+                # Previews
+                if summary.get("first_5_vals"):
+                    with st.expander("👁️ Variable & Date Preview (First 5 values)"):
+                        st.markdown("**Variable Preview (First 5 values):**")
+                        preview_dict = {"Valeur": summary["first_5_vals"]}
+                        if summary.get("first_5_dates"):
+                            preview_dict["Date"] = summary["first_5_dates"]
+                        
+                        # Set column order nicely if dates are present
+                        if "Date" in preview_dict:
+                            preview_dict = {"Date": preview_dict["Date"], "Valeur": preview_dict["Valeur"]}
+                            
+                        st.table(pd.DataFrame(preview_dict))
+
                 st.markdown("---")
 
             st.success(f"✅ Indicateur calculé. Nouvelles variables : {new_vars}")
@@ -922,23 +974,67 @@ with tab_viz:
     # ── Configuration commune ───────────────────────────────────────────────
     col_v1, col_v2 = st.columns(2)
     
-    # Filtres catégoriels (Multi-select)
-    viz_filters = render_categorical_filters(key_prefix="viz")
-    
+    # Selection of variables based on chart type
     if chart_type == "Radar":
         vars_multi = st.multiselect("Variables (axes du radar)", vars_viz, key="viz_radar")
         var_x = None # Non utilisé pour le radar
+        plot_vars_ui = vars_multi
     else:
         # Pour tous les autres types, on peut choisir X et Y
         var_x = col_v1.selectbox("Axe X (abscisse)", vars_viz, key="viz_x")
         
         if chart_type == "Nuage de points":
             var_y = col_v2.selectbox("Axe Y (ordonnée)", vars_viz, key="viz_y")
+            plot_vars_ui = [var_y]
         elif chart_type == "Histogramme":
             var_main = col_v2.selectbox("Variable à analyser", ds_vars(), key="viz_main")
+            plot_vars_ui = [var_main]
         else: # Ligne ou Barres
             var_main = col_v2.selectbox("Variable principale (Y)", ds_vars(), key="viz_main")
             vars_extra = st.multiselect("Variables supplémentaires (optionnel)", ds_vars(), key="viz_extra")
+            plot_vars_ui = [var_main] + (vars_extra or [])
+
+    # Filtres catégoriels (Spécifiques par variable)
+    viz_filters = {}
+    if plot_vars_ui:
+        ds_viz = st.session_state["ds"]
+        standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y', 'station', 'piezometre']
+        
+        has_cat = False
+        for v in plot_vars_ui:
+            if v in ds_viz:
+                if any(d not in standard_dims and ds_viz.dims.get(d, 0) > 1 for d in ds_viz[v].dims):
+                    has_cat = True
+                    break
+                    
+        if has_cat:
+            with st.expander("🔎 Filtres catégoriels (scénarios, modèles…) - Spécifiques par variable"):
+                st.caption("💡 Sélectionnez les valeurs pour filtrer par variable. Laisser vide revient à faire la moyenne de la dimension.")
+                
+                for i, var_n in enumerate(plot_vars_ui):
+                    if var_n not in ds_viz: continue
+                    da_viz = ds_viz[var_n]
+                    cat_dims = [d for d in list(da_viz.dims) if d not in standard_dims and ds_viz.dims.get(d, 0) > 1]
+                    
+                    if not cat_dims: continue
+                    
+                    st.markdown(f"**Pour `{var_n}` :**")
+                    cols = st.columns(len(cat_dims))
+                    var_dict = {}
+                    for j, dim in enumerate(cat_dims):
+                        options = [str(val) for val in ds_viz[dim].values.tolist()]
+                        selected_vals = cols[j].multiselect(
+                            f"{dim}", options, default=[], 
+                            key=f"viz_filt_{i}_{var_n}_{dim}"
+                        )
+                        if selected_vals:
+                            var_dict[dim] = [val for val in ds_viz[dim].values if str(val) in selected_vals]
+                    
+                    if var_dict:
+                        viz_filters[var_n] = var_dict
+                        
+                    if i < len(plot_vars_ui) - 1:
+                        st.markdown("---")
 
         # Options spécifiques selon le type
         st.markdown("---")

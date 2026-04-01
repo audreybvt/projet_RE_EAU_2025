@@ -23,6 +23,21 @@ def subset_time(ds, start, end):
 
     return ds
 
+def _get_var_filters(dim_selections_gui, var_name):
+    """
+    Helper to extract filters specific to a variable.
+    Supports either a global dictionary {dim: [values]} 
+    or a nested dictionary {var_name: {dim: [values]}}.
+    """
+    if not dim_selections_gui:
+        return None
+    
+    # Check if this is a per-variable nested dictionary
+    if any(isinstance(v, dict) for v in dim_selections_gui.values()):
+        return dim_selections_gui.get(var_name, {})
+        
+    return dim_selections_gui
+
 
 def ask_variable(ds: xr.Dataset, multiple: bool = False, prompt: str = None, var_gui=None) -> list | str:
     """
@@ -805,12 +820,14 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
             continue
 
         # -------- Case: model dimension exists and ensemble plot is requested --------
+        var_filters = _get_var_filters(dim_selections_gui, y_name)
+
         if plot_envelope and 'model' in da.dims:
             # For envelope plotting, handle extra dimensions interactively
             results = handle_xarray_dimensions(
                 da,
                 main_dims=[x_dim, 'model'],  # Keep both time and model dimensions
-                dim_selections_gui=dim_selections_gui,
+                dim_selections_gui=var_filters,
                 auto_mean_gui=auto_mean_gui
             )
 
@@ -846,7 +863,7 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
             results = handle_xarray_dimensions(
                 da,
                 main_dims=[x_dim],
-                dim_selections_gui=dim_selections_gui,
+                dim_selections_gui=var_filters,
                 auto_mean_gui=auto_mean_gui
             )
 
@@ -968,10 +985,12 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
         if x_dim not in da.dims:
             continue
         
+        var_filters = _get_var_filters(dim_selections_gui, y_name)
+        
         results = handle_xarray_dimensions(
             da,
             main_dims=[x_dim],
-            dim_selections_gui=dim_selections_gui,
+            dim_selections_gui=var_filters,
             auto_mean_gui=auto_mean_gui
         )
         

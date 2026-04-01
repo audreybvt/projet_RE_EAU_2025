@@ -276,8 +276,11 @@ def soil_water_balance_index(ds, dict_filters_gui=None, var_p_gui=None, var_etr_
     # Summary for GUI
     summary = {
         "method": "Soil Water Balance Index (IPS)",
-        "var_name": new_var_name,
-        "mean_val": mean_val,
+        "selections": selections_made,
+        "new_vars": [new_var_name],
+        "dims": final_dims,
+        "shape": final_shape,
+        "global_mean": float(mean_val),
         "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
     }
     ds.attrs['last_ind_summary'] = summary
@@ -404,8 +407,14 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
     # Summary for GUI
     summary = {
         "method": "Mean Discharge (Qmean)",
-        "var_name": new_var_name,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "selections": selections_made,
+        "new_time_dim": new_time_dim,
+        "new_vars": [new_var_name],
+        "dims": ds[new_var_name].dims,
+        "shape": ds[new_var_name].shape,
+        "global_mean": mean_val if 'mean_val' in locals() else None,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
+        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -527,8 +536,13 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
     # Summary for GUI
     summary = {
         "method": "Q90/Q95",
-        "vars": [new_var_q90, new_var_q95],
-        "first_5_vals": [float(v) for v in ds[new_var_q90].values.flatten()[:5]] if ds[new_var_q90].size > 0 else []
+        "selections": selections_made,
+        "new_time_dim": new_time_dim,
+        "new_vars": [new_var_q90, new_var_q95],
+        "dims": ds[new_var_q90].dims,
+        "shape": ds[new_var_q90].shape,
+        "first_5_vals": [float(v) for v in ds[new_var_q90].values.flatten()[:5]] if ds[new_var_q90].size > 0 else [],
+        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -642,8 +656,13 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
     # Summary for GUI
     summary = {
         "method": "Minimum 10-day mean (VCN10)",
-        "var_name": new_var_name,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "selections": selections_made,
+        "new_time_dim": new_time_dim,
+        "new_vars": [new_var_name],
+        "dims": ds[new_var_name].dims,
+        "shape": ds[new_var_name].shape,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
+        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -755,8 +774,13 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
     # Summary for GUI
     summary = {
         "method": "Q10/Q05 (Low flows)",
-        "vars": [new_var_q10, new_var_q05],
-        "first_5_vals": [float(v) for v in ds[new_var_q10].values.flatten()[:5]] if ds[new_var_q10].size > 0 else []
+        "selections": selections_made,
+        "new_time_dim": new_time_dim,
+        "new_vars": [new_var_q10, new_var_q05],
+        "dims": ds[new_var_q10].dims,
+        "shape": ds[new_var_q10].shape,
+        "first_5_vals": [float(v) for v in ds[new_var_q10].values.flatten()[:5]] if ds[new_var_q10].size > 0 else [],
+        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -870,8 +894,13 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
     # Summary for GUI
     summary = {
         "method": "Maximum 3-day mean (VCX3)",
-        "var_name": new_var_name,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "selections": selections_made,
+        "new_time_dim": new_time_dim,
+        "new_vars": [new_var_name],
+        "dims": ds[new_var_name].dims,
+        "shape": ds[new_var_name].shape,
+        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
+        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -1016,7 +1045,12 @@ def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=Non
 
     # Summary Statistics Output
     summary = {
+        "method": "Over Threshold",
+        "selections": selections_made,
         "var_name": var_name,
+        "new_vars": [new_var_magnitude, new_var_name] if new_var_name in ds else [new_var_magnitude],
+        "dims": ds[new_var_magnitude].dims,
+        "shape": ds[new_var_magnitude].shape,
         "threshold": effective_threshold,
         "total_exceedances": int(np.sum(exceed_flat)),
         "n_episodes": len(episodes),
