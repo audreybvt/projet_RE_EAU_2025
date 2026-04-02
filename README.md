@@ -234,6 +234,14 @@ IPSL-CM5A-MR-RCA4-QM-GR4J
 
 ---
 
+### Split of dataset to be able to load large data
+
+After adding scenario and model dimensions, the datasets are split using the module `.chunk()`. This module split the dataset into smaller pieces. When the code is processed, these pieces are loaded on the RAM one after an other instead of loading all the dataset at once. Thus, it is possible to overcome memory size limitation and to be able to process larger data.
+
+The code first try to do this spliting over time dimension and spatial dimension and, if it was not possible, split over the largest dimension.
+
+---
+
 ### Dataset Combination
 
 After preprocessing, all datasets are merged into one multidimensional dataset.
