@@ -30,6 +30,7 @@
 - [Available Visualizations](#available-visualizations)
 - [Available Statistical Operations](#available-statistical-operations)
 - [Available Hydrological Indicators](#available-hydrological-indicators)
+- [Spatial dimension handling](#spatial-dimension-handling)
 - [Required Libraries](#required-libraries)
   - [Core dependencies](#core-dependencies)
   - [Installation with pip and requirements.txt](#installation-with-pip-and-requirementstxt)
@@ -542,6 +543,8 @@ These indicators are computed directly on the dataset and can be chained with st
 
 It is possible to handle spatial dimension using NetCDF files (but not CSV files) as explained in the "NetCDF Input Data Specification" part but note that the code is not yet accomplished for this feature as it was not part of the first objectives. Further work may thus be done.
 
+---
+
 ## Required Libraries
 
 The project relies on scientific Python libraries commonly used for environmental data analysis.
@@ -597,6 +600,133 @@ Load data → Compute indicators → Apply statistics → Visualize → Save out
 ```
 
 The process can be repeated multiple times on the same dataset.
+
+---
+
+## How to update the code
+
+### Add a supported file format
+
+1. **Create loader function** in `data_formatting.py`:
+   ```python
+   def your_format_to_xarray(filepath):
+       """
+       Convert YOUR_FORMAT to xarray.Dataset.
+       Follow patterns of csv_to_xarray() or load_multiple_datasets().
+       """
+       # Implementation
+       # Return: xarray.Dataset
+   ```
+
+2. **Update CLI menu** in `main_full_xarray.py`:
+   ```python
+   supported_file_format = {
+       1: "NetCDF",  # existing
+       2: "CSV",     # existing
+       3: "YOUR_FORMAT"  # ← ADD THIS
+   }
+   ```
+
+3. **Add loader call** after format selection:
+   ```python
+   elif supported_file_format[file_format] == "YOUR_FORMAT":
+       path = input("Enter path: ")
+       ds = dt_form.your_format_to_xarray(path)
+   ```
+
+4. **Test**: Run `python main_full_xarray.py`, select new format.
+
+### Modify Plot Features
+
+**Note**: `visualization_xr.py` uses factored helpers like `ask_variable()`, `handle_xarray_dimensions()`, `configure_plot()`. Reuse these for consistency.
+
+1. **Edit existing function** (e.g., `line_chart()`).
+
+2. **Or add new visualization**:
+   ```python
+   def your_new_chart(ds):
+       """
+       New plot type following existing patterns.
+       Use helpers: ask_variable(), configure_plot()
+       """
+       fig, ax = plt.subplots()
+       # Plot code
+       return fig
+   ```
+
+3. **Update visualization menu** in `main_full_xarray.py`:
+   ```python
+   dict_visu = {
+       "bar chart": 1,           # existing
+       # ...
+       "your new chart": 6       # ← ADD THIS
+   }
+   menu_visu = {
+       # existing...
+       6: visu_xr.your_new_chart  # ← ADD THIS
+   }
+   ```
+
+4. **Test**: Run script, select visualization → new plot appears + saves to `output/`.
+
+### Add indicators or statistics
+
+**Note**: Modules use **factored helper functions** (e.g., `categorical_filter()`, `get_time_freq()`, `ask_date()`) for common tasks. Reuse these in new functions to maintain consistency.
+
+**For Indicators** (`indicators_xr.py`):
+1. **Create function**:
+   ```python
+   def your_indicator(ds):
+       """
+       Compute new hydrological indicator.
+       Input: xarray.Dataset
+       Output: ds with new variable(s)
+       """
+       # Reuse helpers:
+       # active_ds, selections = categorical_filter(ds, standard_dims)
+       # freq, unite, nb, label = get_time_freq()
+       # Example: ds['new_indicator'] = calculation
+       return ds
+   ```
+
+**For Statistics** (`statistics_xr.py`):
+1. **Create function** following `mean_value_flexible()` pattern, reusing `apply_time_selection()`, `ask_date()`.
+
+2. **Update main menu** (`main_full_xarray.py`):
+   ```python
+   # For indicators:
+   dict_indicateurs["Your Indicator"] = 9  # next number
+   menu_indicateurs[9] = indic_xr.your_indicator
+
+   # For statistics:
+   dict_stats["Your Stat"] = 7
+   menu_stats_xr[7] = stat_xr.your_stat
+   ```
+
+3. **Test**: New option appears in interactive menu.
+
+### Add visualization
+
+**Follow "Modify Plot Features" above** → add to `dict_visu`/`menu_visu`.
+
+### General Guidelines
+
+- **Always** return modified `xarray.Dataset` from processing functions
+- **New variables** get descriptive names (e.g., `Q90_3M_flow`)
+- **Dependencies**: Add to `requirements.txt`, test `pip install -r requirements.txt`
+- **Testing**: `python main_full_xarray.py` → full workflow unchanged
+- **Spatial dims**: Support `handle_spatial_dimensions()` pattern for NetCDF
+- **Multi-model**: Respect `scenario`/`model` dimensions auto-created from NetCDF attrs
+
+**Example full addition**:
+```
+1. New func → indicators_xr.py
+2. dict_indicateurs["New"] = N
+3. menu_indicateurs[N] = indic_xr.new_func
+4. Test!
+```
+
+
 
 ---
 
