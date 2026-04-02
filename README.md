@@ -36,6 +36,7 @@
   - [Installation with pip and requirements.txt](#installation-with-pip-and-requirementstxt)
 - [How to Run](#how-to-run)
 - [Workflow Overview](#workflow-overview)
+- [How to update the code](#how-to-update-the-code)
 - [Notes](#notes)
 - [Authors](#authors)
 
