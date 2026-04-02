@@ -122,10 +122,10 @@ Each file is:
 
 1. Opened individually
 2. Processed
-3. Augmented with model metadata
+3. Augmented with model and scenario metadata
 4. Combined into a single dataset
 
-Combination is performed using `xarray.combine_by_coords`.
+Combination is performed using `xarray.combine_by_coords`. Note that other metadata are discarded to avoid conflicts.
 
 ---
 
