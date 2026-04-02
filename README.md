@@ -14,6 +14,7 @@
     - [Automatic Creation of Dimensions](#automatic-creation-of-dimensions)
       - [Scenario Dimension](#scenario-dimension)
       - [Model Dimension](#model-dimension)
+    - [Datasets chunking](#datasets-chunking)
     - [Dataset Combination](#dataset-combination)
     - [Not Supported](#not-supported)
   - [CSV](#csv-input-data-specification)
@@ -234,7 +235,7 @@ IPSL-CM5A-MR-RCA4-QM-GR4J
 
 ---
 
-### Split of dataset to be able to load large data
+### Split of dataset to be able to load larger data
 
 After adding scenario and model dimensions, the datasets are split using the module `.chunk()`. This module split the dataset into smaller pieces. When the code is processed, these pieces are loaded on the RAM one after an other instead of loading all the dataset at once. Thus, it is possible to overcome memory size limitation and to be able to process larger data.
 
