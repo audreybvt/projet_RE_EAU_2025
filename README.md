@@ -235,7 +235,7 @@ IPSL-CM5A-MR-RCA4-QM-GR4J
 
 ---
 
-### Split of dataset to be able to load larger data
+### Datasets chunking
 
 After adding scenario and model dimensions, the datasets are split using the module `.chunk()`. This module split the dataset into smaller pieces. When the code is processed, these pieces are loaded on the RAM one after an other instead of loading all the dataset at once. Thus, it is possible to overcome memory size limitation and to be able to process larger data.
 
