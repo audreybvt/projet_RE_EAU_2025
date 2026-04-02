@@ -152,6 +152,8 @@ Two options are available:
 1. **Keep all spatial data**
 2. **Select a single entity (point/station/grid cell)**
 
+If the first option is selected, the following calculations (indicators and statistics) will be made over all the spatial dimension (note that this could lead to a long running time). Then, for the visualization, the user will have to chose wether to average over the spatial dimension or to chose specific location(s).
+
 ---
 
 #### Recognized Point Dimensions
@@ -267,7 +269,7 @@ The following cases may cause errors or incorrect results:
 
 ---
 
-### CSV Input Data Specification
+## CSV Input Data Specification
 
 - Single file only  
 - Must be a structured table (rows = observations, columns = variables)  
@@ -277,7 +279,7 @@ The following cases may cause errors or incorrect results:
 
 ---
 
-#### Date Column (REQUIRED)
+### Date Column (REQUIRED)
 
 The file must contain at least one column representing time.
 
@@ -305,7 +307,7 @@ If no valid date column is detected, the import will fail.
 
 ---
 
-#### Optional Dimension Columns
+### Optional Dimension Columns
 
 Additional columns can define coordinates (dimensions) in the dataset.
 
@@ -336,7 +338,7 @@ Recognized dimension columns are converted to categorical coordinates in xarray 
 
 ---
 
-#### Long Format for Multimodel Data
+### Long Format for Multimodel Data
 
 For datasets containing multiple models, stations, or scenarios, a **long format** is required:
 
@@ -379,7 +381,7 @@ To use these features, the dataset must be converted to long format with explici
 
 ---
 
-#### Variable Columns
+### Variable Columns
 
 All remaining columns are interpreted as data variables.
 
@@ -389,7 +391,7 @@ All remaining columns are interpreted as data variables.
 
 ---
 
-#### Not Supported
+### Not Supported
 
 - Files without a valid date/time column  
 - Wide-format Excel-style tables with multi-level headers  
@@ -399,7 +401,7 @@ All remaining columns are interpreted as data variables.
 
 ---
 
-#### Example Minimal Valid CSV
+### Example Minimal Valid CSV
 
 
 Example of a valid CSV containing a single time series (no additional dimensions):
@@ -412,7 +414,7 @@ Date;flow
 ```
 ---
 
-#### Example Multidimensional CSV
+### Example Multidimensional CSV
 
 Example of a valid CSV containing multiple models and stations (long format):
 
@@ -535,6 +537,10 @@ Figures are also displayed interactively.
 These indicators are computed directly on the dataset and can be chained with statistical operations.
 
 ---
+
+## Spatial dimension handling
+
+It is possible to handle spatial dimension using NetCDF files (but not CSV files) as explained in the "NetCDF Input Data Specification" part but note that the code is not yet accomplished for this feature as it was not part of the first objectives. Further work may thus be done.
 
 ## Required Libraries
 
