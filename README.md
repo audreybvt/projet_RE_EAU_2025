@@ -528,13 +528,16 @@ Figures are also displayed interactively.
 
 ## Available Hydrological Indicators
 
-* IPS
-* Qmean
-* Q90 / Q95
-* Q10 / Q05
-* VCN10
-* VCX3
-* Over-threshold indicator
+| Function Name | Indicator Description | Operational Logic & Time Step |
+|---------------|----------------------|--------------------------------|
+| **SWBI** | **Soil Water Balance Index.** Estimates potential groundwater recharge using the formula **SWBI = P − ETR − ΔR**. | **Continuous calculation.** The balance is computed for every time step in the dataset to estimate cumulative water input available for recharge. |
+| **SPLI** | **Standardised Piezometric Level Indicator.** Normalized groundwater level index that expresses deviations from long-term average conditions. Used to identify groundwater drought or recharge anomalies. | **This function is not yet completed** |
+| **Qmoy** | **Mean Discharge.** The average volume of water passing through a section over time. | **Period Aggregation.** The averaging window is user-defined (e.g., monthly or yearly) to analyze seasonal or inter-annual discharge trends. |
+| **Q90_95** | **Low-Flow Quantiles.** Flow rates exceeded **90% or 95%** of the time. Used as drought indicators. | **Statistical Threshold.** Typically computed over a **1-year period** to assess annual drought severity, or **multi-year periods** (e.g., 10 years) for long-term climate analysis. |
+| **VCN10** | **Minimum 10-Day Mean Flow.** Lowest average flow over **10 consecutive days**. Reflects aquifer depletion conditions. | **Rolling + Minimum.** A 10-day rolling average is computed, and the minimum value within the selected period (e.g., yearly) is retained. |
+| **Q10_05** | **High-Flow Quantiles.** Flow rates exceeded only **10% or 5%** of the time. Used as flood indicators. | **High-Value Filter.** Data is split into blocks (e.g., every 6 months), and high-flow thresholds are calculated to identify peak runoff periods. |
+| **VCX3** | **Maximum 3-Day Mean Flow.** Highest average flow over **3 consecutive days**. Reflects basin reactivity to intense rainfall. | **Rolling + Maximum.** A 3-day rolling average is computed, and the maximum value within the selected period (e.g., monthly) is retained to capture short-duration flood peaks. |
+| **OTI** | **Over-Threshold Indicator.** | To be completed |
 
 These indicators are computed directly on the dataset and can be chained with statistical operations.
 
@@ -637,7 +640,7 @@ The process can be repeated multiple times on the same dataset.
 
 4. **Test**: Run `python main_full_xarray.py`, select new format.
 
-### Modify Plot Features
+### Modify Plot Features and add visualization
 
 **Note**: `visualization_xr.py` uses factored helpers like `ask_variable()`, `handle_xarray_dimensions()`, `configure_plot()`. Reuse these for consistency.
 
@@ -706,10 +709,6 @@ The process can be repeated multiple times on the same dataset.
 
 3. **Test**: New option appears in interactive menu.
 
-### Add visualization
-
-**Follow "Modify Plot Features" above** → add to `dict_visu`/`menu_visu`.
-
 ### General Guidelines
 
 - **Always** return modified `xarray.Dataset` from processing functions
@@ -727,6 +726,35 @@ The process can be repeated multiple times on the same dataset.
 4. Test!
 ```
 
+---
+
+### Leads for improvement identified
+
+In this part we highlights features that we did not have the time to accomplished or some leads that we have identified to improve our code. This list is not exhaustive and all relevant improvement is welcomed.
+
+#### Spatial dimension handling
+
+So far the code is able to handle spatial dimension in a basic way only for NetCDF files. It checks if the files have a spatial dimension an give two options : keep all locations found or chose one. If all locations are kept, two options are availble for ploting : chose location(s), or average over all locations. This last option is physically not appropriate as it can average hydrological data over several water basins which does not make sense.
+
+User should be able to chose to conduct they calculation either on one location or over an area included in a water basin. This choice could be masde using locations' coordinates instead of using stations' number as it is currently done.
+
+It could be intersting to handle spatial dimension for other file type as well.
+
+#### Ability to compare different time periods
+
+Currently, it is possible to compute statistical metrics and indicators over multiple time periods by running separate calculations. Each calculation performed on a different period creates a new variable in the dataset.
+
+However, the current visualization tools do not allow the superposition of results from different periods, which limits direct comparison between them.
+
+For example, it is possible to compute monthly mean precipitation over 1 year using 10-year reference periods, calculated separately for different decades. However, it is not currently possible to overlay these decade-based results on the same visualization to compare them directly.
+
+It would therefore be valuable to add functionality allowing users to overlay and compare results from different time periods within the same visualization.
+
+#### Option to download the output file
+
+Users may wish to retain the results of their calculations (statistics and/or indicators) at the end of the process. 
+
+To support this, an option should be provided to download the processed dataset. If selected, the output file can be formatted either as a CSV file or a NetCDF file.
 
 
 ---
