@@ -221,8 +221,7 @@ def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_in
         "new_var": new_var_name,
         "dims": ds[new_var_name].dims,
         "shape": ds[new_var_name].shape,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
-        "first_5_dates": [str(d) for d in ds["time"].values[:5]] if 'time' in ds[new_var_name].dims else None
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_stat_summary'] = summary
 
@@ -320,8 +319,7 @@ def maximum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
         "new_var": new_var_name,
         "dims": ds[new_var_name].dims,
         "shape": ds[new_var_name].shape,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
-        "first_5_dates": [str(d) for d in ds["time"].values[:5]] if 'time' in ds[new_var_name].dims else None
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_stat_summary'] = summary
 
@@ -420,13 +418,109 @@ def minimum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
         "new_var": new_var_name,
         "dims": ds[new_var_name].dims,
         "shape": ds[new_var_name].shape,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
-        "first_5_dates": [str(d) for d in ds["time"].values[:5]] if 'time' in ds[new_var_name].dims else None
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_stat_summary'] = summary
 
     if not is_gui:
         print("\nMinimum calculation summary:")
+        print(f"Dimensions reduced: {dims_to_reduce}")
+        if period_label:
+            print(f"Time period: {period_label.lstrip('_')}")
+        else:
+            print("Time period: full range")
+        print(f"New Variable added: '{new_var_name}'")
+        print(f"Dimensions: {list(ds[new_var_name].dims)}")
+        print(f"Shape: {ds[new_var_name].shape}")
+
+    return ds
+
+
+# ---------------- Median ----------------
+#   Median value of a variable (along any dimension), with optional period selection, and explicit naming of the new variable in the dataset
+
+def median_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_input_gui=None, end_input_gui=None):
+    vars_list = list(ds.data_vars)
+
+    is_gui = any(p is not None for p in [var_name_gui, dims_to_reduce_gui, start_input_gui, end_input_gui])
+    
+    if var_name_gui is not None:
+        var_name = var_name_gui
+    else:
+        # Variable selection
+        print("\nAvailable variables:")
+        for i, var in enumerate(vars_list):
+            print(f" [{i}] {var}")
+
+        while True:
+            try:
+                var_idx = int(input("\nIndex of the variable to process: "))
+                var_name = vars_list[var_idx]
+                break
+            except (ValueError, IndexError):
+                print("Invalid index. Please try again.")
+
+    active_da = ds[var_name]
+
+    # Identification of available dimensions
+    available_dims = list(active_da.dims)
+
+    if dims_to_reduce_gui is not None:
+        dims_to_reduce = dims_to_reduce_gui
+    elif is_gui:
+        dims_to_reduce = available_dims
+    else:
+        dims_to_reduce = []
+        print("\nWhich dimensions do you want to calculate the median across?")
+        print("Enter the indices separated by commas (e.g., 0,2). Leave blank to select all dimensions.")
+        for i, d in enumerate(available_dims):
+            print(f" [{i}] {d} ({ds.dims[d]} values)")
+
+        while True:
+            choice_dims = input("Your choice: ").strip()
+            if choice_dims == "":
+                dims_to_reduce = available_dims
+                break
+            try:
+                indices = list(set(int(x.strip()) for x in choice_dims.split(",")))
+                dims_to_reduce = [available_dims[i] for i in indices]
+                break
+            except (ValueError, IndexError):
+                print("Invalid input. Please enter valid indices separated by commas or leave blank to select all dimensions.")
+
+    # Handling of time period if 'time' is contained in the selected dimensions
+    active_da, period_label = apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui, end_input_gui, is_gui=is_gui)
+
+    # Median calculation
+    if not is_gui:
+        print(f"\nCalculating median across: {dims_to_reduce}...")
+    median_val = active_da.median(dim=dims_to_reduce, skipna=True)
+
+    # Variable naming
+    dims_suffix = "_median_on_" + "_".join(dims_to_reduce)
+    new_var_name = f"median_{var_name}{dims_suffix}{period_label}"
+
+    # Add to Dataset
+    if 'time' in dims_to_reduce and 'time' in ds.dims:
+        median_val, _ = xr.broadcast(median_val, ds['time'])
+
+    ds[new_var_name] = median_val
+
+    # Summary
+    summary = {
+        "method": "Median",
+        "var_name": var_name,
+        "reduced_dims": dims_to_reduce,
+        "period": period_label.lstrip('_') if period_label else "full range",
+        "new_var": new_var_name,
+        "dims": ds[new_var_name].dims,
+        "shape": ds[new_var_name].shape,
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
+    }
+    ds.attrs['last_stat_summary'] = summary
+
+    if not is_gui:
+        print("\nMedian calculation summary:")
         print(f"Dimensions reduced: {dims_to_reduce}")
         if period_label:
             print(f"Time period: {period_label.lstrip('_')}")
@@ -537,8 +631,7 @@ def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_
         "new_var": new_var_name,
         "dims": ds[new_var_name].dims,
         "shape": ds[new_var_name].shape,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
-        "first_5_dates": [str(d) for d in ds["time"].values[:5]] if 'time' in ds[new_var_name].dims else None
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_stat_summary'] = summary
 
@@ -643,7 +736,7 @@ def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=N
         "var_name": var_name,
         "period": period_label.lstrip('_') if period_label else "full range",
         "new_var": new_var_name,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_stat_summary'] = summary
 
@@ -738,7 +831,7 @@ def monthly_interannual_average_xr(ds, var_name_gui=None, time_dim_gui=None):
         "var_name": var_name,
         "grouped_by": time_dim,
         "new_var": new_var_name,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_stat_summary'] = summary
 
@@ -748,5 +841,153 @@ def monthly_interannual_average_xr(ds, var_name_gui=None, time_dim_gui=None):
         print(f"New Variable added: '{new_var_name}'")
         print(f"Dimensions: {list(ds[new_var_name].dims)}")
         print(f"Shape: {ds[new_var_name].shape}")
+
+    return ds
+
+
+# ---------------- Period Grouping ----------------
+#  Assigns each time step to a named "period" category and stores the data 
+#  split by period as a new variable with a 'period' dimension.
+
+def period_grouping(ds, var_name_gui=None, periods_gui=None, time_dim_gui=None):
+    """
+    Create categorical period groups from a time series variable.
+
+    Given a list of named periods, e.g.:
+        [('P1', '1940-01-01', '1980-12-31'),
+         ('P2', '1980-01-01', '2020-12-31')]
+    this function creates two new variables:
+
+      - '{var}_period_mean'  : one mean value per period label — ideal for bar chart comparison
+      - '{var}_by_period'    : time series padded to same length, stacked by period — for line charts
+
+    Args:
+        ds           : xarray Dataset.
+        var_name_gui : Name of the variable to group.
+        periods_gui  : List of tuples (label, start_date, end_date).
+        time_dim_gui : Name of the time dimension (default: first dim containing 'time').
+
+    Returns:
+        ds with new variables added.
+    """
+    vars_list = list(ds.data_vars)
+    is_gui = any(p is not None for p in [var_name_gui, periods_gui, time_dim_gui])
+
+    # --- Variable selection ---
+    if var_name_gui is not None:
+        var_name = var_name_gui
+    else:
+        print("\nAvailable variables:")
+        for i, v in enumerate(vars_list):
+            print(f"  [{i}] {v}")
+        while True:
+            try:
+                var_name = vars_list[int(input("Variable index: "))]
+                break
+            except Exception:
+                print("Invalid index.")
+
+    # --- Time dimension ---
+    active_da = ds[var_name]
+    if time_dim_gui is not None:
+        time_dim = time_dim_gui
+    else:
+        time_dim = next((d for d in active_da.dims if "time" in d.lower()), active_da.dims[0])
+
+    if time_dim not in active_da.dims:
+        raise ValueError(f"Time dimension '{time_dim}' not found in variable '{var_name}'.")
+
+    # --- Period definitions ---
+    if periods_gui is None:
+        if is_gui:
+            raise ValueError("periods_gui must be provided in GUI mode.")
+        periods_gui = []
+        print("\nDefine time periods (empty name to stop):")
+        while True:
+            name = input("  Period name (e.g. P1, leave empty to finish): ").strip()
+            if not name:
+                break
+            start = input(f"  Start date for '{name}' (YYYY-MM-DD): ").strip()
+            end   = input(f"  End date for '{name}' (YYYY-MM-DD): ").strip()
+            periods_gui.append((name, start, end))
+
+    if not periods_gui:
+        raise ValueError("At least one period must be defined.")
+
+    # --- Extract per-period data and compute mean ---
+    period_das = []
+    period_names = []
+    mean_values = []
+    max_len = 0
+
+    for entry in periods_gui:
+        p_name, p_start, p_end = entry
+        start_ts = pd.to_datetime(p_start)
+        end_ts   = pd.to_datetime(p_end)
+        da_p = active_da.sel({time_dim: slice(start_ts, end_ts)})
+        period_das.append(da_p)
+        period_names.append(str(p_name))
+        mean_values.append(float(da_p.mean(skipna=True).values))
+        max_len = max(max_len, da_p.sizes[time_dim])
+
+    # --- Mean per period variable (1 value per period) ---
+    mean_da = xr.DataArray(
+        data=mean_values,
+        dims=['period'],
+        coords={'period': period_names},
+        attrs={'description': f"Mean of '{var_name}' per defined period. Use 'period' as X-axis for bar chart comparisons."}
+    )
+    mean_var_name = f"{var_name}_period_mean"
+    ds[mean_var_name] = mean_da
+
+    # --- Padded time series variable (same length per period) ---
+    padded_arrays = []
+    for da_p in period_das:
+        vals = da_p.values.astype(float)
+        n = vals.shape[0]
+        if n < max_len:
+            pad_shape = (max_len - n,) + vals.shape[1:]
+            pad = np.full(pad_shape, np.nan)
+            vals = np.concatenate([vals, pad], axis=0)
+        elif n > max_len:
+            vals = vals[:max_len]
+        padded_arrays.append(vals)
+
+    stacked = np.stack(padded_arrays, axis=0)  # (n_periods, max_len, ...)
+    extra_dims = [d for d in active_da.dims if d != time_dim]
+    dims_result = ['period', 'time_in_period'] + extra_dims
+    coords_result = {
+        'period': period_names,
+        'time_in_period': np.arange(max_len)
+    }
+
+    series_da = xr.DataArray(
+        data=stacked,
+        dims=dims_result,
+        coords=coords_result,
+        attrs={'description': f"'{var_name}' split by named periods {period_names}. 'time_in_period' = relative step index."}
+    )
+    series_var_name = f"{var_name}_by_period"
+    ds[series_var_name] = series_da
+
+    # --- Summary ---
+    summary = {
+        "method": "Groupement par p\u00e9riodes",
+        "var_name": var_name,
+        "periods": {p: f"{s} \u2192 {e}" for p, s, e in periods_gui},
+        "new_var": mean_var_name,
+        "new_vars": [mean_var_name, series_var_name],
+        "dims": ds[mean_var_name].dims,
+        "shape": ds[mean_var_name].shape,
+        "preview_data": ds[mean_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[mean_var_name].size > 0 else None,
+        "mean_per_period": {p: round(m, 4) for p, m in zip(period_names, mean_values)}
+    }
+    ds.attrs['last_stat_summary'] = summary
+
+    if not is_gui:
+        print(f"\nPeriod grouping summary:")
+        for p, m in zip(period_names, mean_values):
+            print(f"  {p}: mean = {m:.4f}")
+        print(f"New variables: '{mean_var_name}', '{series_var_name}'")
 
     return ds

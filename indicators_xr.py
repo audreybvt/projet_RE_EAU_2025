@@ -281,7 +281,7 @@ def soil_water_balance_index(ds, dict_filters_gui=None, var_p_gui=None, var_etr_
         "dims": final_dims,
         "shape": final_shape,
         "global_mean": float(mean_val),
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -376,7 +376,7 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
         resampled_da = resampled_da.rename({time_coord: new_time_dim})
         
         ds[new_var_name] = resampled_da
-        ds[new_var_name].attrs['description'] = f"Mean discharge over {nb} {label_unite} for {var_q}"
+        ds[new_var_name].attrs['description'] = f"Mean value of '{var_q}' over {nb} {label_unite} per period"
     except Exception as e:
         print(f"Calculation Error: {e}")
         return ds
@@ -406,29 +406,16 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
     
     # Summary for GUI
     summary = {
-        "method": "Mean Discharge (Qmean)",
+        "method": "Flow Mean per Period (Qmean)",
         "selections": selections_made,
         "new_time_dim": new_time_dim,
         "new_vars": [new_var_name],
         "dims": ds[new_var_name].dims,
         "shape": ds[new_var_name].shape,
         "global_mean": mean_val if 'mean_val' in locals() else None,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
-        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_ind_summary'] = summary
-    
-    # Summary for GUI
-    summary = {
-        "method": "Mean Discharge (Qmean)",
-        "var_name": new_var_name,
-        "mean_val": mean_val,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else []
-    }
-    ds.attrs['last_ind_summary'] = summary
-    
-    print("Date Preview (First 5 dates):")
-    print(ds[new_time_dim].values[:5])
     
     return ds
 
@@ -511,10 +498,10 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
 
         # Add to main dataset
         ds[new_var_q90] = da_q90
-        ds[new_var_q90].attrs['description'] = f"Q90 (exceeded 90% of time) over {nb} {label_unite} for {var_q}"
+        ds[new_var_q90].attrs['description'] = f"Q90: value exceeded 90% of the time — calculated over {nb} {label_unite} for '{var_q}'"
         
         ds[new_var_q95] = da_q95
-        ds[new_var_q95].attrs['description'] = f"Q95 (exceeded 95% of time) over {nb} {label_unite} for {var_q}"
+        ds[new_var_q95].attrs['description'] = f"Q95: value exceeded 95% of the time — calculated over {nb} {label_unite} for '{var_q}'"
 
     except Exception as e:
         print(f"Calculation Error: {e}")
@@ -541,8 +528,7 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         "new_vars": [new_var_q90, new_var_q95],
         "dims": ds[new_var_q90].dims,
         "shape": ds[new_var_q90].shape,
-        "first_5_vals": [float(v) for v in ds[new_var_q90].values.flatten()[:5]] if ds[new_var_q90].size > 0 else [],
-        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
+        "preview_data": ds[new_var_q90].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_q90].size > 0 else None
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -630,7 +616,7 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
 
         # Add to main dataset
         ds[new_var_name] = resampled_vcn
-        ds[new_var_name].attrs['description'] = f"VCN10 (Min 10-day consecutive mean) over {nb} {label_unite} for {var_q}"
+        ds[new_var_name].attrs['description'] = f"VCN10: minimum 10-day consecutive mean of '{var_q}', computed over {nb} {label_unite}"
 
     except Exception as e:
         print(f"Calculation Error: {e}")
@@ -655,14 +641,13 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
 
     # Summary for GUI
     summary = {
-        "method": "Minimum 10-day mean (VCN10)",
+        "method": "Minimum 10-consecutive-day mean (VCN10)",
         "selections": selections_made,
         "new_time_dim": new_time_dim,
         "new_vars": [new_var_name],
         "dims": ds[new_var_name].dims,
         "shape": ds[new_var_name].shape,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
-        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -749,10 +734,10 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
 
         # Add to Dataset
         ds[new_var_q10] = da_q10
-        ds[new_var_q10].attrs['description'] = f"Q10 (flow exceeded 10% of time) over {nb} {label_unite} for {var_q}"
+        ds[new_var_q10].attrs['description'] = f"Q10: value exceeded 10% of the time — calculated over {nb} {label_unite} for '{var_q}'"
         
         ds[new_var_q05] = da_q05
-        ds[new_var_q05].attrs['description'] = f"Q05 (flow exceeded 5% of time) over {nb} {label_unite} for {var_q}"
+        ds[new_var_q05].attrs['description'] = f"Q05: value exceeded 5% of the time — calculated over {nb} {label_unite} for '{var_q}'"
 
     except Exception as e:
         print(f"Calculation Error: {e}")
@@ -779,8 +764,7 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         "new_vars": [new_var_q10, new_var_q05],
         "dims": ds[new_var_q10].dims,
         "shape": ds[new_var_q10].shape,
-        "first_5_vals": [float(v) for v in ds[new_var_q10].values.flatten()[:5]] if ds[new_var_q10].size > 0 else [],
-        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
+        "preview_data": ds[new_var_q10].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_q10].size > 0 else None
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -868,7 +852,7 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
 
         # Add to main dataset
         ds[new_var_name] = resampled_vcx
-        ds[new_var_name].attrs['description'] = f"VCX3 (Max 3-day consecutive mean) over {nb} {label_unite} for {var_q}"
+        ds[new_var_name].attrs['description'] = f"VCX3: maximum 3-day consecutive mean of '{var_q}', computed over {nb} {label_unite}"
 
     except Exception as e:
         print(f"Calculation Error: {e}")
@@ -893,14 +877,13 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
 
     # Summary for GUI
     summary = {
-        "method": "Maximum 3-day mean (VCX3)",
+        "method": "Maximum 3-consecutive-day mean (VCX3)",
         "selections": selections_made,
         "new_time_dim": new_time_dim,
         "new_vars": [new_var_name],
         "dims": ds[new_var_name].dims,
         "shape": ds[new_var_name].shape,
-        "first_5_vals": [float(v) for v in ds[new_var_name].values.flatten()[:5]] if ds[new_var_name].size > 0 else [],
-        "first_5_dates": [str(d) for d in ds[new_time_dim].values[:5]]
+        "preview_data": ds[new_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[new_var_name].size > 0 else None
     }
     ds.attrs['last_ind_summary'] = summary
     
@@ -985,36 +968,50 @@ def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=Non
             except ValueError:
                 print("Tolerance must be a number.")
 
-    # Time config
-    frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
+    # ── Variable Naming Configuration ──
+    # Using explicit English names to avoid confusion between 'count' and 'series'.
+    mag_var_name = f"POT_magnitude_{var_name}_{str(threshold).replace('.','_')}"
+    dev_var_name = f"POT_deviation_{var_name}_{str(threshold).replace('.','_')}"
+    count_var_name = f"Exceedance_Count_{var_name}_{str(threshold).replace('.','_')}"
 
     effective_threshold = threshold * (1 + tolerance / 100)
     print(f"Effective threshold used: {effective_threshold:.3f}")
 
-    # Add Visualization Variable (Magnitude)
-    new_var_magnitude = f"POT_magnitude_{var_name}"
-    ds[new_var_magnitude] = ds[var_name] - effective_threshold
-    ds[new_var_magnitude].attrs['description'] = f"Exceedance magnitude above {effective_threshold} for {var_name}"
-    
-    # Calculation
-    new_time_dim = f"{time_coord_gui or 'time'}_Group_{nb}{unite}"
-    new_var_name = f"Over_{threshold}_{var_name}"
+    # 1. Magnitude Series (Actual value if > threshold, else 0) -- Always >= 0
+    mag_da = xr.where(active_ds[var_name] >= effective_threshold, active_ds[var_name], 0)
+    ds[mag_var_name] = mag_da
+    ds[mag_var_name].attrs['description'] = f"Actual magnitude values only during exceedances of {effective_threshold:.3f}. Else 0."
 
+    # 2. Deviation Series (Value - threshold) -- Biphasic (positive above, negative below)
+    # This is the variable to use for biphasic bar charts.
+    dev_da = active_ds[var_name] - effective_threshold
+    ds[dev_var_name] = dev_da
+    ds[dev_var_name].attrs['description'] = (
+        f"Deviation from threshold {effective_threshold:.3f}. "
+        "Positive = exceedance, Negative = below threshold. Ideal for biphasic bar charts."
+    )
+
+    # 3. Resampled Count (Optional, if unite_gui is provided)
+    added_vars = [mag_var_name, dev_var_name]
+    
     try:
-        # Group detection could be more complex, but we'll stick to basic counting for now
-        # per resampled period if unite provided
-        da = active_ds[var_name]
-        exceed = (da > effective_threshold).astype(int)
-        
+        t_coord = time_coord_gui or 'time'
         if unite_gui:
-            resampled_exceed = exceed.resample({time_coord_gui or 'time': frequence}).sum()
-            resampled_exceed = resampled_exceed.rename({time_coord_gui or 'time': new_time_dim})
-            ds[new_var_name] = resampled_exceed
-            ds[new_var_name].attrs['description'] = f"Count of occurrences above {effective_threshold} for {var_name}"
-        
+            frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
+            new_time_dim = f"{t_coord}_{nb}{unite}_Group"
+            
+            # Number of occurrences (time steps) above threshold per period
+            exceed_mask = (active_ds[var_name] >= effective_threshold).astype(int)
+            resampled_count = exceed_mask.resample({t_coord: frequence}).sum()
+            resampled_count = resampled_count.rename({t_coord: new_time_dim})
+            
+            ds[count_var_name] = resampled_count
+            ds[count_var_name].attrs['description'] = f"Number of occurrences (time steps) above {effective_threshold:.3f} per period."
+            added_vars.append(count_var_name)
     except Exception as e:
-        print(f"Calculation Error: {e}")
-        return ds
+        print(f"Calculation Error on count: {e}")
+
+    da = active_ds[var_name] # For episode calculations below
 
     # Episode Detection Logic (for terminal summary)
     values = da.values.flatten()
@@ -1045,18 +1042,18 @@ def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=Non
 
     # Summary Statistics Output
     summary = {
-        "method": "Over Threshold",
+        "method": "Peak Over Threshold (POT)",
         "selections": selections_made,
         "var_name": var_name,
-        "new_vars": [new_var_magnitude, new_var_name] if new_var_name in ds else [new_var_magnitude],
-        "dims": ds[new_var_magnitude].dims,
-        "shape": ds[new_var_magnitude].shape,
+        "new_vars": added_vars,
+        "dims": ds[dev_var_name].dims,
+        "shape": ds[dev_var_name].shape,
         "threshold": effective_threshold,
         "total_exceedances": int(np.sum(exceed_flat)),
         "n_episodes": len(episodes),
         "mean_duration": float(np.mean(episodes)) if episodes else 0.0,
         "max_pot": float(np.max(pot_values)) if pot_values else 0.0,
-        "first_5_vals": [float(v) for v in ds[new_var_magnitude].values.flatten()[:5]] if ds[new_var_magnitude].size > 0 else []
+        "preview_data": ds[dev_var_name].to_dataframe().head(5).reset_index().to_dict(orient='list') if ds[dev_var_name].size > 0 else None
     }
     ds.attrs['last_ind_summary'] = summary
 

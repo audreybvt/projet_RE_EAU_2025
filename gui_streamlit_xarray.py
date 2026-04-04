@@ -167,6 +167,8 @@ def render_categorical_filters(key_prefix="filter"):
     dict_filters = {}
     if cat_dims:
         with st.expander("🔎 Filtres catégoriels (scénarios, modèles…)"):
+            if key_prefix == "ind":
+                st.info("💡 Sélectionner des valeurs de catégorie si vous voulez travailler sur un modèle spécifique par exemple.")
             for dim in cat_dims:
                 vals = ds[dim].values.tolist()
                 options = [str(v) for v in vals]
@@ -209,6 +211,9 @@ def render_temporal_filters(key_prefix="time_filter"):
         max_dt = time_values.max().date()
         
         with st.expander("📅 Filtrage temporel (période d'analyse)"):
+            st.info(
+                "💡 **Filtrage temporel** : Sélectionnez la période sur laquelle vous voulez effectuer le calcul. "
+                ) 
             st.info(f"Période disponible : {min_dt} au {max_dt}")
             c1, c2 = st.columns(2)
             start_date = c1.date_input("Date de début", min_dt, min_value=min_dt, max_value=max_dt, key=f"{key_prefix}_start")
@@ -522,22 +527,54 @@ if has_dataset():
             rows = []
             for v in ds.data_vars:
                 da = ds[v]
-                flat_vals = da.values.flatten()
-                
-                # Chercher les 5 premières valeurs (non-NaN si numériques)
+                # Try to build a rich preview with dates and category context
                 try:
-                    if np.issubdtype(da.dtype, np.number):
-                        non_nans = flat_vals[~np.isnan(flat_vals)]
-                        extrait = str(list(np.round(non_nans[:min(5, len(non_nans))], 3)))
+                    # Build a flat index-based view
+                    df_preview = da.to_dataframe().reset_index()
+                    # Remove NaN in the value column
+                    val_col = [c for c in df_preview.columns if c == v]
+                    if val_col:
+                        df_clean = df_preview[df_preview[val_col[0]].notna()].head(5)
+                        if len(df_clean) > 0:
+                            # Format datetime columns
+                            for col in df_clean.columns:
+                                if pd.api.types.is_datetime64_any_dtype(df_clean[col]):
+                                    df_clean = df_clean.copy()
+                                    df_clean[col] = df_clean[col].dt.strftime("%Y-%m-%d")
+                            # Round numeric non-value columns
+                            for col in df_clean.columns:
+                                if col != v and pd.api.types.is_float_dtype(df_clean[col]):
+                                    df_clean = df_clean.copy()
+                                    df_clean[col] = df_clean[col].round(4)
+                            extrait = df_clean.to_dict(orient="records")
+                            extrait_str = "; ".join(
+                                " | ".join(f"{k}: {val}" for k, val in row.items())
+                                for row in extrait[:3]
+                            )
+                            if len(extrait) >= 3:
+                                extrait_str += " ..."
+                        else:
+                            extrait_str = "(no non-NaN values)"
                     else:
-                        extrait = str(list(flat_vals[:min(5, len(flat_vals))]))
-                    if flat_vals.size > 5:
-                        extrait = extrait.rstrip("]") + ", ...]"
-                except:
-                    extrait = "..."
+                        extrait_str = str(list(da.values.flatten()[:5]))
+                except Exception:
+                    flat_vals = da.values.flatten()
+                    try:
+                        if np.issubdtype(da.dtype, np.number):
+                            non_nans = flat_vals[~np.isnan(flat_vals.astype(float))]
+                            extrait_str = str(list(np.round(non_nans[:5], 3)))
+                        else:
+                            extrait_str = str(list(flat_vals[:5]))
+                    except Exception:
+                        extrait_str = "..."
 
-                rows.append({"Variable": v, "Dims": str(da.dims), "Aperçu (5 val)": extrait})
+                rows.append({
+                    "Variable": v,
+                    "Dimensions": str(da.dims),
+                    "Aperçu — date | catégorie | valeur (5 premières lignes non-NaN)": extrait_str
+                })
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+            st.caption("💡 Chaque ligne montre jusqu'à 3 exemples de valeurs avec leur date et leur contexte catégoriel (modèle, scénario…).")
 
 else:
     st.info("👈 Chargez un fichier depuis le panneau latéral pour commencer.")
@@ -570,7 +607,16 @@ with tab_stat:
             "Percentile flexible",
             "Moyenne glissante (rolling)",
             "Moyenne interannuelle mensuelle",
+            "Groupement par périodes",
         ],
+        help=(
+            "Choisissez le type de calcul à effectuer sur votre variable. "
+            "'Flexible' signifie que vous choisissez sur quelles dimensions agréger le calcul. "
+            "Ex: Moyenne flexible sur 'time' = une valeur unique pour toute la période. "
+            "Ex: Moyenne flexible sur 'modèle' = une moyenne des modèles chaque jour. "
+            "Moyenne glissante = lisse une série en moyennant sur une fenêtre mobile (idéal pour détecter des tendances). "
+            "Groupement par périodes = crée des catégories P1/P2/… que vous pouvez comparer dans les graphiques."
+        )
     )
 
     vars_list = ds_vars()
@@ -579,7 +625,16 @@ with tab_stat:
     col1, col2 = st.columns(2)
 
     with col1:
-        var_name = st.selectbox("Variable source", vars_list, key="stat_var")
+        var_name = st.selectbox(
+            "Variable source",
+            vars_list,
+            key="stat_var",
+            help=(
+                "Variable sur laquelle effectuer le calcul statistique. "
+                "Toutes les variables du dataset sont disponibles, y compris celles calculées précédemment "
+                "(indicateurs hydrologiques, etc.)."
+            )
+        )
 
     if var_name:
         avail_dims = list(st.session_state["ds"][var_name].dims)
@@ -587,24 +642,92 @@ with tab_stat:
         avail_dims = all_dims
 
     with col2:
-        if stat_func not in ("Moyenne interannuelle mensuelle", "Moyenne glissante (rolling)"):
+        if stat_func not in ("Moyenne interannuelle mensuelle", "Moyenne glissante (rolling)", "Groupement par périodes"):
             dims_sel = st.multiselect(
-                "Dimensions à réduire (laisser vide = toutes)",
+                "Agréger sur ces axes (calculer une valeur unique par combinaison restante)",
                 avail_dims,
                 default=avail_dims,
                 key="stat_dims",
+                help=(
+                    "Sélectionnez les dimensions à 'aplatir' par un calcul statistique. "
+                    "Exemple 1 : si vos données ont les axes [time, model, scenario] et que vous sélectionnez "
+                    "model + scenario → vous obtenez une valeur par pas de temps (moyennée sur tous les modèles et scénarios). "
+                    "Exemple 2 : sélectionner uniquement 'time' → vous obtenez une seule valeur par combinaison modèle/scénario. "
+                    "Laisser vide = tout agréger en une seule valeur globale."
+                ),
             )
         elif stat_func == "Moyenne interannuelle mensuelle":
             t_dims_list = [d for d in avail_dims if "time" in d.lower()]
-            time_dim_sel = st.selectbox("Dimension temporelle", t_dims_list if t_dims_list else avail_dims, key="stat_time_dim")
+            time_dim_sel = st.selectbox(
+                "Dimension temporelle",
+                t_dims_list if t_dims_list else avail_dims,
+                key="stat_time_dim",
+                help="Choisissez la dimension qui représente le temps dans votre dataset (ex: 'time', 'time_Group_1m', etc.)."
+            )
         elif stat_func == "Moyenne glissante (rolling)":
-            window_val = st.number_input("Taille de la fenêtre (pas de temps)", min_value=1, value=7, step=1)
+            window_val = st.number_input(
+                "Taille de la fenêtre (pas de temps)",
+                min_value=1, value=7, step=1,
+                help="Nombre de pas de temps consécutifs utilisés pour calculer la moyenne glissante. Ex: 7 = moyenne sur 7 jours si les données sont journalières."
+            )
+        elif stat_func == "Groupement par périodes":
+            st.markdown("**Définition des périodes de comparaison**")
+            st.caption("💡 Définissez 2 périodes ou plus pour comparer. Ex : P1 = 1950–1980 et P2 = 1980–2010. "
+                       "Deux nouvelles variables seront créées : la moyenne par période (idéale pour un diagramme en barres) "
+                       "et la série temporelle par période (idéale pour un graphique en ligne).")
+
+            # Manage periods list in session state
+            if "stat_periods" not in st.session_state:
+                st.session_state["stat_periods"] = [("P1", "", ""), ("P2", "", "")]
+
+            col_add, col_rm = st.columns([1, 1])
+            if col_add.button("➕ Ajouter une période", key="add_period"):
+                n = len(st.session_state["stat_periods"]) + 1
+                st.session_state["stat_periods"].append((f"P{n}", "", ""))
+            if col_rm.button("➖ Supprimer la dernière", key="rm_period") and len(st.session_state["stat_periods"]) > 1:
+                st.session_state["stat_periods"].pop()
+
+            # Time range for date pickers
+            _t_dims_s = time_like_dims()
+            _t_min = _t_max = None
+            if _t_dims_s:
+                try:
+                    _tv = pd.to_datetime(st.session_state["ds"][_t_dims_s[0]].values)
+                    _t_min, _t_max = _tv.min().date(), _tv.max().date()
+                except Exception:
+                    pass
+
+            updated_periods = []
+            for pi, (p_name, p_start, p_end) in enumerate(st.session_state["stat_periods"]):
+                cc1, cc2, cc3 = st.columns([1, 1.5, 1.5])
+                new_name = cc1.text_input(f"Nom P{pi+1}", value=p_name, key=f"pg_name_{pi}")
+                try:
+                    dflt_s = pd.to_datetime(p_start).date() if p_start else (_t_min or None)
+                    dflt_e = pd.to_datetime(p_end).date()   if p_end else (_t_max or None)
+                    new_start = cc2.date_input(f"Début P{pi+1}", value=dflt_s, min_value=_t_min, max_value=_t_max, key=f"pg_start_{pi}")
+                    new_end   = cc3.date_input(f"Fin P{pi+1}",   value=dflt_e, min_value=_t_min, max_value=_t_max, key=f"pg_end_{pi}")
+                except Exception:
+                    new_start = cc2.text_input(f"Début P{pi+1} (YYYY-MM-DD)", value=p_start, key=f"pg_start_{pi}")
+                    new_end   = cc3.text_input(f"Fin P{pi+1} (YYYY-MM-DD)",   value=p_end,   key=f"pg_end_{pi}")
+                updated_periods.append((new_name, str(new_start), str(new_end)))
+            st.session_state["stat_periods"] = updated_periods
+
+            t_dims_pg = [d for d in avail_dims if "time" in d.lower()]
+            time_dim_pg = st.selectbox(
+                "Dimension temporelle à utiliser",
+                t_dims_pg if t_dims_pg else avail_dims,
+                key="pg_timedim",
+                help="Choisissez la dimension temporelle de votre variable source. Habituellement 'time'."
+            )
 
     # Période temporelle
     if stat_func not in ("Moyenne interannuelle mensuelle",):
         t_dims = time_like_dims()
         if t_dims:
             with st.expander("⏳ Filtrage temporel (optionnel)"):
+                st.info(
+                "💡 **Filtrage temporel** : Sélectionnez la période sur laquelle vous voulez effectuer le calcul. "
+                )  
                 t_vals_raw = st.session_state["ds"][t_dims[0]].values
                 try:
                     t_vals = pd.to_datetime(t_vals_raw)
@@ -632,7 +755,9 @@ with tab_stat:
     if st.button("▶️ Lancer le calcul statistique", key="run_stat"):
         ds_work = st.session_state["ds"]
         try:
-            dims_to_reduce = dims_sel if stat_func not in ("Moyenne interannuelle mensuelle", "Moyenne glissante (rolling)") else None
+            # Sécurité pour éviter name 'dims_sel' is not defined
+            _dims_input = dims_sel if 'dims_sel' in locals() else None
+            dims_to_reduce = _dims_input if stat_func not in ("Moyenne interannuelle mensuelle", "Moyenne glissante (rolling)", "Groupement par périodes") else None
 
             if stat_func == "Moyenne flexible":
                 ds_work = stats.mean_value_flexible(
@@ -696,6 +821,14 @@ with tab_stat:
                     time_dim_gui=time_dim_sel,
                 )
 
+            elif stat_func == "Groupement par périodes":
+                ds_work = stats.period_grouping(
+                    ds_work,
+                    var_name_gui=var_name,
+                    periods_gui=st.session_state.get("stat_periods", []),
+                    time_dim_gui=time_dim_pg,
+                )
+
             st.session_state["ds"] = ds_work
             new_vars = [v for v in ds_work.data_vars if v not in vars_list]
             log(f"Statistique '{stat_func}' calculée → {new_vars}", "success")
@@ -724,11 +857,30 @@ with tab_stat:
                     st.markdown(f"**Dimensions:** `{da_new.dims}`")
                     st.markdown(f"**Shape:** `{da_new.shape}`")
 
-                # Affichage des 5 premières valeurs
-                if "first_5_vals" in summary and summary["first_5_vals"]:
-                    with st.expander("👁️ Variable Preview (First 5 values)"):
-                        st.markdown("**Variables Preview:**")
-                        st.table(pd.DataFrame({"Valeur": summary["first_5_vals"]}))
+                # Affichage de l'aperçu structuré
+                if "preview_data" in summary and summary["preview_data"]:
+                    with st.expander("👁️ Aperçu des 5 premières valeurs (avec dimensions)"):
+                        st.markdown("**Tableau d'aperçu :**")
+                        df_preview = pd.DataFrame(summary["preview_data"])
+                        rename_map = {
+                            "time": "Date",
+                            "model": "Modèle",
+                            "scenario": "Scénario",
+                            "period": "Période",
+                            0: "Valeur"
+                        }
+                        st.table(df_preview.rename(columns=rename_map))
+
+                # Fallback: moyennes par période pour Groupement par périodes
+                elif "mean_per_period" in summary:
+                    st.markdown("**Moyennes par période :**")
+                    period_df = pd.DataFrame.from_dict(
+                        summary["mean_per_period"], orient='index', columns=["Moyenne"]
+                    ).rename_axis("Période")
+                    st.dataframe(period_df, use_container_width=True)
+                    if "periods" in summary:
+                        for p, rng in summary["periods"].items():
+                            st.caption(f"  {p} : {rng}")
                 
                 st.markdown("---")
 
@@ -771,6 +923,15 @@ with tab_ind:
             "over_threshold"
         ],
         key="ind_select",
+        help=(
+            "Choisissez l'indicateur à calculer. "
+            "Qmean = moyenne sur la période. "
+            "Q90/95 = valeur dépassée 90\u202f% ou 95\u202f% du temps (hautes valeurs). "
+            "Q10/05 = valeur dépassée seulement 10\u202f% ou 5\u202f% du temps (basses valeurs). "
+            "VCN10 = minimum des moyennes glissantes sur 10 pas de temps consécutifs (extrême bas). "
+            "VCX3 = maximum des moyennes sur 3 pas de temps (extrême haut). "
+            "over_threshold = détecte les dépassements d'un seuil et calcule l'écart à ce seuil."
+        )
     )
 
     vars_list_ind = ds_vars()
@@ -791,10 +952,37 @@ with tab_ind:
     if indicator in ("Qmean", "Q90/95", "Q10/05", "VCN10", "VCX3", "over_threshold"):
         col_tc, col_unit, col_nb = st.columns(3)
         if t_dims_ind:
-            time_coord_ind = col_tc.selectbox("Coordonnée temporelle", t_dims_ind, key="ind_tc")
-        unite_gui_val = col_unit.selectbox("Unité de temps", ["d", "m", "y"],
-                                            format_func=lambda x: {"d": "Jours", "m": "Mois", "y": "Années"}[x], key="ind_unite")
-        nb_gui_val = col_nb.number_input("Pas de temps", min_value=1, value=1, step=1, key="ind_nb")
+            time_coord_ind = col_tc.selectbox(
+                "Coordonnée temporelle",
+                t_dims_ind,
+                key="ind_tc",
+                help=(
+                    "Choisissez la dimension temporelle de votre variable. "
+                    "Habituellement appelée 'time'. Si vous avez déjà calculé un indicateur, "
+                    "il peut y avoir d'autres dimensions temporelles comme 'time_Group_1m'."
+                )
+            )
+        unite_gui_val = col_unit.selectbox(
+            "Unité de la période de calcul",
+            ["d", "m", "y"],
+            format_func=lambda x: {"d": "Jours", "m": "Mois", "y": "Années"}[x],
+            key="ind_unite",
+            help=(
+                "Unité de temps utilisée pour rééchantillonner vos données avant de calculer l'indicateur. "
+                "Ex: 1 mois = calculer l'indicateur chaque mois. 1 an = chaque année. "
+                "3 mois = chaque trimestre."
+            )
+        )
+        nb_gui_val = col_nb.number_input(
+            "Pas de temps (nombre d'unités)",
+            min_value=1, value=1, step=1,
+            key="ind_nb",
+            help=(
+                "Nombre d'unités à regrouper par calcul. "
+                "Ex : unité=Mois, pas=3 → l'indicateur est calculé tous les 3 mois (par trimestre). "
+                "Unité=Jours, pas=10 → toutes les 10 journées."
+            )
+        )
 
     if indicator == "Soil_Water_Balance_Index":
         col_p, col_etr, col_dr = st.columns(3)
@@ -806,13 +994,53 @@ with tab_ind:
         var_q = st.selectbox("Variable Niveau Piézométrique", vars_list_ind, key="ind_varspli")
 
     elif indicator in ("Qmean", "Q90/95", "Q10/05", "VCN10", "VCX3"):
-        var_q = st.selectbox("Variable débit (Q)", vars_list_ind, key="ind_varq")
+        var_q = st.selectbox(
+            "Variable à analyser",
+            vars_list_ind,
+            key="ind_varq",
+            help=(
+                "Sélectionnez la variable sur laquelle calculer l'indicateur. "
+                "Peut être un débit (m³/s), une précipitation (mm/j), un niveau piézométrique (m), etc. "
+                "L'indicateur sera calculé sur les valeurs de cette variable."
+            )
+        )
 
     elif indicator == "over_threshold":
-        var_q    = st.selectbox("Variable débit (Q)", vars_list_ind, key="ind_varq_ot")
+        var_q = st.selectbox(
+            "Variable à analyser",
+            vars_list_ind,
+            key="ind_varq_ot",
+            help=(
+                "Sélectionnez la variable dont vous souhaitez détecter les dépassements de seuil. "
+                "Ex: un débit journalier, une température, une précipitation, etc."
+            )
+        )
         c1, c2 = st.columns(2)
-        threshold = c1.number_input("Seuil", value=0.0, format="%.4f", key="ind_thresh")
-        tolerance = c2.number_input("Tolérance (%)", value=0.0, format="%.1f", key="ind_tol")
+        threshold = c1.number_input(
+            "Threshold (Seuil)",
+            value=0.0,
+            format="%.4f",
+            key="ind_thresh",
+            help=(
+                "The threshold value to detect exceedances. \n\n"
+                "Examples:\n"
+                "- **Floods**: set to 50 m³/s to find flood values.\n"
+                "- **Heatwaves**: set to 30°C for temperature records.\n"
+                "- **Droughts**: use a low threshold for groundwater levels (e.g., -0.5 m).\n\n"
+                "Values **ABOVE** this threshold will be identified as exceedances."
+            )
+        )
+        tolerance = c2.number_input(
+            "Tolerance (%)",
+            value=0.0,
+            format="%.1f",
+            key="ind_tol",
+            help=(
+                "A percentage added to the threshold to create a 'buffer zone'. \n\n"
+                "Example: Threshold = 100, Tolerance = 5% → Effective Threshold = 105. \n\n"
+                "Useful to avoid counting 'false exceedances' due to sensor noise near the threshold."
+            )
+        )
 
     # ── Bouton calcul indicateur ─────────────────────────────────────────────
     if st.button("▶️ Calculer l'indicateur", key="run_ind"):
@@ -925,19 +1153,44 @@ with tab_ind:
                 if summary.get("global_mean") is not None:
                     st.markdown(f"**Global Mean on the selection:** `{summary['global_mean']:.3f}`")
 
-                # Specific to "Over threshold"
-                if indicator == "Over threshold":
+                # Specific to "Peak Over Threshold" (POT)
+                if indicator == "over_threshold" or summary.get("method") == "Peak Over Threshold (POT)":
+                    st.info(f"💡 Effective threshold used : **{summary.get('threshold', 0):.3f}**")
                     c1, c2, c3, c4 = st.columns(4)
                     c1.metric("Total exceedances", summary.get("total_exceedances", 0))
                     c2.metric("Number of episodes", summary.get("n_episodes", 0))
-                    c3.metric("Mean episode duration", f"{summary.get('mean_duration', 0):.2f}")
-                    c4.metric("Highest POT", f"{summary.get('max_pot', 0):.3f}")
-                    st.info(f"💡 Effective threshold : **{summary.get('threshold', 0):.3f}**")
+                    c3.metric("Mean episode duration", f"{summary.get('mean_duration', 0):.2f} steps")
+                    c4.metric("Highest Peak (POT)", f"{summary.get('max_pot', 0):.3f}")
+                    
+                    st.warning(
+                        "📌 **Which variable to use for visualization?**\n"
+                        "- **`POT_deviation_...`** : Use this for a **biphasic bar chart** (shows gaps above and below threshold).\n"
+                        "- **`Exceedance_Count_...`** : Use this to see the **number of days** per month/year (if resampled).\n"
+                        "- **`POT_magnitude_...`** : Values only when above threshold (0 otherwise)."
+                    )
 
                 # Previews
-                if summary.get("first_5_vals"):
-                    with st.expander("👁️ Variable & Date Preview (First 5 values)"):
-                        st.markdown("**Variable Preview (First 5 values):**")
+                if summary.get("preview_data"):
+                    with st.expander("👁️ Aperçu des 5 premières valeurs (avec dimensions)"):
+                        st.markdown("**Tableau d'aperçu :**")
+                        # preview_data is a dict (orient='list') from a pandas DataFrame
+                        df_preview = pd.DataFrame(summary["preview_data"])
+                        
+                        # Rename columns for better readability
+                        rename_map = {
+                            "time": "Date",
+                            "model": "Modèle",
+                            "scenario": "Scénario",
+                            0: "Valeur"
+                        }
+                        df_preview = df_preview.rename(columns=rename_map)
+                        
+                        # If a column name is not in rename_map, it stays as is
+                        st.table(df_preview)
+
+                elif summary.get("first_5_vals"):
+                    with st.expander("👁️ Aperçu (Ancien format)"):
+                        st.markdown("**Aperçu des 5 premières valeurs :**")
                         preview_dict = {"Valeur": summary["first_5_vals"]}
                         if summary.get("first_5_dates"):
                             preview_dict["Date"] = summary["first_5_dates"]
@@ -953,7 +1206,7 @@ with tab_ind:
             st.success(f"✅ Indicateur calculé. Nouvelles variables : {new_vars}")
 
             if new_vars:
-                with st.expander("👁️ Aperçu"):
+                with st.expander("🔍 Détails techniques des nouvelles variables"):
                     for nv in new_vars:
                         da_new = ds_work[nv]
                         st.markdown(f"**{nv}** — dims: `{da_new.dims}`, shape: `{da_new.shape}`")
@@ -1014,7 +1267,7 @@ with tab_viz:
     viz_filters = {}
     if plot_vars_ui:
         ds_viz = st.session_state["ds"]
-        standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y', 'station', 'piezometre']
+        standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y', 'station', 'piezometre','month']
         
         has_cat = False
         for v in plot_vars_ui:
@@ -1024,8 +1277,15 @@ with tab_viz:
                     break
                     
         if has_cat:
-            with st.expander("🔎 Filtres catégoriels (scénarios, modèles…) - Spécifiques par variable"):
-                st.caption("💡 Sélectionnez les valeurs pour filtrer par variable. Laisser vide revient à faire la moyenne de la dimension.")
+            with st.expander(
+                "🔎 Filtres catégoriels (scénarios, modèles…) - Spécifiques par variable",
+            ):
+                st.info(
+                    "💡 **Filtres catégoriels** : Sélectionnez des valeurs spécifiques pour une ou plusieurs catégories. "
+                    "Ex: en sélectionnant `model = model1` vous ne tracez que ce modèle. "
+                    "Laisser vide = la **moyenne** de toutes les valeurs de cette dimension sera calculée automatiquement. "
+                    "Sélectionner plusieurs valeurs = une courbe par valeur."
+                )
                 
                 for i, var_n in enumerate(plot_vars_ui):
                     if var_n not in ds_viz: continue
@@ -1056,15 +1316,45 @@ with tab_viz:
         st.markdown("---")
 
         if chart_type in ["Graphique en ligne", "Nuage de points"]:
-            show_envelope = st.checkbox("Afficher les enveloppes (min-max) / Dispersion", value=False, help="Si une dimension 'model' est présente")
+            show_envelope = st.checkbox(
+                "Afficher l'enveloppe d'incertitude (plage min–max entre modèles/scénarios)",
+                value=False,
+                help=(
+                    "Si votre dataset contient plusieurs modèles ou scénarios, l'enveloppe représente "
+                    "la plage de valeurs possibles entre le minimum et le maximum de tous les modèles disponibles. "
+                    "La zone ombrée montre la dispersion ; la ligne centrale = la moyenne ou le(s) modèle(s) sélectionné(s)."
+                )
+            )
             env_type = "average"
             if show_envelope:
-                env_type = st.radio("Type d'enveloppe", ["average", "individual"], index=0, horizontal=True)
+                st.info(
+                    "**Enveloppe** : La zone ombrée représente l'intervalle "
+                    "[min, max] calculé sur tous les modèles ou scénarios pour chaque pas de temps. "
+                    "Cela permet de visualiser la dispersion liée aux projections climatiques. "
+                    "Mode 'average': La zone ombrée montre la dispersion ; la ligne centrale = la moyenne ou le(s) modèle(s) sélectionné(s) "
+                    "Mode 'individual': Toutes les courbes des modèles non selectionnés sont tracées à l'intérieur de l'enveloppe en couleur transparente"
+                )
+                env_type = st.radio(
+                    "Courbe centrale de l'enveloppe",
+                    ["average", "individual"],
+                    index=0,
+                    horizontal=True,
+                    help="'average' trace la moyenne de tous les modèles. 'individual' trace une courbe par modèle à l'intérieur de l'enveloppe."
+                )
             st.session_state["viz_envelope"] = show_envelope
             st.session_state["viz_env_type"] = env_type
             
         elif chart_type == "Histogramme":
-            nb_bins = st.number_input("Nombre de classes (bins)", min_value=1, max_value=100, value=10)
+            nb_bins = st.number_input(
+                "Nombre de classes (bins)",
+                min_value=1, max_value=200, value=10,
+                help=(
+                    "Détermine la résolution de l'histogramme. "
+                    "Peu de classes = vue globale de la distribution. "
+                    "Beaucoup de classes = détail fin mais plus bruité. "
+                    "Règle pratique : √(nombre de valeurs) est un bon point de départ."
+                )
+            )
             st.session_state["viz_bins"] = nb_bins
 
     # Période temporelle
@@ -1072,7 +1362,14 @@ with tab_viz:
     start_viz = None
     end_viz   = None
     if t_dims_viz:
-        with st.expander("⏳ Filtrage temporel"):
+        with st.expander(
+            "⏳ Filtrage temporel",
+        ):
+            st.info(
+                "💡 **Filtrage temporel** : Sélectionnez la période à afficher sur le graphique. "
+                "La période choisie apparaîtra dans le titre du graphique. "
+                "Laisser les dates par défaut (min/max) = afficher toute la chronique disponible."
+            )
             t_v = pd.to_datetime(st.session_state["ds"][t_dims_viz[0]].values)
             c1, c2 = st.columns(2)
             d_s = c1.date_input("Début", value=t_v.min().date(), min_value=t_v.min().date(), max_value=t_v.max().date(), key="viz_ds")
@@ -1080,20 +1377,130 @@ with tab_viz:
             start_viz = str(d_s)
             end_viz   = str(d_e)
 
-    # Options de style
-    with st.expander("🎨 Options de style & 🔍 Zoom Manuel"):
+    # ── Options de style et zoom ──────────────────────────────────────────────
+    with st.expander("🎨 Options de style & 🔍 Zoom / Curseurs d'axes"):
         col_t, col_xl, col_yl = st.columns(3)
-        p_title  = col_t.text_input("Titre", "")
-        p_xlabel = col_xl.text_input("Axe X", "")
-        p_ylabel = col_yl.text_input("Axe Y", "")
+        p_title  = col_t.text_input("Titre du graphique", "", help="Titre principal affiché en haut du graphique.")
+        p_xlabel = col_xl.text_input("Label axe X", "", help="Nom de l'axe horizontal (ex: 'Temps', 'Précipitations (mm/j)').")
+        p_ylabel = col_yl.text_input("Label axe Y", "", help="Nom de l'axe vertical (ex: 'Débit (m³/s)', 'Température (°C)').")
         
         st.markdown("---")
-        st.markdown("**🔍 Zoom Manuel (Limites des axes)**", help="Laissez vide pour le mode automatique. L'Axe X temporel est géré par l'outil de filtrage temporel juste au-dessus.")
-        col_zx1, col_zx2, col_zy1, col_zy2 = st.columns(4)
-        z_xmin = col_zx1.number_input("X min (si num.)", value=None)
-        z_xmax = col_zx2.number_input("X max (si num.)", value=None)
-        z_ymin = col_zy1.number_input("Y min", value=None)
-        z_ymax = col_zy2.number_input("Y max", value=None)
+        st.markdown(
+            "**🔍 Zoom manuel — Curseurs d'axes**",
+            help=(
+                "Définissez les limites d'affichage des axes. "
+                "Laissez les curseurs à leurs valeurs min/max pour afficher toutes les données. "
+                "Utile pour zoomer sur une plage de valeurs spécifique."
+            )
+        )
+        st.caption("💡 Déplacez les curseurs pour zoomer sur une plage de valeurs. Les données hors plage ne seront pas affichées.")
+
+        # Compute data range dynamically for sliders
+        _ds_cur = st.session_state.get("ds")
+        _y_min_g, _y_max_g = 0.0, 1.0
+        _x_min_g, _x_max_g = 0.0, 1.0
+
+        if _ds_cur is not None and plot_vars_ui:
+            try:
+                _num_vars = [v for v in plot_vars_ui if v in _ds_cur and np.issubdtype(_ds_cur[v].dtype, np.number)]
+                if _num_vars:
+                    _all_y = np.concatenate([_ds_cur[v].values.ravel() for v in _num_vars])
+                    _all_y = _all_y[np.isfinite(_all_y)]
+                    if len(_all_y) > 0:
+                        _y_min_g = float(_all_y.min())
+                        _y_max_g = float(_all_y.max())
+            except Exception:
+                pass
+
+            try:
+                if var_x in _ds_cur and np.issubdtype(_ds_cur[var_x].dtype, np.number):
+                    _all_x = _ds_cur[var_x].values.ravel()
+                    _all_x = _all_x[np.isfinite(_all_x)]
+                    if len(_all_x) > 0:
+                        _x_min_g = float(_all_x.min())
+                        _x_max_g = float(_all_x.max())
+            except Exception:
+                pass
+
+        _y_range = _y_max_g - _y_min_g if _y_max_g != _y_min_g else 1.0
+        _x_range = _x_max_g - _x_min_g if _x_max_g != _x_min_g else 1.0
+        _y_step = float(f"{_y_range / 100:.4g}")
+        _x_step = float(f"{_x_range / 100:.4g}")
+
+        col_sly, col_slx = st.columns(2)
+
+        with col_sly:
+            use_y_zoom = st.checkbox("Activer le zoom sur l'axe Y", value=False, key="use_y_zoom")
+            if use_y_zoom:
+                y_slider = st.slider(
+                    "Plage de l'axe Y",
+                    min_value=float(_y_min_g),
+                    max_value=float(_y_max_g),
+                    value=(float(_y_min_g), float(_y_max_g)),
+                    step=_y_step,
+                    key="y_slider",
+                    help=f"Valeurs de la variable Y : de {_y_min_g:.4g} à {_y_max_g:.4g}."
+                )
+                z_ymin, z_ymax = y_slider
+            else:
+                z_ymin, z_ymax = None, None
+
+        with col_slx:
+            use_x_zoom = st.checkbox("Activer le zoom sur l'axe X (si numérique)", value=False, key="use_x_zoom")
+            if use_x_zoom:
+                x_slider = st.slider(
+                    "Plage de l'axe X",
+                    min_value=float(_x_min_g),
+                    max_value=float(_x_max_g),
+                    value=(float(_x_min_g), float(_x_max_g)),
+                    step=_x_step,
+                    key="x_slider",
+                    help=f"Valeurs de la variable X : de {_x_min_g:.4g} à {_x_max_g:.4g}. Ne fonctionne que si l'axe X est numérique (pas un axe temporel)."
+                )
+                z_xmin, z_xmax = x_slider
+            else:
+                z_xmin, z_xmax = None, None
+
+        st.markdown("---")
+        st.markdown(
+            "📐 **Lignes de seuil (référence sur le graphique)**",
+        )
+        st.caption(
+            "💡 Tracez des lignes horizontales (Y) ou verticales (X) sur le graphique pour indiquer un seuil ou une référence. "
+            "Ex: tracer Y=0 pour la ligne zéro, ou X=1980 pour marquer une année clé. Laisser vide = pas de ligne."
+        )
+        col_thr_y, col_thr_x = st.columns(2)
+        th_y_vals_raw = col_thr_y.text_input(
+            "Seuil(s) horizontal(aux) Y (valeur de la variable)",
+            value="",
+            key="thresh_y",
+            help=(
+                "Entrez une ou plusieurs valeurs numériques séparées par des virgules pour tracer des lignes horizontales. "
+                "Ex: '0' trace la ligne zéro. '100, 200' trace deux lignes Y=100 et Y=200. "
+                "Utile pour visualiser un seuil de crue, un seuil de sécheresse, une valeur de référence…"
+            )
+        )
+        th_x_vals_raw = col_thr_x.text_input(
+            "Seuil(s) vertical(aux) X (valeur de l'axe X)",
+            value="",
+            key="thresh_x",
+            help=(
+                "Entrez une ou plusieurs valeurs séparées par des virgules pour tracer des lignes verticales. "
+                "Fonctionne si l'axe X est numérique. Pour un axe temporel, entrez une année (ex: '1980'). "
+                "Ex: '1980' trace une ligne verticale à l'année 1980."
+            )
+        )
+        col_thr_col, col_thr_sty = st.columns(2)
+        thresh_color = col_thr_col.color_picker(
+            "Couleur des lignes de seuil", "#FF4B4B", key="thresh_color",
+            help="Couleur appliquée à toutes les lignes de seuil."
+        )
+        thresh_style = col_thr_sty.selectbox(
+            "Style de ligne",
+            ["--", "-", "-.", ":"],
+            key="thresh_style",
+            help="Style du trait : -- = tirets, - = plein, -. = tiret-point, : = pointé."
+        )
 
         st.markdown("---")
         col_save, col_fmt = st.columns(2)
@@ -1106,6 +1513,18 @@ with tab_viz:
     x_lim_val = [z_xmin, z_xmax] if (z_xmin is not None or z_xmax is not None) else None
     y_lim_val = [z_ymin, z_ymax] if (z_ymin is not None or z_ymax is not None) else None
 
+    # Parsing des seuils
+    h_lines = [float(x.strip()) for x in th_y_vals_raw.split(",") if x.strip()] if th_y_vals_raw else []
+    v_lines = []
+    if th_x_vals_raw:
+        for x in th_x_vals_raw.split(","):
+            x = x.strip()
+            if not x: continue
+            try: v_lines.append(pd.to_datetime(x))
+            except:
+                try: v_lines.append(float(x))
+                except: v_lines.append(x)
+
     plot_config_gui = {
         "title":    p_title  or None,
         "xlabel":   p_xlabel or None,
@@ -1113,6 +1532,10 @@ with tab_viz:
         "save_path": save_path if save_fig else None,
         "x_limits": x_lim_val,
         "y_limits": y_lim_val,
+        "h_lines": h_lines,
+        "v_lines": v_lines,
+        "thresh_color": thresh_color,
+        "thresh_style": thresh_style
     }
 
     # ── Bouton tracer ────────────────────────────────────────────────────────
@@ -1140,6 +1563,10 @@ with tab_viz:
                 "title": plot_config_gui.get("title") or "",
                 "x_limits": plot_config_gui.get("x_limits"),
                 "y_limits": plot_config_gui.get("y_limits"),
+                "h_lines": plot_config_gui.get("h_lines"),
+                "v_lines": plot_config_gui.get("v_lines"),
+                "thresh_color": plot_config_gui.get("thresh_color"),
+                "thresh_style": plot_config_gui.get("thresh_style"),
             }
 
             if chart_type == "Graphique en ligne":
@@ -1215,7 +1642,43 @@ with tab_viz:
                 )
 
             if fig is not None:
+                # ── Lignes de seuil (threshold lines) ─────────────────────
+                _tc = st.session_state.get("thresh_color", "#FF4B4B")
+                _ts = st.session_state.get("thresh_style", "--")
+                _th_y_raw = st.session_state.get("thresh_y", "")
+                _th_x_raw = st.session_state.get("thresh_x", "")
+
+                def _parse_thresh(raw):
+                    vals = []
+                    for tok in str(raw).split(","):
+                        tok = tok.strip()
+                        if tok:
+                            try:
+                                vals.append(float(tok))
+                            except ValueError:
+                                pass
+                    return vals
+
+                _th_y_vals = _parse_thresh(_th_y_raw)
+                _th_x_vals = _parse_thresh(_th_x_raw)
+
+                if _th_y_vals or _th_x_vals:
+                    for ax_t in fig.get_axes():
+                        for yv in _th_y_vals:
+                            ax_t.axhline(y=yv, color=_tc, linestyle=_ts, linewidth=1.4,
+                                         label=f"Seuil Y={yv:.4g}", zorder=10)
+                        for xv in _th_x_vals:
+                            ax_t.axvline(x=xv, color=_tc, linestyle=_ts, linewidth=1.4,
+                                         label=f"Seuil X={xv:.4g}", zorder=10)
+                        # Refresh legend if new lines were added
+                        handles, labels_leg = ax_t.get_legend_handles_labels()
+                        if handles:
+                            ax_t.legend(handles, labels_leg, loc="upper center",
+                                        bbox_to_anchor=(0.5, -0.15), ncol=min(4, len(handles)))
+                    fig.tight_layout()
+
                 st.pyplot(fig, use_container_width=True)
+
 
                 # ── Téléchargement ────────────────────────────────────────
                 buf = io.BytesIO()
@@ -1236,6 +1699,97 @@ with tab_viz:
             st.error(f"Erreur : {e}")
             import traceback
             st.code(traceback.format_exc())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  EXPORT CSV DES VARIABLES CRÉÉES
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown("---")
+st.markdown('<div class="section-title">⬇️ Exporter les variables en CSV</div>', unsafe_allow_html=True)
+
+with st.expander("📊 Télécharger les variables calculées", expanded=False):
+    st.info(
+        "💡 **Comment utiliser cet export** : Sélectionnez une ou plusieurs variables ci-dessous "
+        "(y compris les indicateurs et statistiques que vous venez de calculer) et téléchargez-les en CSV. "
+        "Le fichier contiendra toutes les dimensions comme colonnes (date, modèle, scénario…) "
+        "suivi des valeurs de chaque variable sélectionnée."
+    )
+    
+    all_vars_export = list(st.session_state["ds"].data_vars)
+    export_vars = st.multiselect(
+        "Variables à exporter",
+        all_vars_export,
+        default=[],
+        key="export_vars",
+        help=(
+            "Sélectionnez les variables à inclure dans le fichier CSV. "
+            "Vous pouvez exporter toutes vos variables originales ainsi que celles calculées "
+            "(indicateurs, statistiques…). Exemple : sélectionner 'Qmean_1m_debit' exportera "
+            "la moyenne mensuelle du débit avec les colonnes date et valeur."
+        )
+    )
+
+    if export_vars:
+        try:
+            ds_export = st.session_state["ds"][export_vars]
+            
+            # Determine if dataset has mixed time dimensions (some vars may have different time coords)
+            export_dfs = []
+            for v in export_vars:
+                try:
+                    df_v = st.session_state["ds"][v].to_dataframe().reset_index()
+                    export_dfs.append(df_v)
+                except Exception:
+                    pass
+            
+            if export_dfs:
+                # Try a simple merge if all have the same index, else concat
+                try:
+                    if len(export_dfs) == 1:
+                        df_final = export_dfs[0]
+                    else:
+                        # Merge on common index columns
+                        df_final = export_dfs[0]
+                        for df_next in export_dfs[1:]:
+                            common_cols = [c for c in df_final.columns if c in df_next.columns
+                                         and c not in export_vars]
+                            if common_cols:
+                                df_final = pd.merge(df_final, df_next, on=common_cols, how='outer')
+                            else:
+                                df_final = pd.concat([df_final, df_next], axis=1)
+                except Exception:
+                    df_final = pd.concat(export_dfs, axis=0, ignore_index=True)
+
+                # Format datetime columns for CSV readability
+                for col in df_final.columns:
+                    if pd.api.types.is_datetime64_any_dtype(df_final[col]):
+                        df_final[col] = df_final[col].dt.strftime("%Y-%m-%d")
+
+                st.markdown(f"**Aperçu du CSV ({len(df_final):,} lignes, {len(df_final.columns)} colonnes) :**")
+                st.dataframe(df_final.head(10), use_container_width=True)
+
+                csv_buffer = io.StringIO()
+                df_final.to_csv(csv_buffer, index=False, float_format="%.6g")
+                csv_bytes = csv_buffer.getvalue().encode("utf-8")
+
+                export_filename = "_".join(export_vars[:3]) + "_export.csv"
+                st.download_button(
+                    label=f"⬇️ Télécharger le CSV ({len(df_final):,} lignes)",
+                    data=csv_bytes,
+                    file_name=export_filename,
+                    mime="text/csv",
+                    key="csv_download_btn",
+                )
+                st.caption(f"📁 Fichier : `{export_filename}` — Colonnes : {', '.join(df_final.columns.tolist())}")
+            else:
+                st.warning("Impossible de convertir les variables sélectionnées en tableau.")
+
+        except Exception as e:
+            st.error(f"Erreur lors de l'export : {e}")
+            import traceback
+            st.code(traceback.format_exc())
+    else:
+        st.caption("Sélectionnez au moins une variable pour activer le téléchargement.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

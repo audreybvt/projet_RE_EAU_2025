@@ -206,7 +206,9 @@ def configure_plot(
             "legend_labels": cfg.get("legend_labels", y_defaults if isinstance(y_defaults, list) else []),
             "title": cfg.get("title") or "",
             "x_limits": cfg.get("x_limits", None),
-            "y_limits": cfg.get("y_limits", None)
+            "y_limits": cfg.get("y_limits", None),
+            "h_lines": cfg.get("h_lines", []),
+            "v_lines": cfg.get("v_lines", [])
         }
 
     # ----------------------
@@ -351,7 +353,9 @@ def configure_plot(
         "legend_labels": legend_labels,
         "title": title,
         "x_limits": x_limits,
-        "y_limits": y_limits
+        "y_limits": y_limits,
+        "h_lines": [],
+        "v_lines": []
     }
 
 
@@ -657,7 +661,7 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
         sort_idx = np.arange(len(x_vals))
 
     # ----------------------
-    # Envelope plotting (background)
+    # Envelope plotting (background) — error bars on bars
     # ----------------------
     if plot_envelope:
         # Identify the dimension causing variability (e.g. 'model' or 'scenario')
@@ -666,15 +670,27 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
         if variability_dim:
             y_min_env = da_envelope_base.min(dim=variability_dim, skipna=True).values.ravel()
             y_max_env = da_envelope_base.max(dim=variability_dim, skipna=True).values.ravel()
-            
-            if len(y_min_env) != len(x_vals):
-                y_min_env = y_min_env[:len(x_vals)]
-                y_max_env = y_max_env[:len(x_vals)]
-            
-            y_min_env = y_min_env[sort_idx]
-            y_max_env = y_max_env[sort_idx]
-            
-            ax.fill_between(np.arange(len(x_vals)), y_min_env, y_max_env, color='gray', alpha=0.15, label="Global Range")
+            y_mean_env = da_envelope_base.mean(dim=variability_dim, skipna=True).values.ravel()
+
+            # Safe size alignment
+            n_x = len(x_vals)
+            y_min_env  = y_min_env[:n_x]  if len(y_min_env)  >= n_x else np.pad(y_min_env,  (0, n_x - len(y_min_env)),  constant_values=np.nan)
+            y_max_env  = y_max_env[:n_x]  if len(y_max_env)  >= n_x else np.pad(y_max_env,  (0, n_x - len(y_max_env)),  constant_values=np.nan)
+            y_mean_env = y_mean_env[:n_x] if len(y_mean_env) >= n_x else np.pad(y_mean_env, (0, n_x - len(y_mean_env)), constant_values=np.nan)
+
+            # Apply sort (safe: sort_idx computed from x_vals length)
+            y_min_env  = y_min_env[sort_idx]
+            y_max_env  = y_max_env[sort_idx]
+            y_mean_env = y_mean_env[sort_idx]
+
+            # Store for error-bar drawing after the bar loop
+            _env_min = y_min_env
+            _env_max = y_max_env
+            _env_mean = y_mean_env
+        else:
+            _env_min = _env_max = _env_mean = None
+    else:
+        _env_min = _env_max = _env_mean = None
 
     # ----------------------
     # Foreground filtering and multi-series logic
@@ -716,7 +732,19 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
             label += " (" + ", ".join(f"{v}" for v in all_info.values()) + ")"
 
         offset = (i - (n_series - 1)/2) * width if n_series > 1 else 0
-        ax.bar(x_base + offset, y_sorted, width=width, label=label, color=colors[i % len(colors)])
+        bar_positions = x_base + offset
+        ax.bar(bar_positions, y_sorted, width=width, label=label, color=colors[i % len(colors)])
+
+        # ── Error bars (envelope) on each bar series ──
+        if _env_min is not None and _env_max is not None:
+            yerr_lo = np.maximum(0, y_sorted - _env_min)   # downward error
+            yerr_hi = np.maximum(0, _env_max - y_sorted)   # upward error
+            ax.errorbar(
+                bar_positions, y_sorted,
+                yerr=[yerr_lo, yerr_hi],
+                fmt='none', ecolor='dimgray', elinewidth=1.2, capsize=3, alpha=0.7,
+                label="_nolegend_" if i > 0 else "Incertitude (min–max)"
+            )
 
     # ----------------------
     # Styling
@@ -730,7 +758,18 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
         ax.set_xlim(labels["x_limits"])
     if labels.get("y_limits") is not None:
         ax.set_ylim(labels["y_limits"])
-    ax.grid(axis='y', linestyle='--', alpha=0.6)
+    # ── Threshold lines (Curseurs) ──
+    h_color = labels.get("thresh_color", "red")
+    v_color = labels.get("thresh_color", "blue")
+    t_style = labels.get("thresh_style", "--")
+    
+    for val in labels.get("h_lines", []):
+        ax.axhline(float(val), color=h_color, linestyle=t_style, linewidth=1.5, alpha=0.8, zorder=5)
+    for val in labels.get("v_lines", []):
+        try:
+            ax.axvline(float(val), color=v_color, linestyle=t_style, linewidth=1.5, alpha=0.8, zorder=5)
+        except: pass
+
     if n_series > 1: ax.legend()
     plt.tight_layout()
 
@@ -866,9 +905,10 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                 y_max = y_da_env.max(dim='model', skipna=True).values
                 x_vals_local = y_da_env[x_dim].values
                 
-                # Plot global envelope with variable-specific color
-                ax.fill_between(x_vals_local, y_min, y_max, alpha=0.15,
-                                color=c_env, label=f"{y_name} (Enveloppe globale)")
+                # Plot global envelope only if not in "individual" mode (otherwise it hides the individual lines)
+                if envelope_type != "individual":
+                    ax.fill_between(x_vals_local, y_min, y_max, alpha=0.15,
+                                    color=c_env, label=f"{y_name} (Enveloppe globale)")
 
             # Foreground: Selective models
             da_selected = apply_gui_filters(da_envelope, {'model': var_filters.get('model')})
@@ -894,11 +934,46 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                     label_final = label_prefix + (" (moyenne)" if did_average else "")
                     ax.plot(x_vals_local, y_mean, label=label_final, linewidth=2.5)
                 else:
-                    if 'model' in da_sel.dims:
-                        for m_idx in range(da_sel.sizes['model']):
-                            m_name = str(da_sel['model'].values[m_idx])
-                            y_v = da_sel.isel(model=m_idx).values
-                            ax.plot(x_vals_local, y_v, label=f"{label_prefix} | {m_name}", alpha=0.8)
+                    # Mode 'individual': draw ALL models as thin transparent lines,
+                    # assigning each its own color from a larger map (tab20),
+                    # then re-draw selected/highlighted ones with full opacity on top.
+                    if 'model' in da_envelope.dims:
+                        all_models = da_envelope['model'].values
+                        # Determine which models are "selected" (from filters)
+                        selected_models = var_filters.get('model', None)
+                        if isinstance(selected_models, list) and len(selected_models) > 0:
+                            selected_set = set(str(m) for m in selected_models)
+                        else:
+                            selected_set = None  # None = all highlighted
+
+                        # 1. Draw ALL models as faint background lines with distinct colors
+                        colors_models = plt.cm.tab20.colors # Up to 20 distinct colors
+                        for m_idx in range(len(all_models)):
+                            m_name = str(all_models[m_idx])
+                            y_v = da_envelope.isel(model=m_idx).values
+                            if y_v.ndim > 1:
+                                y_v = y_v.mean(axis=tuple(range(1, y_v.ndim)))
+                            x_v = da_envelope[x_dim].values
+                            is_selected = (selected_set is None or m_name in selected_set)
+                            
+                            # Different color for each background line
+                            m_color = colors_models[m_idx % len(colors_models)]
+                            
+                            ax.plot(x_v, y_v,
+                                    color=m_color,
+                                    alpha=0.25 if not is_selected else 0.0,
+                                    linewidth=0.7, label="_nolegend_")
+
+                        # 2. Draw selected models prominently on top
+                        if 'model' in da_sel.dims:
+                            for m_idx in range(da_sel.sizes['model']):
+                                m_name = str(da_sel['model'].values[m_idx])
+                                y_v = da_sel.isel(model=m_idx).values
+                                ax.plot(x_vals_local, y_v,
+                                        label=f"{label_prefix} | {m_name}",
+                                        alpha=0.9, linewidth=1.8)
+                        else:
+                            ax.plot(x_vals_local, da_sel.values, label=label_prefix, linewidth=1.8)
                     else:
                         ax.plot(x_vals_local, da_sel.values, label=label_prefix)
         else:
@@ -922,6 +997,19 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
         ax.set_ylim(labels["y_limits"])
 
     ax.grid(True, linestyle="--", alpha=0.5)
+    
+    # ── Threshold lines (Curseurs) ──
+    h_color = labels.get("thresh_color", "red")
+    v_color = labels.get("thresh_color", "blue")
+    t_style = labels.get("thresh_style", "--")
+    
+    for val in labels.get("h_lines", []):
+        ax.axhline(float(val), color=h_color, linestyle=t_style, linewidth=1.5, alpha=0.8, zorder=5)
+    for val in labels.get("v_lines", []):
+        try:
+            ax.axvline(val, color=v_color, linestyle=t_style, linewidth=1.5, alpha=0.8, zorder=5)
+        except: pass
+
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
     plt.subplots_adjust(bottom=0.3)
 
@@ -957,8 +1045,15 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     is_gui = any(p is not None for p in [x_name_gui, y_names_gui, plot_config_gui, dim_selections_gui])
     
     if is_gui:
+        # Apply time subset if provided
+        if start_gui or end_gui:
+            start_date = pd.to_datetime(start_gui) if start_gui else None
+            end_date = pd.to_datetime(end_gui) if end_gui else None
+            ds = subset_time(ds, start_date, end_date)
+            period_text = format_period_text(start_date, end_date)
+        else:
+            period_text = ""
         ds_period = ds
-        period_text = ""
     else:
         start_date, end_date = ask_time_period(ds)
         ds_period = subset_time(ds, start_date, end_date)
@@ -1112,6 +1207,17 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
         ax.set_ylim(labels["y_limits"])
     ax.set_title(title)
     ax.grid(True, linestyle='--', alpha=0.5)
+
+    # ── Threshold lines (Curseurs) ──
+    h_color = labels.get("thresh_color", "red")
+    v_color = labels.get("thresh_color", "blue")
+    t_style = labels.get("thresh_style", "--")
+    
+    for val in labels.get("h_lines", []):
+        ax.axhline(float(val), color=h_color, linestyle=t_style, linewidth=1.5, alpha=0.8, zorder=5)
+    for val in labels.get("v_lines", []):
+        ax.axvline(float(val), color=v_color, linestyle=t_style, linewidth=1.5, alpha=0.8, zorder=5)
+
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
     plt.subplots_adjust(bottom=0.3)
     
@@ -1293,6 +1399,7 @@ def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui
 def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=None, bins_gui=None, start_gui=None, end_gui=None, plot_config_gui: dict = None, dim_selections_gui: dict = None, auto_mean_gui: bool = False):
     """
     Plot a histogram from an xarray Dataset.
+    Supports multiple series (e.g., two models) by plotting superimposed semi-transparent histograms.
     """
     is_gui = any(p is not None for p in [var_gui, col_name_gui, x_name_gui, bins_gui, start_gui, end_gui, plot_config_gui, dim_selections_gui])
 
@@ -1310,85 +1417,113 @@ def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=
 
     # --- Period selection ---
     if is_gui:
-        ds_period = ds
-        period_text = ""
+        if start_gui or end_gui:
+            start_date = pd.to_datetime(start_gui) if start_gui else None
+            end_date = pd.to_datetime(end_gui) if end_gui else None
+            ds_period = subset_time(ds, start_date, end_date)
+            period_text = format_period_text(start_date, end_date)
+        else:
+            ds_period = ds
+            period_text = ""
     else:
         start_date, end_date = ask_time_period(ds)
         ds_period = subset_time(ds, start_date, end_date)
         period_text = format_period_text(start_date, end_date)
 
     # -------- Figure --------
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-    fig, ax = plt.subplots(figsize=(10,6))
+    # --- Split the variable into series based on categorical dimensions ---
+    da = ds_period[col_name]
+
+    # Identify categorical (non-time) dimensions that have multiple values
+    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y', 'station', 'piezometre']
+    time_dims = [d for d in da.dims if 'time' in d.lower() or d in standard_dims]
+
+    # Build results: each entry is (label_dict, flat_data)
+    # We split by any categorical dim that was filtered OR that has > 1 value
+    if dim_selections_gui:
+        # Use the provided filters to generate separate series
+        results = handle_xarray_dimensions(
+            da,
+            main_dims=time_dims,
+            dim_selections_gui=dim_selections_gui if dim_selections_gui else {},
+            auto_mean_gui=False  # Don't auto-mean; we want separate series
+        )
+    else:
+        # No filters: single series
+        results = [({}, da)]
+
+    # Determine global bin range so all series share the same bins
+    all_vals_for_range = []
+    for _, da_sel in results:
+        v = da_sel.values.ravel().astype(float)
+        v = v[np.isfinite(v)]
+        if len(v) > 0:
+            all_vals_for_range.extend(v.tolist())
+
+    if not all_vals_for_range:
+        ax.set_title(f"Histogram of {col_name}{period_text}")
+        ax.text(0.5, 0.5, "No finite data to display", ha='center', va='center', transform=ax.transAxes)
+        return fig
+
+    global_min = float(np.min(all_vals_for_range))
+    global_max = float(np.max(all_vals_for_range))
 
     # --- Configuration labels/title ---
-    data = ds_period[col_name].values.astype(float)
-    data = data[np.isfinite(data)]
-
-    counts, _ = np.histogram(data, bins=bins)
-
-    y_min = 0
-    y_max = counts.max()
-
     labels = configure_plot(
-            x_default=col_name,
-            y_defaults="Frequency",
-            period_text=period_text,
-            x_limits=None,
-            y_limits=[y_min, y_max],
-            multiple_y=False,
-            plot_config_gui=plot_config_gui
-        )
-    
+        x_default=col_name,
+        y_defaults="Fréquence",
+        period_text=period_text,
+        x_limits=None,
+        y_limits=[0, 1],    # placeholder, will be overridden after plotting
+        multiple_y=False,
+        plot_config_gui=plot_config_gui
+    )
+
     x_label = labels["x_label"]
     y_label = labels["y_label"]
-    legend_labels = labels["legend_labels"]
-    title = labels["title"] or f"Histogram of {col_name}{period_text}"
-    if labels["y_limits"] is not None:
-        ax.set_ylim(labels["y_limits"])
+    legend_labels = labels.get("legend_labels", [])
+    title = labels["title"] or f"Histogramme de {col_name}{period_text}"
 
-    # -------- Loop over selected variable --------
-
-    da = ds[col_name]
-
-    # Handle extra dimensions
-    results = handle_xarray_dimensions(da, main_dims=["time"], dim_selections_gui=dim_selections_gui, auto_mean_gui=auto_mean_gui)
-
-    colors = cm.viridis(np.linspace(0, 1, len(results)))
+    # -------- Plotting loop --------
+    n_series = len(results)
+    colors = cm.viridis(np.linspace(0, 1, max(n_series, 1)))
+    alpha = 0.65 if n_series > 1 else 0.85
 
     for i, (sel, da_sel) in enumerate(results):
-        data = da_sel.values.ravel()
+        data = da_sel.values.ravel().astype(float)
+        data = data[np.isfinite(data)]
+        if len(data) == 0:
+            continue
 
-        # Handle label
-        if isinstance(legend_labels, list) and len(legend_labels) > 0:
-            label = legend_labels[0]
-        elif isinstance(legend_labels, str):
-            label = legend_labels
+        # Label
+        if isinstance(legend_labels, list) and i < len(legend_labels) and legend_labels[i]:
+            label = legend_labels[i]
         else:
             label = col_name
-
         if sel:
-            label += " | " + ", ".join(
-                f"{k}={v}" for k, v in sel.items()
-            )
+            label += " (" + ", ".join(f"{k}={v}" for k, v in sel.items()) + ")"
 
         ax.hist(
             data,
             bins=bins,
+            range=(global_min, global_max),
             label=label,
-            linewidth=1,
+            alpha=alpha,
+            linewidth=0.8,
             color=colors[i],
-            edgecolor='black'
+            edgecolor='white'
         )
 
-    # --- Chart creation ---
-    
+    # --- Chart styling ---
     ax.set_title(title)
     ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label)
+    ax.set_ylabel(y_label or "Fréquence")
     if labels.get("x_limits") is not None:
         ax.set_xlim(labels["x_limits"])
-    if labels.get("y_limits") is not None:
-        ax.set_ylim(labels["y_limits"])
+    if n_series > 1:
+        ax.legend(loc="upper right")
     ax.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
     return fig
