@@ -1,8 +1,8 @@
 """
 gui_streamlit_xarray.py
-Interface graphique Streamlit pour le projet RE_EAU 2025.
-Permet de charger des fichiers NetCDF ou CSV, calculer des indicateurs
-hydrologiques, des statistiques et générer des visualisations.
+Streamlit graphical interface for the RE_EAU 2025 project.
+Allows loading NetCDF or CSV files, calculating hydrological indicators,
+statistics, and generating visualizations.
 """
 from __future__ import annotations
 
@@ -14,23 +14,23 @@ import os
 import io
 import tempfile
 
-# ── Modules du projet ──────────────────────────────────────────────────────────
+# ── Project Modules ──────────────────────────────────────────────────────────
 import data_formatting as df_mod
 import statistics_xr   as stats
 import indicators_xr   as ind
 import visualization_xr as viz
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  CONFIG PAGE
+#  PAGE CONFIG
 # ══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="RE_EAU 2025 – Analyse Hydrologique",
+    page_title="RE_EAU 2025 – Hydrological Analysis",
     page_icon="💧",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── CSS personnalisé ───────────────────────────────────────────────────────────
+# ── Custom CSS ───────────────────────────────────────────────────────────
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -120,9 +120,9 @@ st.markdown("""
 # ══════════════════════════════════════════════════════════════════════════════
 def _init_state():
     defaults = {
-        "ds": None,        # Dataset xarray courant
-        "ds_info": {},     # Métadonnées du dataset
-        "logs": [],        # Historique des opérations
+        "ds": None,        # Current xarray Dataset
+        "ds_info": {},     # Dataset metadata
+        "logs": [],        # Operations history
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -166,16 +166,16 @@ def render_categorical_filters(key_prefix="filter"):
     
     dict_filters = {}
     if cat_dims:
-        with st.expander("🔎 Filtres catégoriels (scénarios, modèles…)"):
+        with st.expander("🔎 Categorical filters (scenarios, models…)"):
             if key_prefix == "ind":
-                st.info("💡 Sélectionner des valeurs de catégorie si vous voulez travailler sur un modèle spécifique par exemple.")
+                st.info("💡 Select category values if you want to work on a specific model for example.")
             for dim in cat_dims:
                 vals = ds[dim].values.tolist()
                 options = [str(v) for v in vals]
                 
                 # In Viz tab (if key_prefix is 'viz'), use multiselect
                 if "viz" in key_prefix:
-                    selected_vals = st.multiselect(f"Filtre pour '{dim}'", options, default=[], key=f"{key_prefix}_{dim}")
+                    selected_vals = st.multiselect(f"Filter for '{dim}'", options, default=[], key=f"{key_prefix}_{dim}")
                     if selected_vals:
                         # Map back to original values
                         orig_vals = ds[dim].values
@@ -183,8 +183,8 @@ def render_categorical_filters(key_prefix="filter"):
                         dict_filters[dim] = matches
                 else:
                     # In Ind tab, stay with single select for now (standard behavior)
-                    selected_val = st.selectbox(f"Filtre pour '{dim}'", ["(Tout)"] + options, key=f"{key_prefix}_{dim}")
-                    if selected_val != "(Tout)":
+                    selected_val = st.selectbox(f"Filter for '{dim}'", ["(All)"] + options, key=f"{key_prefix}_{dim}")
+                    if selected_val != "(All)":
                         orig_vals = ds[dim].values
                         match = [v for v in orig_vals if str(v) == selected_val]
                         if match: dict_filters[dim] = match[0]
@@ -210,14 +210,14 @@ def render_temporal_filters(key_prefix="time_filter"):
         min_dt = time_values.min().date()
         max_dt = time_values.max().date()
         
-        with st.expander("📅 Filtrage temporel (période d'analyse)"):
+        with st.expander("📅 Temporal filtering (analysis period)"):
             st.info(
-                "💡 **Filtrage temporel** : Sélectionnez la période sur laquelle vous voulez effectuer le calcul. "
+                "💡 **Temporal filtering**: Select the period over which you want to perform the calculation."
                 ) 
-            st.info(f"Période disponible : {min_dt} au {max_dt}")
+            st.info(f"Available period: {min_dt} to {max_dt}")
             c1, c2 = st.columns(2)
-            start_date = c1.date_input("Date de début", min_dt, min_value=min_dt, max_value=max_dt, key=f"{key_prefix}_start")
-            end_date = c2.date_input("Date de fin", max_dt, min_value=min_dt, max_value=max_dt, key=f"{key_prefix}_end")
+            start_date = c1.date_input("Start date", min_dt, min_value=min_dt, max_value=max_dt, key=f"{key_prefix}_start")
+            end_date = c2.date_input("End date", max_dt, min_value=min_dt, max_value=max_dt, key=f"{key_prefix}_end")
             
         return str(start_date), str(end_date)
     except Exception:
@@ -233,35 +233,35 @@ def has_dataset() -> bool:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  SIDEBAR – Chargement de données
+#  SIDEBAR – Data Loading
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("## 💧 RE_EAU 2025")
     st.markdown("---")
 
     # ── Format ──────────────────────────────────────────────────────────────
-    st.markdown("### 📁 Chargement des données")
-    file_format = st.radio("Format du fichier", ["NetCDF (.nc)", "CSV (.csv)", "Excel (.xlsx)"], horizontal=True)
+    st.markdown("### 📁 Data Loading")
+    file_format = st.radio("File format", ["NetCDF (.nc)", "CSV (.csv)", "Excel (.xlsx)"], horizontal=True)
 
     # ── Uploader ─────────────────────────────────────────────────────────────
     if file_format.startswith("NetCDF"):
         uploaded_files = st.file_uploader(
-            "Glissez-déposez un ou plusieurs fichiers NetCDF",
+            "Drag and drop one or several NetCDF files",
             type=["nc"],
             accept_multiple_files=True,
             key="nc_uploader",
         )
     elif file_format.startswith("CSV"):
         uploaded_files = st.file_uploader(
-            "Glissez-déposez un fichier CSV",
+            "Drag and drop a CSV file",
             type=["csv"],
             accept_multiple_files=False,
             key="csv_uploader",
         )
-        skip_n = st.number_input("Lignes de métadonnées à ignorer", min_value=0, value=0, step=1)
+        skip_n = st.number_input("Metadata lines to ignore", min_value=0, value=0, step=1)
     else:  # Excel
         uploaded_files = st.file_uploader(
-            "Glissez-déposez un fichier Excel",
+            "Drag and drop an Excel file",
             type=["xlsx", "xls"],
             accept_multiple_files=False,
             key="excel_uploader",
@@ -269,31 +269,31 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # ── Options spatiales (NetCDF) ───────────────────────────────────────────
+    # ── Spatial Options (NetCDF) ───────────────────────────────────────────
     if file_format.startswith("NetCDF"):
-        st.markdown("### 🗺️ Sélection spatiale")
+        st.markdown("### 🗺️ Spatial Selection")
         spatial_mode = st.selectbox(
-            "Mode de sélection spatiale",
+            "Spatial selection mode",
             [
-                "Conserver tout",
-                "Sélectionner un point par index",
-                "Sélectionner un point (lat/lon)",
-                "Sélectionner une région (lat/lon)",
+                "Keep all",
+                "Select a point by index",
+                "Select a point (lat/lon)",
+                "Select a region (lat/lon)",
             ],
         )
 
         spatial_gui_extra = {}
-        if spatial_mode == "Sélectionner un point par index":
-            pt_idx = st.number_input("Index du point", min_value=0, value=0, step=1)
+        if spatial_mode == "Select a point by index":
+            pt_idx = st.number_input("Point index", min_value=0, value=0, step=1)
             spatial_gui_extra = {"method_gui": 1, "idx_gui": int(pt_idx)}
 
-        elif spatial_mode == "Sélectionner un point (lat/lon)":
+        elif spatial_mode == "Select a point (lat/lon)":
             col_lat, col_lon = st.columns(2)
             pt_lat = col_lat.number_input("Latitude", value=0.0, format="%.4f")
             pt_lon = col_lon.number_input("Longitude", value=0.0, format="%.4f")
             spatial_gui_extra = {"method_gui": 2, "lat_gui": pt_lat, "lon_gui": pt_lon}
 
-        elif spatial_mode == "Sélectionner une région (lat/lon)":
+        elif spatial_mode == "Select a region (lat/lon)":
             col1, col2 = st.columns(2)
             r_lat_min = col1.number_input("Lat min", value=0.0, format="%.2f")
             r_lat_max = col2.number_input("Lat max", value=90.0, format="%.2f")
@@ -309,14 +309,14 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # ── Bouton de chargement ─────────────────────────────────────────────────
-    load_btn = st.button("⬆️ Charger le dataset", use_container_width=True)
+    # ── Load button ─────────────────────────────────────────────────
+    load_btn = st.button("⬆️ Load dataset", use_container_width=True)
 
     if load_btn:
         if not uploaded_files:
-            st.error("Veuillez sélectionner au moins un fichier.")
+            st.error("Please select at least one file.")
         else:
-            with st.spinner("Chargement en cours…"):
+            with st.spinner("Loading in progress…"):
                 try:
                     if file_format.startswith("NetCDF"):
                         files = uploaded_files if isinstance(uploaded_files, list) else [uploaded_files]
@@ -338,7 +338,7 @@ with st.sidebar:
                             except Exception:
                                 ds_first = xr.open_dataset(tmp_paths[0], decode_cf=False, engine='scipy')
 
-                        if spatial_mode == "Conserver tout":
+                        if spatial_mode == "Keep all":
                             spatial_gui_val = {"keep_all": True}
                         else:
                             # Calculate 'choice' according to dimensions
@@ -356,11 +356,11 @@ with st.sidebar:
                                 options_map[option_num] = ('points', 'select'); option_num += 1
                             options_map[option_num] = ('all', 'keep')
 
-                            if spatial_mode == "Sélectionner un point par index" and has_pts:
+                            if spatial_mode == "Select a point by index" and has_pts:
                                 target = ('points', 'select')
-                            elif spatial_mode == "Sélectionner un point (lat/lon)" and has_grid:
+                            elif spatial_mode == "Select a point (lat/lon)" and has_grid:
                                 target = ('grid', 'point')
-                            elif spatial_mode == "Sélectionner une région (lat/lon)" and has_grid:
+                            elif spatial_mode == "Select a region (lat/lon)" and has_grid:
                                 target = ('grid', 'region')
                             else:
                                 target = ('all', 'keep')
@@ -374,7 +374,7 @@ with st.sidebar:
                             if "lon_gui" in spatial_gui_extra: spatial_gui_val["lon_gui"] = spatial_gui_extra["lon_gui"]
                             if "region_gui" in spatial_gui_extra: spatial_gui_val["region_gui"] = spatial_gui_extra["region_gui"]
 
-                        # Choisir mode de chargement (simple vs multi-fichiers)
+                        # Choose loading mode (single vs multi-files)
                         if len(tmp_paths) == 1:
                             ds_raw = ds_first # Reuse the one we opened
                             
@@ -390,7 +390,7 @@ with st.sidebar:
                             ds_loaded = df_mod.handle_spatial_dimensions(ds_raw, spatial_gui=spatial_gui_val)
 
                             # Handle advanced selection (re-selection on raw)
-                            if spatial_mode == "Sélectionner un point par index" and "idx_gui" in spatial_gui_extra:
+                            if spatial_mode == "Select a point by index" and "idx_gui" in spatial_gui_extra:
                                 if has_pts:
                                     pt_dim = next(d for d in ['piezometre', 'station', 'stations', 'site', 'sites'] if d in ds_raw.dims)
                                     ds_loaded = df_mod.select_spatial_point(
@@ -398,7 +398,7 @@ with st.sidebar:
                                         method_gui=1, idx_gui=spatial_gui_extra["idx_gui"]
                                     )
 
-                            elif spatial_mode == "Sélectionner un point (lat/lon)" and "lat_gui" in spatial_gui_extra:
+                            elif spatial_mode == "Select a point (lat/lon)" and "lat_gui" in spatial_gui_extra:
                                 if has_grid:
                                     g = next((['latitude', 'longitude'] if 'latitude' in ds_raw.dims else None) or
                                              (['lat', 'lon'] if 'lat' in ds_raw.dims else None) or
@@ -409,7 +409,7 @@ with st.sidebar:
                                             method_gui=2, lat_gui=spatial_gui_extra["lat_gui"], lon_gui=spatial_gui_extra["lon_gui"]
                                         )
 
-                            elif spatial_mode == "Sélectionner une région (lat/lon)" and "region_gui" in spatial_gui_extra:
+                            elif spatial_mode == "Select a region (lat/lon)" and "region_gui" in spatial_gui_extra:
                                 has_lat = next((d for d in ['latitude', 'lat'] if d in ds_raw.dims), None)
                                 has_lon = next((d for d in ['longitude', 'lon'] if d in ds_raw.dims), None)
                                 if has_lat and has_lon:
@@ -418,7 +418,7 @@ with st.sidebar:
                                         region_gui=spatial_gui_extra["region_gui"]
                                     )
                         else:
-                            # Multi-fichiers
+                            # Multi-files
                             ds_loaded = df_mod.load_multiple_datasets(tmp_paths, spatial_gui=spatial_gui_val)
 
                         st.session_state["ds"] = ds_loaded
@@ -434,7 +434,7 @@ with st.sidebar:
                         
                     elif file_format.startswith("Excel"):
                         # Excel
-                        st.info("Conversion de l'Excel en format long en cours...")
+                        st.info("Converting Excel to new format in progress... It may take a few minutes.")
                         f = uploaded_files
                         tmp_excel = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
                         tmp_excel.write(f.read())
@@ -449,19 +449,19 @@ with st.sidebar:
                         ds_loaded = df_mod.csv_to_xarray(tmp_csv.name, skip_n_gui=0)
                         st.session_state["ds"] = ds_loaded
 
-                    log("Dataset chargé avec succès.", "success")
-                    st.success("✅ Dataset chargé !")
+                    log("Dataset loaded successfully.", "success")
+                    st.success("✅ Dataset loaded!")
 
                 except Exception as e:
-                    log(f"Erreur de chargement : {e}", "error")
-                    st.error(f"Erreur : {e}")
+                    log(f"Loading error: {e}", "error")
+                    st.error(f"Error: {e}")
 
     st.markdown("---")
     # ── Logs ─────────────────────────────────────────────────────────────────
-    with st.expander("📋 Journaux"):
+    with st.expander("📋 Logs"):
         for line in reversed(st.session_state["logs"][-30:]):
             st.caption(line)
-        if st.button("🗑️ Effacer les logs"):
+        if st.button("🗑️ Clear logs"):
             st.session_state["logs"] = []
 
 
@@ -470,44 +470,44 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <div class="main-header">
-    <h1>💧 RE_EAU 2025 – Analyse Hydrologique</h1>
-    <p>Interface graphique pour l'analyse de données climatiques et hydrologiques (xArray)</p>
+    <h1>💧 RE_EAU 2025 – Hydrological Analysis</h1>
+    <p>Graphical interface for climatic and hydrological data analysis (xArray)</p>
 </div>
 """, unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  APERÇU DU DATASET
+#  DATASET PREVIEW
 # ══════════════════════════════════════════════════════════════════════════════
 if has_dataset():
     ds = st.session_state["ds"]
 
-    with st.expander("📊 Aperçu du Dataset", expanded=True):
+    with st.expander("📊 Dataset Preview", expanded=True):
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Variables", len(ds.data_vars))
         c2.metric("Dimensions", len(ds.dims))
         n_pts = 1
         for s in ds.sizes.values():
             n_pts *= s
-        c3.metric("Taille totale", f"{n_pts:,}")
+        c3.metric("Total size", f"{n_pts:,}")
         t_dims = time_like_dims()
         if t_dims:
             try:
                 t_vals = pd.to_datetime(ds[t_dims[0]].values)
-                c4.metric("Période", f"{t_vals.min().date()} → {t_vals.max().date()}")
+                c4.metric("Period", f"{t_vals.min().date()} → {t_vals.max().date()}")
             except Exception:
-                c4.metric("Dimension temps", t_dims[0])
+                c4.metric("Time dimension", t_dims[0])
 
         col_a, col_b = st.columns(2)
         with col_a:
-            st.markdown("**Dimensions / Catégories**")
+            st.markdown("**Dimensions / Categories**")
             dim_rows = []
             for d, size in ds.dims.items():
                 extrait = ""
                 if d in ds.coords:
                     c_vals = ds[d].values
                     if size <= 10 or str(c_vals.dtype).startswith('<U') or str(c_vals.dtype) == 'object':
-                        # Petites listes ou texte : on affiche le contenu
+                        # Small lists or text: we display the content
                         extrait = str(list(c_vals[:min(5, size)]))
                         if size > 5: extrait = extrait.rstrip("]") + ", ...]"
                     elif np.issubdtype(c_vals.dtype, np.number):
@@ -518,8 +518,8 @@ if has_dataset():
                         except:
                             extrait = "..."
                 else:
-                    extrait = "Pas de coord."
-                dim_rows.append({"Dimension": d, "Nb Valeurs": size, "Extrait / Plage": extrait})
+                    extrait = "No coords"
+                dim_rows.append({"Dimension": d, "Nb Values": size, "Extract / Range": extrait})
             st.dataframe(pd.DataFrame(dim_rows), hide_index=True, use_container_width=True)
 
         with col_b:
@@ -571,51 +571,51 @@ if has_dataset():
                 rows.append({
                     "Variable": v,
                     "Dimensions": str(da.dims),
-                    "Aperçu — date | catégorie | valeur (5 premières lignes non-NaN)": extrait_str
+                    "Preview — date | category | value (first 5 non-NaN rows)": extrait_str
                 })
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-            st.caption("💡 Chaque ligne montre jusqu'à 3 exemples de valeurs avec leur date et leur contexte catégoriel (modèle, scénario…).")
+            st.caption("💡 Each row shows up to 3 examples of values with their date and categorical context (model, scenario…).")
 
 else:
-    st.info("👈 Chargez un fichier depuis le panneau latéral pour commencer.")
+    st.info("👈 Load a file from the sidebar to begin.")
     st.stop()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  ONGLETS PRINCIPAUX
+#  MAIN TABS
 # ══════════════════════════════════════════════════════════════════════════════
 tab_stat, tab_ind, tab_viz = st.tabs([
-    "📐 Statistiques",
-    "📏 Indicateurs hydrologiques",
-    "📈 Visualisation",
+    "📐 Statistics",
+    "📏 Hydrological Indicators",
+    "📈 Visualization",
 ])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  TAB 1 : STATISTIQUES
+#  TAB 1 : STATISTICS
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_stat:
-    st.markdown('<div class="section-title">Calculs Statistiques</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Statistical Calculations</div>', unsafe_allow_html=True)
 
     stat_func = st.selectbox(
-        "Opération statistique",
+        "Statistical operation",
         [
-            "Moyenne flexible",
-            "Maximum flexible",
-            "Minimum flexible",
-            "Médiane flexible",
-            "Percentile flexible",
-            "Moyenne glissante (rolling)",
-            "Moyenne interannuelle mensuelle",
-            "Groupement par périodes",
+            "Flexible mean",
+            "Flexible maximum",
+            "Flexible minimum",
+            "Flexible median",
+            "Flexible percentile",
+            "Rolling mean",
+            "Monthly interannual average",
+            "Period grouping",
         ],
         help=(
-            "Choisissez le type de calcul à effectuer sur votre variable. "
-            "'Flexible' signifie que vous choisissez sur quelles dimensions agréger le calcul. "
-            "Ex: Moyenne flexible sur 'time' = une valeur unique pour toute la période. "
-            "Ex: Moyenne flexible sur 'modèle' = une moyenne des modèles chaque jour. "
-            "Moyenne glissante = lisse une série en moyennant sur une fenêtre mobile (idéal pour détecter des tendances). "
-            "Groupement par périodes = crée des catégories P1/P2/… que vous pouvez comparer dans les graphiques."
+            "Choose the type of calculation to perform on your variable. "
+            "'Flexible' means you choose which dimensions to aggregate over. "
+            "Ex: Flexible mean over 'time' = a single value for the whole period. "
+            "Ex: Flexible mean over 'model' = a mean of the models each day. "
+            "Rolling mean = smooths a series by averaging over a moving window (ideal for detecting trends). "
+            "Period grouping = creates categories P1/P2/… that you can compare in charts."
         )
     )
 
@@ -626,13 +626,13 @@ with tab_stat:
 
     with col1:
         var_name = st.selectbox(
-            "Variable source",
+            "Source variable",
             vars_list,
             key="stat_var",
             help=(
-                "Variable sur laquelle effectuer le calcul statistique. "
-                "Toutes les variables du dataset sont disponibles, y compris celles calculées précédemment "
-                "(indicateurs hydrologiques, etc.)."
+                "Variable on which to perform the statistical calculation. "
+                "All dataset variables are available, including previously calculated ones "
+                "(hydrological indicators, etc.)."
             )
         )
 
@@ -642,49 +642,49 @@ with tab_stat:
         avail_dims = all_dims
 
     with col2:
-        if stat_func not in ("Moyenne interannuelle mensuelle", "Moyenne glissante (rolling)", "Groupement par périodes"):
+        if stat_func not in ("Monthly interannual average", "Rolling mean", "Period grouping"):
             dims_sel = st.multiselect(
-                "Agréger sur ces axes (calculer une valeur unique par combinaison restante)",
+                "Aggregate across these dimensions (calculate a single value per remaining combination)",
                 avail_dims,
                 default=avail_dims,
                 key="stat_dims",
                 help=(
-                    "Sélectionnez les dimensions à 'aplatir' par un calcul statistique. "
-                    "Exemple 1 : si vos données ont les axes [time, model, scenario] et que vous sélectionnez "
-                    "model + scenario → vous obtenez une valeur par pas de temps (moyennée sur tous les modèles et scénarios). "
-                    "Exemple 2 : sélectionner uniquement 'time' → vous obtenez une seule valeur par combinaison modèle/scénario. "
-                    "Laisser vide = tout agréger en une seule valeur globale."
+                    "Select dimensions to 'flatten' by a statistical calculation. "
+                    "Example 1: if your data has axes [time, model, scenario] and you select "
+                    "model + scenario → you get one value per time step (averaged across all models and scenarios). "
+                    "Example 2: selecting only 'time' → you get a single value per model/scenario combination. "
+                    "Leave blank = aggregate everything into a single global value."
                 ),
             )
-        elif stat_func == "Moyenne interannuelle mensuelle":
+        elif stat_func == "Monthly interannual average":
             t_dims_list = [d for d in avail_dims if "time" in d.lower()]
             time_dim_sel = st.selectbox(
-                "Dimension temporelle",
+                "Time dimension",
                 t_dims_list if t_dims_list else avail_dims,
                 key="stat_time_dim",
-                help="Choisissez la dimension qui représente le temps dans votre dataset (ex: 'time', 'time_Group_1m', etc.)."
+                help="Choose the dimension that represents time in your dataset (e.g. 'time', 'time_Group_1m', etc.)."
             )
-        elif stat_func == "Moyenne glissante (rolling)":
+        elif stat_func == "Rolling mean":
             window_val = st.number_input(
-                "Taille de la fenêtre (pas de temps)",
+                "Window size (time steps)",
                 min_value=1, value=7, step=1,
-                help="Nombre de pas de temps consécutifs utilisés pour calculer la moyenne glissante. Ex: 7 = moyenne sur 7 jours si les données sont journalières."
+                help="Number of consecutive time steps used to calculate the rolling mean. E.g. 7 = 7-day average if data is daily."
             )
-        elif stat_func == "Groupement par périodes":
-            st.markdown("**Définition des périodes de comparaison**")
-            st.caption("💡 Définissez 2 périodes ou plus pour comparer. Ex : P1 = 1950–1980 et P2 = 1980–2010. "
-                       "Deux nouvelles variables seront créées : la moyenne par période (idéale pour un diagramme en barres) "
-                       "et la série temporelle par période (idéale pour un graphique en ligne).")
+        elif stat_func == "Period grouping":
+            st.markdown("**Comparison periods definition**")
+            st.caption("💡 Define 2 or more periods to compare. Ex: P1 = 1950–1980 and P2 = 1980–2010. "
+                       "Two new variables will be created: the mean per period (ideal for a bar chart) "
+                       "and the time series per period (ideal for a line chart).")
 
             # Manage periods list in session state
             if "stat_periods" not in st.session_state:
                 st.session_state["stat_periods"] = [("P1", "", ""), ("P2", "", "")]
 
             col_add, col_rm = st.columns([1, 1])
-            if col_add.button("➕ Ajouter une période", key="add_period"):
+            if col_add.button("➕ Add period", key="add_period"):
                 n = len(st.session_state["stat_periods"]) + 1
                 st.session_state["stat_periods"].append((f"P{n}", "", ""))
-            if col_rm.button("➖ Supprimer la dernière", key="rm_period") and len(st.session_state["stat_periods"]) > 1:
+            if col_rm.button("➖ Remove the last one", key="rm_period") and len(st.session_state["stat_periods"]) > 1:
                 st.session_state["stat_periods"].pop()
 
             # Time range for date pickers
@@ -700,41 +700,41 @@ with tab_stat:
             updated_periods = []
             for pi, (p_name, p_start, p_end) in enumerate(st.session_state["stat_periods"]):
                 cc1, cc2, cc3 = st.columns([1, 1.5, 1.5])
-                new_name = cc1.text_input(f"Nom P{pi+1}", value=p_name, key=f"pg_name_{pi}")
+                new_name = cc1.text_input(f"Name P{pi+1}", value=p_name, key=f"pg_name_{pi}")
                 try:
                     dflt_s = pd.to_datetime(p_start).date() if p_start else (_t_min or None)
                     dflt_e = pd.to_datetime(p_end).date()   if p_end else (_t_max or None)
-                    new_start = cc2.date_input(f"Début P{pi+1}", value=dflt_s, min_value=_t_min, max_value=_t_max, key=f"pg_start_{pi}")
-                    new_end   = cc3.date_input(f"Fin P{pi+1}",   value=dflt_e, min_value=_t_min, max_value=_t_max, key=f"pg_end_{pi}")
+                    new_start = cc2.date_input(f"Start P{pi+1}", value=dflt_s, min_value=_t_min, max_value=_t_max, key=f"pg_start_{pi}")
+                    new_end   = cc3.date_input(f"End P{pi+1}",   value=dflt_e, min_value=_t_min, max_value=_t_max, key=f"pg_end_{pi}")
                 except Exception:
-                    new_start = cc2.text_input(f"Début P{pi+1} (YYYY-MM-DD)", value=p_start, key=f"pg_start_{pi}")
-                    new_end   = cc3.text_input(f"Fin P{pi+1} (YYYY-MM-DD)",   value=p_end,   key=f"pg_end_{pi}")
+                    new_start = cc2.text_input(f"Start P{pi+1} (YYYY-MM-DD)", value=p_start, key=f"pg_start_{pi}")
+                    new_end   = cc3.text_input(f"End P{pi+1} (YYYY-MM-DD)",   value=p_end,   key=f"pg_end_{pi}")
                 updated_periods.append((new_name, str(new_start), str(new_end)))
             st.session_state["stat_periods"] = updated_periods
 
             t_dims_pg = [d for d in avail_dims if "time" in d.lower()]
             time_dim_pg = st.selectbox(
-                "Dimension temporelle à utiliser",
+                "Time dimension to use",
                 t_dims_pg if t_dims_pg else avail_dims,
                 key="pg_timedim",
-                help="Choisissez la dimension temporelle de votre variable source. Habituellement 'time'."
+                help="Choose the time dimension of your source variable. Usually 'time'."
             )
 
-    # Période temporelle
-    if stat_func not in ("Moyenne interannuelle mensuelle",):
+    # Time period
+    if stat_func not in ("Monthly interannual average",):
         t_dims = time_like_dims()
         if t_dims:
-            with st.expander("⏳ Filtrage temporel (optionnel)"):
+            with st.expander("⏳ Temporal filtering (optional)"):
                 st.info(
-                "💡 **Filtrage temporel** : Sélectionnez la période sur laquelle vous voulez effectuer le calcul. "
+                "💡 **Temporal filtering**: Select the period over which you want to perform the calculation."
                 )  
                 t_vals_raw = st.session_state["ds"][t_dims[0]].values
                 try:
                     t_vals = pd.to_datetime(t_vals_raw)
                     t_min, t_max = t_vals.min().date(), t_vals.max().date()
                     c_s, c_e = st.columns(2)
-                    d_start = c_s.date_input("Date de début", value=t_min, min_value=t_min, max_value=t_max, key="stat_dstart")
-                    d_end   = c_e.date_input("Date de fin",   value=t_max, min_value=t_min, max_value=t_max, key="stat_dend")
+                    d_start = c_s.date_input("Start date", value=t_min, min_value=t_min, max_value=t_max, key="stat_dstart")
+                    d_end   = c_e.date_input("End date",   value=t_max, min_value=t_min, max_value=t_max, key="stat_dend")
                     start_str = str(d_start)
                     end_str   = str(d_end)
                 except Exception:
@@ -747,19 +747,19 @@ with tab_stat:
         start_str = None
         end_str   = None
 
-    # Percentile spécifique
-    if stat_func == "Percentile flexible":
+    # Specific percentile
+    if stat_func == "Flexible percentile":
         q_val = st.slider("Percentile (%)", 1, 99, 90, key="stat_q") / 100.0
 
-    # ── Bouton calcul ────────────────────────────────────────────────────────
-    if st.button("▶️ Lancer le calcul statistique", key="run_stat"):
+    # ── Calculation button ────────────────────────────────────────────────────────
+    if st.button("▶️ Run statistical calculation", key="run_stat"):
         ds_work = st.session_state["ds"]
         try:
-            # Sécurité pour éviter name 'dims_sel' is not defined
+            # Security to avoid name 'dims_sel' is not defined
             _dims_input = dims_sel if 'dims_sel' in locals() else None
-            dims_to_reduce = _dims_input if stat_func not in ("Moyenne interannuelle mensuelle", "Moyenne glissante (rolling)", "Groupement par périodes") else None
+            dims_to_reduce = _dims_input if stat_func not in ("Monthly interannual average", "Rolling mean", "Period grouping") else None
 
-            if stat_func == "Moyenne flexible":
+            if stat_func == "Flexible mean":
                 ds_work = stats.mean_value_flexible(
                     ds_work,
                     var_name_gui=var_name,
@@ -768,7 +768,7 @@ with tab_stat:
                     end_input_gui=end_str,
                 )
 
-            elif stat_func == "Maximum flexible":
+            elif stat_func == "Flexible maximum":
                 ds_work = stats.maximum_value_flexible(
                     ds_work,
                     var_name_gui=var_name,
@@ -777,7 +777,7 @@ with tab_stat:
                     end_input_gui=end_str,
                 )
 
-            elif stat_func == "Minimum flexible":
+            elif stat_func == "Flexible minimum":
                 ds_work = stats.minimum_value_flexible(
                     ds_work,
                     var_name_gui=var_name,
@@ -786,7 +786,7 @@ with tab_stat:
                     end_input_gui=end_str,
                 )
 
-            elif stat_func == "Médiane flexible":
+            elif stat_func == "Flexible median":
                 ds_work = stats.median_value_flexible(
                     ds_work,
                     var_name_gui=var_name,
@@ -795,7 +795,7 @@ with tab_stat:
                     end_input_gui=end_str,
                 )
 
-            elif stat_func == "Percentile flexible":
+            elif stat_func == "Flexible percentile":
                 ds_work = stats.percentile_value_flexible(
                     ds_work,
                     var_name_gui=var_name,
@@ -805,7 +805,7 @@ with tab_stat:
                     end_input_gui=end_str,
                 )
 
-            elif stat_func == "Moyenne glissante (rolling)":
+            elif stat_func == "Rolling mean":
                 ds_work = stats.rolling_mean_value(
                     ds_work,
                     var_name_gui=var_name,
@@ -814,14 +814,14 @@ with tab_stat:
                     end_input_gui=end_str,
                 )
 
-            elif stat_func == "Moyenne interannuelle mensuelle":
+            elif stat_func == "Monthly interannual average":
                 ds_work = stats.monthly_interannual_average_xr(
                     ds_work,
                     var_name_gui=var_name,
                     time_dim_gui=time_dim_sel,
                 )
 
-            elif stat_func == "Groupement par périodes":
+            elif stat_func == "Period grouping":
                 ds_work = stats.period_grouping(
                     ds_work,
                     var_name_gui=var_name,
@@ -831,17 +831,17 @@ with tab_stat:
 
             st.session_state["ds"] = ds_work
             new_vars = [v for v in ds_work.data_vars if v not in vars_list]
-            log(f"Statistique '{stat_func}' calculée → {new_vars}", "success")
-            st.success(f"✅ Calcul terminé. Nouvelles variables : {new_vars}")
+            log(f"Statistic '{stat_func}' calculated → {new_vars}", "success")
+            st.success(f"✅ Calculation completed. New variables: {new_vars}")
 
-            # --- Affichage du résumé statistique ---
+            # --- Display statistical summary ---
             if "last_stat_summary" in ds_work.attrs:
                 summary = ds_work.attrs["last_stat_summary"]
                 st.markdown("---")
-                st.subheader(f"📊 Résultats : {summary.get('method', stat_func)}")
+                st.subheader(f"📊 Results: {summary.get('method', stat_func)}")
                 
                 # Selection / Time period
-                st.markdown(f"**Variable source:** `{summary.get('var_name', 'N/A')}`")
+                st.markdown(f"**Source variable:** `{summary.get('var_name', 'N/A')}`")
                 st.markdown(f"**Time period:** `{summary.get('period', 'full range')}`")
                 
                 if "reduced_dims" in summary:
@@ -857,26 +857,26 @@ with tab_stat:
                     st.markdown(f"**Dimensions:** `{da_new.dims}`")
                     st.markdown(f"**Shape:** `{da_new.shape}`")
 
-                # Affichage de l'aperçu structuré
+                # Display structured preview
                 if "preview_data" in summary and summary["preview_data"]:
-                    with st.expander("👁️ Aperçu des 5 premières valeurs (avec dimensions)"):
-                        st.markdown("**Tableau d'aperçu :**")
+                    with st.expander("👁️ Preview of the first 5 values (with dimensions)"):
+                        st.markdown("**Preview table:**")
                         df_preview = pd.DataFrame(summary["preview_data"])
                         rename_map = {
                             "time": "Date",
-                            "model": "Modèle",
-                            "scenario": "Scénario",
-                            "period": "Période",
-                            0: "Valeur"
+                            "model": "Model",
+                            "scenario": "Scenario",
+                            "period": "Period",
+                            0: "Value"
                         }
                         st.table(df_preview.rename(columns=rename_map))
 
-                # Fallback: moyennes par période pour Groupement par périodes
+                # Fallback: means per period for Period grouping
                 elif "mean_per_period" in summary:
-                    st.markdown("**Moyennes par période :**")
+                    st.markdown("**Means per period:**")
                     period_df = pd.DataFrame.from_dict(
-                        summary["mean_per_period"], orient='index', columns=["Moyenne"]
-                    ).rename_axis("Période")
+                        summary["mean_per_period"], orient='index', columns=["Mean"]
+                    ).rename_axis("Period")
                     st.dataframe(period_df, use_container_width=True)
                     if "periods" in summary:
                         for p, rng in summary["periods"].items():
@@ -884,9 +884,9 @@ with tab_stat:
                 
                 st.markdown("---")
 
-            # Aperçu de la nouvelle variable (existant)
+            # Preview of the new variable (existing)
             if new_vars:
-                with st.expander("🔍 Détails techniques des nouvelles variables"):
+                with st.expander("🔍 Technical details of new variables"):
                     for nv in new_vars:
                         da_new = ds_work[nv]
                         st.markdown(f"**{nv}** — dims: `{da_new.dims}`, shape: `{da_new.shape}`")
@@ -895,23 +895,23 @@ with tab_stat:
                         if vals_flat.size > 0:
                             c1, c2, c3, c4 = st.columns(4)
                             c1.metric("Min", f"{float(vals_flat.min()):.3f}")
-                            c2.metric("Moy", f"{float(vals_flat.mean()):.3f}")
+                            c2.metric("Mean", f"{float(vals_flat.mean()):.3f}")
                             c3.metric("Max", f"{float(vals_flat.max()):.3f}")
-                            c4.metric("Données (hors NaN)", f"{vals_flat.size:,}", help="Nombre de valeurs réelles non-nulles résultant du calcul stat.")
+                            c4.metric("Data (excl. NaN)", f"{vals_flat.size:,}", help="Number of real non-null values resulting from the stat calculation.")
 
         except Exception as e:
-            log(f"Erreur statistique : {e}", "error")
-            st.error(f"Erreur : {e}")
+            log(f"Statistical error: {e}", "error")
+            st.error(f"Error: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  TAB 2 : INDICATEURS hydrologiques
+#  TAB 2 : HYDROLOGICAL INDICATORS
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_ind:
-    st.markdown('<div class="section-title">Indicateurs Hydrologiques</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Hydrological Indicators</div>', unsafe_allow_html=True)
 
     indicator = st.selectbox(
-        "Indicateur",
+        "Indicator",
         [
             "Soil_Water_Balance_Index", 
             "Standardised Piezometric Level Indicator", 
@@ -924,26 +924,26 @@ with tab_ind:
         ],
         key="ind_select",
         help=(
-            "Choisissez l'indicateur à calculer. "
-            "Qmean = moyenne sur la période. "
-            "Q90/95 = valeur dépassée 90\u202f% ou 95\u202f% du temps (hautes valeurs). "
-            "Q10/05 = valeur dépassée seulement 10\u202f% ou 5\u202f% du temps (basses valeurs). "
-            "VCN10 = minimum des moyennes glissantes sur 10 pas de temps consécutifs (extrême bas). "
-            "VCX3 = maximum des moyennes sur 3 pas de temps (extrême haut). "
-            "over_threshold = détecte les dépassements d'un seuil et calcule l'écart à ce seuil."
+            "Choose the indicator to calculate. "
+            "Qmean = mean over the period. "
+            "Q90/95 = value exceeded 90% or 95% of the time (high values). "
+            "Q10/05 = value exceeded only 10% or 5% of the time (low values). "
+            "VCN10 = minimum of the rolling means over 10 consecutive time steps (extreme low). "
+            "VCX3 = maximum of the means over 3 time steps (extreme high). "
+            "over_threshold = detects threshold exceedances and calculates the deviation from this threshold."
         )
     )
 
     vars_list_ind = ds_vars()
 
-    # ── Filtres catégoriels et temporels ────────────────────────────────────
+    # ── Categorical and temporal filters ────────────────────────────────────
     dict_filters_gui = render_categorical_filters(key_prefix="ind")
     start_gui_ind, end_gui_ind = render_temporal_filters(key_prefix="ind_time")
 
-    # ── Paramètres spécifiques à chaque indicateur ─────────────────────────
-    st.markdown("**Paramètres de l'indicateur**")
+    # ── Specific parameters for each indicator ─────────────────────────
+    st.markdown("**Indicator parameters**")
 
-    # Période temporelle
+    # Time period
     t_dims_ind = time_like_dims()
     time_coord_ind = t_dims_ind[0] if t_dims_ind else None
     unite_gui_val = None
@@ -953,71 +953,71 @@ with tab_ind:
         col_tc, col_unit, col_nb = st.columns(3)
         if t_dims_ind:
             time_coord_ind = col_tc.selectbox(
-                "Coordonnée temporelle",
+                "Time coordinate",
                 t_dims_ind,
                 key="ind_tc",
                 help=(
-                    "Choisissez la dimension temporelle de votre variable. "
-                    "Habituellement appelée 'time'. Si vous avez déjà calculé un indicateur, "
-                    "il peut y avoir d'autres dimensions temporelles comme 'time_Group_1m'."
+                    "Choose the time dimension of your variable. "
+                    "Usually called 'time'. If you have already calculated an indicator, "
+                    "there may be other time dimensions like 'time_Group_1m'."
                 )
             )
         unite_gui_val = col_unit.selectbox(
-            "Unité de la période de calcul",
+            "Unit of the calculation period",
             ["d", "m", "y"],
-            format_func=lambda x: {"d": "Jours", "m": "Mois", "y": "Années"}[x],
+            format_func=lambda x: {"d": "Days", "m": "Months", "y": "Years"}[x],
             key="ind_unite",
             help=(
-                "Unité de temps utilisée pour rééchantillonner vos données avant de calculer l'indicateur. "
-                "Ex: 1 mois = calculer l'indicateur chaque mois. 1 an = chaque année. "
-                "3 mois = chaque trimestre."
+                "Time unit used to resample your data before calculating the indicator. "
+                "Ex: 1 month = calculate the indicator each month. 1 year = each year. "
+                "3 months = each quarter."
             )
         )
         nb_gui_val = col_nb.number_input(
-            "Pas de temps (nombre d'unités)",
+            "Time steps (number of units)",
             min_value=1, value=1, step=1,
             key="ind_nb",
             help=(
-                "Nombre d'unités à regrouper par calcul. "
-                "Ex : unité=Mois, pas=3 → l'indicateur est calculé tous les 3 mois (par trimestre). "
-                "Unité=Jours, pas=10 → toutes les 10 journées."
+                "Number of units to group per calculation. "
+                "Ex: unit=Months, step=3 → indicator is calculated every 3 months (per quarter). "
+                "Unit=Days, step=10 → every 10 days."
             )
         )
 
     if indicator == "Soil_Water_Balance_Index":
         col_p, col_etr, col_dr = st.columns(3)
-        var_p   = col_p.selectbox("Variable P (précipitations)", vars_list_ind, key="ips_p")
+        var_p   = col_p.selectbox("Variable P (precipitations)", vars_list_ind, key="ips_p")
         var_etr = col_etr.selectbox("Variable ETR", vars_list_ind, key="ips_etr")
-        var_dr  = col_dr.selectbox("Variable ΔR (variation stock)", vars_list_ind, key="ips_dr")
+        var_dr  = col_dr.selectbox("Variable ΔR (storage variation)", vars_list_ind, key="ips_dr")
     
     elif indicator == "Standardised Piezometric Level Indicator":
-        var_q = st.selectbox("Variable Niveau Piézométrique", vars_list_ind, key="ind_varspli")
+        var_q = st.selectbox("Piezometric Level Variable", vars_list_ind, key="ind_varspli")
 
     elif indicator in ("Qmean", "Q90/95", "Q10/05", "VCN10", "VCX3"):
         var_q = st.selectbox(
-            "Variable à analyser",
+            "Variable to analyze",
             vars_list_ind,
             key="ind_varq",
             help=(
-                "Sélectionnez la variable sur laquelle calculer l'indicateur. "
-                "Peut être un débit (m³/s), une précipitation (mm/j), un niveau piézométrique (m), etc. "
-                "L'indicateur sera calculé sur les valeurs de cette variable."
+                "Select the variable on which to calculate the indicator. "
+                "Can be discharge (m³/s), precipitation (mm/d), piezometric level (m), etc. "
+                "The indicator will be calculated on the values of this variable."
             )
         )
 
     elif indicator == "over_threshold":
         var_q = st.selectbox(
-            "Variable à analyser",
+            "Variable to analyze",
             vars_list_ind,
             key="ind_varq_ot",
             help=(
-                "Sélectionnez la variable dont vous souhaitez détecter les dépassements de seuil. "
-                "Ex: un débit journalier, une température, une précipitation, etc."
+                "Select the variable for which you want to detect threshold exceedances. "
+                "Ex: daily discharge, temperature, precipitation, etc."
             )
         )
         c1, c2 = st.columns(2)
         threshold = c1.number_input(
-            "Threshold (Seuil)",
+            "Threshold",
             value=0.0,
             format="%.4f",
             key="ind_thresh",
@@ -1042,8 +1042,8 @@ with tab_ind:
             )
         )
 
-    # ── Bouton calcul indicateur ─────────────────────────────────────────────
-    if st.button("▶️ Calculer l'indicateur", key="run_ind"):
+    # ── Indicator calculation button ─────────────────────────────────────────────
+    if st.button("▶️ Calculate indicator", key="run_ind"):
         ds_work = st.session_state["ds"]
         prev_vars = set(ds_work.data_vars)
         try:
@@ -1101,7 +1101,7 @@ with tab_ind:
                     nb_gui=int(nb_gui_val),
                 )
             elif indicator == "Standardised Piezometric Level Indicator":
-                st.warning("SPLI n'est pas encore implémenté dans le moteur de calcul.")
+                st.warning("SPLI is not yet implemented in the calculation engine.")
                 ds_work = ind.SPLI(ds_work)
 
             elif indicator == "over_threshold":
@@ -1120,9 +1120,9 @@ with tab_ind:
 
             st.session_state["ds"] = ds_work
             new_vars = [v for v in ds_work.data_vars if v not in prev_vars]
-            log(f"Indicateur '{indicator}' calculé → {new_vars}", "success")
+            log(f"Indicator '{indicator}' calculated → {new_vars}", "success")
             
-            # --- Affichage des résultats détaillés (Summary) ---
+            # --- Display detailed results (Summary) ---
             if "last_ind_summary" in ds_work.attrs:
                 summary = ds_work.attrs["last_ind_summary"]
                 st.markdown("---")
@@ -1136,7 +1136,7 @@ with tab_ind:
                 else:
                     st.markdown("**Selection:** none (calculated across all categories).")
 
-                # Temps et Variables
+                # Time and Variables
                 if summary.get("new_time_dim"):
                     st.markdown(f"**New Temporal Coordinate added:** `{summary['new_time_dim']}`")
 
@@ -1144,7 +1144,7 @@ with tab_ind:
                 if new_vars and new_vars != [None]:
                     st.markdown(f"**New Variable(s) added:** {', '.join([f'`{v}`' for v in new_vars])}")
 
-                # Dimensions et Shape
+                # Dimensions and Shape
                 if summary.get("dims"):
                     st.markdown(f"**Dimensions:** `{summary['dims']}`")
                 if summary.get("shape"):
@@ -1171,17 +1171,17 @@ with tab_ind:
 
                 # Previews
                 if summary.get("preview_data"):
-                    with st.expander("👁️ Aperçu des 5 premières valeurs (avec dimensions)"):
-                        st.markdown("**Tableau d'aperçu :**")
+                    with st.expander("👁️ Preview of the first 5 values (with dimensions)"):
+                        st.markdown("**Preview table:**")
                         # preview_data is a dict (orient='list') from a pandas DataFrame
                         df_preview = pd.DataFrame(summary["preview_data"])
                         
                         # Rename columns for better readability
                         rename_map = {
                             "time": "Date",
-                            "model": "Modèle",
-                            "scenario": "Scénario",
-                            0: "Valeur"
+                            "model": "Model",
+                            "scenario": "Scenario",
+                            0: "Value"
                         }
                         df_preview = df_preview.rename(columns=rename_map)
                         
@@ -1189,24 +1189,24 @@ with tab_ind:
                         st.table(df_preview)
 
                 elif summary.get("first_5_vals"):
-                    with st.expander("👁️ Aperçu (Ancien format)"):
-                        st.markdown("**Aperçu des 5 premières valeurs :**")
-                        preview_dict = {"Valeur": summary["first_5_vals"]}
+                    with st.expander("👁️ Preview (Old format)"):
+                        st.markdown("**Preview of first 5 values:**")
+                        preview_dict = {"Value": summary["first_5_vals"]}
                         if summary.get("first_5_dates"):
                             preview_dict["Date"] = summary["first_5_dates"]
                         
                         # Set column order nicely if dates are present
                         if "Date" in preview_dict:
-                            preview_dict = {"Date": preview_dict["Date"], "Valeur": preview_dict["Valeur"]}
+                            preview_dict = {"Date": preview_dict["Date"], "Value": preview_dict["Value"]}
                             
                         st.table(pd.DataFrame(preview_dict))
 
                 st.markdown("---")
 
-            st.success(f"✅ Indicateur calculé. Nouvelles variables : {new_vars}")
+            st.success(f"✅ Indicator calculated. New variables: {new_vars}")
 
             if new_vars:
-                with st.expander("🔍 Détails techniques des nouvelles variables"):
+                with st.expander("🔍 Technical details of new variables"):
                     for nv in new_vars:
                         da_new = ds_work[nv]
                         st.markdown(f"**{nv}** — dims: `{da_new.dims}`, shape: `{da_new.shape}`")
@@ -1216,54 +1216,54 @@ with tab_ind:
                             if vals_flat.size:
                                 c1, c2, c3 = st.columns(3)
                                 c1.metric("Min", f"{vals_flat.min():.3f}")
-                                c2.metric("Moy", f"{vals_flat.mean():.3f}")
+                                c2.metric("Mean", f"{vals_flat.mean():.3f}")
                                 c3.metric("Max", f"{vals_flat.max():.3f}")
                         except Exception:
                             pass
 
         except Exception as e:
-            log(f"Erreur indicateur : {e}", "error")
-            st.error(f"Erreur : {e}")
+            log(f"Indicator error: {e}", "error")
+            st.error(f"Error: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  TAB 3 : VISUALISATION
+#  TAB 3 : VISUALIZATION
 # ══════════════════════════════════════════════════════════════════════════════
 with tab_viz:
-    st.markdown('<div class="section-title">Visualisation</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Visualization</div>', unsafe_allow_html=True)
 
     chart_type = st.selectbox(
-        "Type de graphique",
-        ["Graphique en ligne", "Graphique en barres", "Nuage de points", "Radar", "Histogramme"],
+        "Chart type",
+        ["Line chart", "Bar chart", "Scatter plot", "Radar chart", "Histogram"],
         key="viz_type",
     )
 
     vars_viz = ds_vars_and_coords()
 
-    # ── Configuration commune ───────────────────────────────────────────────
+    # ── Common configuration ───────────────────────────────────────────────
     col_v1, col_v2 = st.columns(2)
     
     # Selection of variables based on chart type
-    if chart_type == "Radar":
-        vars_multi = col_v2.multiselect("Variables (valeurs)", ds_vars(), key="viz_radar")
-        var_x = col_v1.selectbox("Variable catégorielle (rayons du radar)", vars_viz, key="viz_radar_x")
+    if chart_type == "Radar chart":
+        vars_multi = col_v2.multiselect("Variables (values)", ds_vars(), key="viz_radar")
+        var_x = col_v1.selectbox("Categorical variable (radar axes)", vars_viz, key="viz_radar_x")
         plot_vars_ui = vars_multi
     else:
-        # Pour tous les autres types, on peut choisir X et Y
-        var_x = col_v1.selectbox("Axe X (abscisse)", vars_viz, key="viz_x")
+        # For all other types, we can choose X and Y
+        var_x = col_v1.selectbox("X Axis (abscissa)", vars_viz, key="viz_x")
         
-        if chart_type == "Nuage de points":
-            var_y = col_v2.selectbox("Axe Y (ordonnée)", vars_viz, key="viz_y")
+        if chart_type == "Scatter plot":
+            var_y = col_v2.selectbox("Y Axis (ordinate)", vars_viz, key="viz_y")
             plot_vars_ui = [var_x, var_y]
-        elif chart_type == "Histogramme":
-            var_main = col_v2.selectbox("Variable à analyser", ds_vars(), key="viz_main")
+        elif chart_type == "Histogram":
+            var_main = col_v2.selectbox("Variable to analyze", ds_vars(), key="viz_main")
             plot_vars_ui = [var_main]
-        else: # Ligne ou Barres
-            var_main = col_v2.selectbox("Variable principale (Y)", ds_vars(), key="viz_main")
-            vars_extra = st.multiselect("Variables supplémentaires (optionnel)", ds_vars(), key="viz_extra")
+        else: # Line or Bar
+            var_main = col_v2.selectbox("Main variable (Y)", ds_vars(), key="viz_main")
+            vars_extra = st.multiselect("Additional variables (optional)", ds_vars(), key="viz_extra")
             plot_vars_ui = [var_main] + (vars_extra or [])
 
-    # Filtres catégoriels (Spécifiques par variable)
+    # Categorical filters (Variable-specific)
     viz_filters = {}
     if plot_vars_ui:
         ds_viz = st.session_state["ds"]
@@ -1278,13 +1278,13 @@ with tab_viz:
                     
         if has_cat:
             with st.expander(
-                "🔎 Filtres catégoriels (scénarios, modèles…) - Spécifiques par variable",
+                "🔎 Categorical filters (scenarios, models…) - Variable-specific",
             ):
                 st.info(
-                    "💡 **Filtres catégoriels** : Sélectionnez des valeurs spécifiques pour une ou plusieurs catégories. "
-                    "Ex: en sélectionnant `model = model1` vous ne tracez que ce modèle. "
-                    "Laisser vide = la **moyenne** de toutes les valeurs de cette dimension sera calculée automatiquement. "
-                    "Sélectionner plusieurs valeurs = une courbe par valeur."
+                    "💡 **Categorical filters**: Select specific values for one or more categories. "
+                    "Ex: by selecting `model = model1` you only plot this model. "
+                    "Leave empty = the **mean** of all values of this dimension will be calculated automatically. "
+                    "Select multiple values = one curve per value."
                 )
                 
                 for i, var_n in enumerate(plot_vars_ui):
@@ -1294,7 +1294,7 @@ with tab_viz:
                     
                     if not cat_dims: continue
                     
-                    st.markdown(f"**Pour `{var_n}` :**")
+                    st.markdown(f"**For `{var_n}` :**")
                     cols = st.columns(len(cat_dims))
                     var_dict = {}
                     for j, dim in enumerate(cat_dims):
@@ -1312,88 +1312,88 @@ with tab_viz:
                     if i < len(plot_vars_ui) - 1:
                         st.markdown("---")
 
-        # Options spécifiques selon le type
+        # Specific options depending on the type
         st.markdown("---")
 
-        if chart_type in ["Graphique en ligne", "Nuage de points"]:
+        if chart_type in ["Line chart", "Scatter plot"]:
             show_envelope = st.checkbox(
-                "Afficher l'enveloppe d'incertitude (plage min–max entre modèles/scénarios)",
+                "Show uncertainty envelope (min-max range between models/scenarios)",
                 value=False,
                 help=(
-                    "Si votre dataset contient plusieurs modèles ou scénarios, l'enveloppe représente "
-                    "la plage de valeurs possibles entre le minimum et le maximum de tous les modèles disponibles. "
-                    "La zone ombrée montre la dispersion ; la ligne centrale = la moyenne ou le(s) modèle(s) sélectionné(s)."
+                    "If your dataset contains multiple models or scenarios, the envelope represents "
+                    "the range of possible values between the minimum and maximum of all available models. "
+                    "The shaded area shows the dispersion; the central line = the mean or the selected model(s)."
                 )
             )
             env_type = "average"
             if show_envelope:
                 st.info(
-                    "**Enveloppe** : La zone ombrée représente l'intervalle "
-                    "[min, max] calculé sur tous les modèles ou scénarios pour chaque pas de temps. "
-                    "Cela permet de visualiser la dispersion liée aux projections climatiques. "
-                    "Mode 'average': La zone ombrée montre la dispersion ; la ligne centrale = la moyenne ou le(s) modèle(s) sélectionné(s) "
-                    "Mode 'individual': Toutes les courbes des modèles non selectionnés sont tracées à l'intérieur de l'enveloppe en couleur transparente"
+                    "**Envelope**: The shaded area represents the interval "
+                    "[min, max] calculated on all models or scenarios for each time step. "
+                    "This allows visualizing the dispersion related to climatic projections. "
+                    "Mode 'average': The shaded area shows the dispersion; the central line = the mean or the selected model(s) "
+                    "Mode 'individual': All curves of unselected models are plotted inside the envelope in a transparent color"
                 )
                 env_type = st.radio(
-                    "Courbe centrale de l'enveloppe",
+                    "Central curve of the envelope",
                     ["average", "individual"],
                     index=0,
                     horizontal=True,
-                    help="'average' trace la moyenne de tous les modèles. 'individual' trace une courbe par modèle à l'intérieur de l'enveloppe."
+                    help="'average' plots the mean of all models. 'individual' plots a curve per model inside the envelope."
                 )
             st.session_state["viz_envelope"] = show_envelope
             st.session_state["viz_env_type"] = env_type
             
-        elif chart_type == "Histogramme":
+        elif chart_type == "Histogram":
             nb_bins = st.number_input(
-                "Nombre de classes (bins)",
+                "Number of bins",
                 min_value=1, max_value=200, value=10,
                 help=(
-                    "Détermine la résolution de l'histogramme. "
-                    "Peu de classes = vue globale de la distribution. "
-                    "Beaucoup de classes = détail fin mais plus bruité. "
-                    "Règle pratique : √(nombre de valeurs) est un bon point de départ."
+                    "Determines the resolution of the histogram. "
+                    "Few bins = global view of the distribution. "
+                    "Many bins = fine detail but noisier. "
+                    "Rule of thumb: √(number of values) is a good starting point."
                 )
             )
             st.session_state["viz_bins"] = nb_bins
 
-    # Période temporelle
+    # Time period
     t_dims_viz = time_like_dims()
     start_viz = None
     end_viz   = None
     if t_dims_viz:
         with st.expander(
-            "⏳ Filtrage temporel",
+            "⏳ Temporal filtering",
         ):
             st.info(
-                "💡 **Filtrage temporel** : Sélectionnez la période à afficher sur le graphique. "
-                "La période choisie apparaîtra dans le titre du graphique. "
-                "Laisser les dates par défaut (min/max) = afficher toute la chronique disponible."
+                "💡 **Temporal filtering**: Select the period to display on the chart. "
+                "The chosen period will appear in the chart title. "
+                "Leave default dates (min/max) = display all available history."
             )
             t_v = pd.to_datetime(st.session_state["ds"][t_dims_viz[0]].values)
             c1, c2 = st.columns(2)
-            d_s = c1.date_input("Début", value=t_v.min().date(), min_value=t_v.min().date(), max_value=t_v.max().date(), key="viz_ds")
-            d_e = c2.date_input("Fin",   value=t_v.max().date(), min_value=t_v.min().date(), max_value=t_v.max().date(), key="viz_de")
+            d_s = c1.date_input("Start", value=t_v.min().date(), min_value=t_v.min().date(), max_value=t_v.max().date(), key="viz_ds")
+            d_e = c2.date_input("End",   value=t_v.max().date(), min_value=t_v.min().date(), max_value=t_v.max().date(), key="viz_de")
             start_viz = str(d_s)
             end_viz   = str(d_e)
 
-    # ── Options de style et zoom ──────────────────────────────────────────────
-    with st.expander("🎨 Options de style & 🔍 Zoom / Curseurs d'axes"):
+    # ── Style options and zoom ──────────────────────────────────────────────
+    with st.expander("🎨 Style options & 🔍 Zoom / Axis sliders"):
         col_t, col_xl, col_yl = st.columns(3)
-        p_title  = col_t.text_input("Titre du graphique", "", help="Titre principal affiché en haut du graphique.")
-        p_xlabel = col_xl.text_input("Label axe X", "", help="Nom de l'axe horizontal (ex: 'Temps', 'Précipitations (mm/j)').")
-        p_ylabel = col_yl.text_input("Label axe Y", "", help="Nom de l'axe vertical (ex: 'Débit (m³/s)', 'Température (°C)').")
+        p_title  = col_t.text_input("Chart title", "", help="Main title displayed at the top of the chart.")
+        p_xlabel = col_xl.text_input("X-axis label", "", help="Name of the horizontal axis (e.g. 'Time', 'Precipitation (mm/d)').")
+        p_ylabel = col_yl.text_input("Y-axis label", "", help="Name of the vertical axis (e.g. 'Discharge (m³/s)', 'Temperature (°C)').")
         
         st.markdown("---")
         st.markdown(
-            "**🔍 Zoom manuel — Curseurs d'axes**",
+            "**🔍 Manual zoom — Axis sliders**",
             help=(
-                "Définissez les limites d'affichage des axes. "
-                "Laissez les curseurs à leurs valeurs min/max pour afficher toutes les données. "
-                "Utile pour zoomer sur une plage de valeurs spécifique."
+                "Set the display limits of the axes. "
+                "Leave the sliders at their min/max values to display all data. "
+                "Useful for zooming in on a specific range of values."
             )
         )
-        st.caption("💡 Déplacez les curseurs pour zoomer sur une plage de valeurs. Les données hors plage ne seront pas affichées.")
+        st.caption("💡 Move the sliders to zoom in on a range of values. Data outside the range will not be displayed.")
 
         # Compute data range dynamically for sliders
         _ds_cur = st.session_state.get("ds")
@@ -1430,32 +1430,32 @@ with tab_viz:
         col_sly, col_slx = st.columns(2)
 
         with col_sly:
-            use_y_zoom = st.checkbox("Activer le zoom sur l'axe Y", value=False, key="use_y_zoom")
+            use_y_zoom = st.checkbox("Enable Y-axis zoom", value=False, key="use_y_zoom")
             if use_y_zoom:
                 y_slider = st.slider(
-                    "Plage de l'axe Y",
+                    "Y-axis range",
                     min_value=float(_y_min_g),
                     max_value=float(_y_max_g),
                     value=(float(_y_min_g), float(_y_max_g)),
                     step=_y_step,
                     key="y_slider",
-                    help=f"Valeurs de la variable Y : de {_y_min_g:.4g} à {_y_max_g:.4g}."
+                    help=f"Y variable values: from {_y_min_g:.4g} to {_y_max_g:.4g}."
                 )
                 z_ymin, z_ymax = y_slider
             else:
                 z_ymin, z_ymax = None, None
 
         with col_slx:
-            use_x_zoom = st.checkbox("Activer le zoom sur l'axe X (si numérique)", value=False, key="use_x_zoom")
+            use_x_zoom = st.checkbox("Enable X-axis zoom (if numeric)", value=False, key="use_x_zoom")
             if use_x_zoom:
                 x_slider = st.slider(
-                    "Plage de l'axe X",
+                    "X-axis range",
                     min_value=float(_x_min_g),
                     max_value=float(_x_max_g),
                     value=(float(_x_min_g), float(_x_max_g)),
                     step=_x_step,
                     key="x_slider",
-                    help=f"Valeurs de la variable X : de {_x_min_g:.4g} à {_x_max_g:.4g}. Ne fonctionne que si l'axe X est numérique (pas un axe temporel)."
+                    help=f"X variable values: from {_x_min_g:.4g} to {_x_max_g:.4g}. Only works if the X axis is numeric (not a time axis)."
                 )
                 z_xmin, z_xmax = x_slider
             else:
@@ -1463,40 +1463,40 @@ with tab_viz:
 
         st.markdown("---")
         st.markdown(
-            "📐 **Lignes de seuil (référence sur le graphique)**",
+            "📐 **Threshold lines (reference on the chart)**",
         )
         st.caption(
-            "💡 Tracez des lignes horizontales (Y) ou verticales (X) sur le graphique pour indiquer un seuil ou une référence. "
-            "Ex: tracer Y=0 pour la ligne zéro, ou X=1980 pour marquer une année clé. Laisser vide = pas de ligne."
+            "💡 Draw horizontal (Y) or vertical (X) lines on the chart to indicate a threshold or reference. "
+            "Ex: draw Y=0 for the zero line, or X=1980 to mark a key year. Leave empty = no line."
         )
         col_thr_y, col_thr_x = st.columns(2)
         th_y_vals_raw = col_thr_y.text_input(
-            "Seuil(s) horizontal(aux) Y (valeur de la variable)",
+            "Horizontal Y threshold(s) (variable value)",
             value="",
             key="thresh_y",
             help=(
-                "Entrez une ou plusieurs valeurs numériques séparées par des virgules pour tracer des lignes horizontales. "
-                "Ex: '0' trace la ligne zéro. '100, 200' trace deux lignes Y=100 et Y=200. "
-                "Utile pour visualiser un seuil de crue, un seuil de sécheresse, une valeur de référence…"
+                "Enter one or more comma-separated numeric values to draw horizontal lines. "
+                "Ex: '0' draws the zero line. '100, 200' draws two lines Y=100 and Y=200. "
+                "Useful for visualizing a flood threshold, drought threshold, reference value..."
             )
         )
         th_x_vals_raw = col_thr_x.text_input(
-            "Seuil(s) vertical(aux) X (valeur de l'axe X)",
+            "Vertical X threshold(s) (X axis value)",
             value="",
             key="thresh_x",
             help=(
-                "Entrez une ou plusieurs valeurs séparées par des virgules pour tracer des lignes verticales. "
-                "Fonctionne si l'axe X est numérique. Pour un axe temporel, entrez une année (ex: '1980'). "
-                "Ex: '1980' trace une ligne verticale à l'année 1980."
+                "Enter one or more comma-separated values to draw vertical lines. "
+                "Works if the X axis is numeric. For a time axis, enter a year (e.g. '1980'). "
+                "Ex: '1980' draws a vertical line at the year 1980."
             )
         )
         col_thr_col, col_thr_sty = st.columns(2)
         thresh_color = col_thr_col.color_picker(
-            "Couleur des lignes de seuil", "#FF4B4B", key="thresh_color",
-            help="Couleur appliquée à toutes les lignes de seuil."
+            "Threshold lines color", "#FF4B4B", key="thresh_color",
+            help="Color applied to all threshold lines."
         )
         thresh_style = col_thr_sty.selectbox(
-            "Style de ligne",
+            "Line style",
             ["--", "-", "-.", ":"],
             key="thresh_style",
             help="Style du trait : -- = tirets, - = plein, -. = tiret-point, : = pointé."
@@ -1504,16 +1504,16 @@ with tab_viz:
 
         st.markdown("---")
         col_save, col_fmt = st.columns(2)
-        save_fig = col_save.checkbox("Sauvegarder la figure", value=False)
+        save_fig = col_save.checkbox("Save figure", value=False)
         save_fmt = col_fmt.selectbox("Format", ["png", "pdf", "svg"], key="save_fmt")
         save_path = ""
         if save_fig:
-            save_path = st.text_input("Chemin de sauvegarde (ex: output/fig.png)", "output/figure.png", key="save_path")
+            save_path = st.text_input("Save path (e.g. output/fig.png)", "output/figure.png", key="save_path")
 
     x_lim_val = [z_xmin, z_xmax] if (z_xmin is not None or z_xmax is not None) else None
     y_lim_val = [z_ymin, z_ymax] if (z_ymin is not None or z_ymax is not None) else None
 
-    # Parsing des seuils
+    # Parsing thresholds
     h_lines = [float(x.strip()) for x in th_y_vals_raw.split(",") if x.strip()] if th_y_vals_raw else []
     v_lines = []
     if th_x_vals_raw:
@@ -1538,11 +1538,11 @@ with tab_viz:
         "thresh_style": thresh_style
     }
 
-    # ── Bouton tracer ────────────────────────────────────────────────────────
-    if st.button("📈 Tracer", key="run_viz"):
+    # ── Plot button ────────────────────────────────────────────────────────
+    if st.button("📈 Plot", key="run_viz"):
         ds_work = st.session_state["ds"]
 
-        # Sous-ensemble temporel si demandé
+        # Temporal subset if requested
         ds_plot = ds_work
         if t_dims_viz and start_viz and end_viz:
             for dim in t_dims_viz:
@@ -1569,7 +1569,7 @@ with tab_viz:
                 "thresh_style": plot_config_gui.get("thresh_style"),
             }
 
-            if chart_type == "Graphique en ligne":
+            if chart_type == "Line chart":
                 plot_vars = [var_main] + (vars_extra or [])
                 fig = viz.line_chart(
                     ds_plot,
@@ -1584,7 +1584,7 @@ with tab_viz:
                     envelope_type_gui=st.session_state.get("viz_env_type", "average")
                 )
 
-            elif chart_type == "Graphique en barres":
+            elif chart_type == "Bar chart":
                 plot_vars = [var_main] + (vars_extra or [])
                 fig = viz.bar_chart(
                     ds_plot,
@@ -1599,7 +1599,7 @@ with tab_viz:
                     envelope_type_gui=st.session_state.get("viz_env_type", "average")
                 )
 
-            elif chart_type == "Nuage de points":
+            elif chart_type == "Scatter plot":
                 fig = viz.scatter_chart(
                     ds_plot,
                     x_name_gui=var_x,
@@ -1613,9 +1613,9 @@ with tab_viz:
                     envelope_type_gui=st.session_state.get("viz_env_type", "average")
                 )
 
-            elif chart_type == "Radar":
+            elif chart_type == "Radar chart":
                 if not vars_multi:
-                    st.warning("Sélectionnez au moins deux variables pour le radar.")
+                    st.warning("Please select at least two variables for the radar chart.")
                 else:
                     fig = viz.radar_chart(
                         ds_plot, 
@@ -1628,7 +1628,7 @@ with tab_viz:
                         auto_mean_gui=True
                     )
 
-            elif chart_type == "Histogramme":
+            elif chart_type == "Histogram":
                 fig = viz.histogram_chart(
                     ds_plot,
                     x_name_gui=var_x,
@@ -1642,7 +1642,7 @@ with tab_viz:
                 )
 
             if fig is not None:
-                # ── Lignes de seuil (threshold lines) ─────────────────────
+                # ── Threshold lines ─────────────────────
                 _tc = st.session_state.get("thresh_color", "#FF4B4B")
                 _ts = st.session_state.get("thresh_style", "--")
                 _th_y_raw = st.session_state.get("thresh_y", "")
@@ -1666,10 +1666,10 @@ with tab_viz:
                     for ax_t in fig.get_axes():
                         for yv in _th_y_vals:
                             ax_t.axhline(y=yv, color=_tc, linestyle=_ts, linewidth=1.4,
-                                         label=f"Seuil Y={yv:.4g}", zorder=10)
+                                         label=f"Threshold Y={yv:.4g}", zorder=10)
                         for xv in _th_x_vals:
                             ax_t.axvline(x=xv, color=_tc, linestyle=_ts, linewidth=1.4,
-                                         label=f"Seuil X={xv:.4g}", zorder=10)
+                                         label=f"Threshold X={xv:.4g}", zorder=10)
                         # Refresh legend if new lines were added
                         handles, labels_leg = ax_t.get_legend_handles_labels()
                         if handles:
@@ -1680,52 +1680,52 @@ with tab_viz:
                 st.pyplot(fig, use_container_width=True)
 
 
-                # ── Téléchargement ────────────────────────────────────────
+                # ── Download ────────────────────────────────────────
                 buf = io.BytesIO()
                 fmt = save_fmt if save_fig else "png"
                 fig.savefig(buf, format=fmt, dpi=150, bbox_inches="tight")
                 buf.seek(0)
                 fname = os.path.splitext(os.path.basename(save_path))[0] if (save_fig and save_path) else "figure"
                 st.download_button(
-                    label=f"⬇️ Télécharger ({fmt.upper()})",
+                    label=f"⬇️ Download ({fmt.upper()})",
                     data=buf,
                     file_name=f"{fname}.{fmt}",
                     mime=f"image/{fmt}",
                 )
-                log(f"Graphique '{chart_type}' généré.", "success")
+                log(f"Chart '{chart_type}' generated.", "success")
 
         except Exception as e:
-            log(f"Erreur de visualisation : {e}", "error")
-            st.error(f"Erreur : {e}")
+            log(f"Visualization error: {e}", "error")
+            st.error(f"Error: {e}")
             import traceback
             st.code(traceback.format_exc())
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  EXPORT CSV DES VARIABLES CRÉÉES
+#  EXPORT CSV OF CREATED VARIABLES
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("---")
-st.markdown('<div class="section-title">⬇️ Exporter les variables en CSV</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">⬇️ Export variables to CSV</div>', unsafe_allow_html=True)
 
-with st.expander("📊 Télécharger les variables calculées", expanded=False):
+with st.expander("📊 Download calculated variables", expanded=False):
     st.info(
-        "💡 **Comment utiliser cet export** : Sélectionnez une ou plusieurs variables ci-dessous "
-        "(y compris les indicateurs et statistiques que vous venez de calculer) et téléchargez-les en CSV. "
-        "Le fichier contiendra toutes les dimensions comme colonnes (date, modèle, scénario…) "
-        "suivi des valeurs de chaque variable sélectionnée."
+        "💡 **How to use this export**: Select one or more variables below "
+        "(including indicators and statistics you just calculated) and download them as CSV. "
+        "The file will contain all dimensions as columns (date, model, scenario...) "
+        "followed by the values of each selected variable."
     )
     
     all_vars_export = list(st.session_state["ds"].data_vars)
     export_vars = st.multiselect(
-        "Variables à exporter",
+        "Variables to export",
         all_vars_export,
         default=[],
         key="export_vars",
         help=(
-            "Sélectionnez les variables à inclure dans le fichier CSV. "
-            "Vous pouvez exporter toutes vos variables originales ainsi que celles calculées "
-            "(indicateurs, statistiques…). Exemple : sélectionner 'Qmean_1m_debit' exportera "
-            "la moyenne mensuelle du débit avec les colonnes date et valeur."
+            "Select the variables to include in the CSV file. "
+            "You can export all your original variables as well as those calculated "
+            "(indicators, statistics...). Example: selecting 'Qmean_1m_discharge' will export "
+            "the monthly mean discharge with date and value columns."
         )
     )
 
@@ -1765,7 +1765,7 @@ with st.expander("📊 Télécharger les variables calculées", expanded=False):
                     if pd.api.types.is_datetime64_any_dtype(df_final[col]):
                         df_final[col] = df_final[col].dt.strftime("%Y-%m-%d")
 
-                st.markdown(f"**Aperçu du CSV ({len(df_final):,} lignes, {len(df_final.columns)} colonnes) :**")
+                st.markdown(f"**CSV Preview ({len(df_final):,} rows, {len(df_final.columns)} columns):**")
                 st.dataframe(df_final.head(10), use_container_width=True)
 
                 csv_buffer = io.StringIO()
@@ -1774,26 +1774,26 @@ with st.expander("📊 Télécharger les variables calculées", expanded=False):
 
                 export_filename = "_".join(export_vars[:3]) + "_export.csv"
                 st.download_button(
-                    label=f"⬇️ Télécharger le CSV ({len(df_final):,} lignes)",
+                    label=f"⬇️ Download CSV ({len(df_final):,} rows)",
                     data=csv_bytes,
                     file_name=export_filename,
                     mime="text/csv",
                     key="csv_download_btn",
                 )
-                st.caption(f"📁 Fichier : `{export_filename}` — Colonnes : {', '.join(df_final.columns.tolist())}")
+                st.caption(f"📁 File: `{export_filename}` — Columns: {', '.join(df_final.columns.tolist())}")
             else:
-                st.warning("Impossible de convertir les variables sélectionnées en tableau.")
+                st.warning("Cannot convert selected variables to table.")
 
         except Exception as e:
-            st.error(f"Erreur lors de l'export : {e}")
+            st.error(f"Error during export: {e}")
             import traceback
             st.code(traceback.format_exc())
     else:
-        st.caption("Sélectionnez au moins une variable pour activer le téléchargement.")
+        st.caption("Select at least one variable to enable download.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  FOOTER
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("---")
-st.caption("RE_EAU 2025 — Interface Streamlit | Données climatiques & hydrologiques xArray")
+st.caption("RE_EAU 2025 — Streamlit GUI | Climatic & Hydrological Data xArray")

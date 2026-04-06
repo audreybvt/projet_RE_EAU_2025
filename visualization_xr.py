@@ -931,7 +931,7 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                 if envelope_type == "average":
                     did_average = 'model' in da_sel.dims and da_sel.sizes['model'] > 1
                     y_mean = da_sel.mean(dim='model', skipna=True).values if 'model' in da_sel.dims else da_sel.values
-                    label_final = label_prefix + (" (moyenne)" if did_average else "")
+                    label_final = label_prefix + (" (average)" if did_average else "")
                     ax.plot(x_vals_local, y_mean, label=label_final, linewidth=2.5)
                 else:
                     # Mode 'individual': draw ALL models as thin transparent lines,
@@ -1170,7 +1170,7 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
                     did_average = 'model' in y_da_sel.dims and y_da_sel.sizes['model'] > 1
                     y_m = y_da_sel.mean(dim='model').values.ravel() if 'model' in y_da_sel.dims else y_da_sel.values.ravel()
                     x_m = x_da_sel.mean(dim='model').values.ravel() if 'model' in x_da_sel.dims else x_da_sel.values.ravel()
-                    label_final = label_m + (" (moyenne)" if did_average else "")
+                    label_final = label_m + (" (average)" if did_average else "")
                     ax.scatter(x_m, y_m, color=c, s=60, label=label_final, edgecolor='black')
                 else:
                     if 'model' in y_da_sel.dims:
