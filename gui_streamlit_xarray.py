@@ -24,7 +24,7 @@ import visualization_xr as viz
 #  PAGE CONFIG
 # ══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="RE_EAU 2025 – Hydrological Analysis",
+    page_title="Hydrological Analysis - 2026",
     page_icon="💧",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -236,7 +236,7 @@ def has_dataset() -> bool:
 #  SIDEBAR – Data Loading
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## 💧 RE_EAU 2025")
+    st.markdown("💧 Projet Mention Ressources Energétiques 2026 - Audrey, Malvina, Marine et Raphaël")
     st.markdown("---")
 
     # ── Format ──────────────────────────────────────────────────────────────
@@ -470,7 +470,7 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("""
 <div class="main-header">
-    <h1>💧 RE_EAU 2025 – Hydrological Analysis</h1>
+    <h1>💧 Hydrological Analysis - 2026</h1>
     <p>Graphical interface for climatic and hydrological data analysis (xArray)</p>
 </div>
 """, unsafe_allow_html=True)
@@ -1796,4 +1796,4 @@ with st.expander("📊 Download calculated variables", expanded=False):
 #  FOOTER
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("---")
-st.caption("RE_EAU 2025 — Streamlit GUI | Climatic & Hydrological Data xArray")
+st.caption("Projet Mention Ressources Energétiques 2026 — Streamlit GUI | Climatic & Hydrological Data xArray")

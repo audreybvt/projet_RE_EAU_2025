@@ -636,6 +636,9 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
     da_y = ds_period[y_name]
     x_dim = x_arr.dims[0]
     
+    if x_dim not in da_y.dims:
+        raise ValueError(f"The selected X-axis '{x_name}' (dimension '{x_dim}') is not present in the variable '{y_name}'. No data could be plotted. Please change the X-axis, you may have several date variable. For example, for period-grouped variables, usually select 'period' or 'time_in_period'.")
+
     # Get filters for this variable
     var_filters = _get_var_filters(dim_selections_gui, y_name) or {}
     
@@ -850,21 +853,28 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
         plot_envelope = plot_envelope_gui
         if envelope_type_gui is not None:
             envelope_type = envelope_type_gui
-    elif not is_gui and any('model' in ds[y_name].dims and ds[y_name].sizes['model'] > 1 for y_name in y_names):
-        while True:
-            choice = input("Model dimension detected. Plot envelopes (min-max)? (y/n): ").strip().lower()
-            if choice in ["y", "n"]:
-                plot_envelope = (choice == "y")
+    elif not is_gui:
+        # Check if any categorical dimension exists that could act as a variability dimension
+        has_variability = False
+        for y_name in y_names:
+            if any(d != x_name_gui and ds[y_name].sizes[d] > 1 for d in ds[y_name].dims if str(d).lower() not in ['time', 'date', 'lat', 'lon', 'x', 'y']):
+                has_variability = True
                 break
-            print("Please enter 'y' or 'n'.")
 
-        if plot_envelope:
+        if has_variability:
             while True:
-                choice = input("Show average across models or individual model lines? (avg/individual): ").strip().lower()
-                if choice in ["avg", "average", "individual", "ind"]:
-                    envelope_type = "average" if choice in ["avg", "average"] else "individual"
+                choice = input("Variability dimension detected. Plot envelopes (min-max)? (y/n): ").strip().lower()
+                if choice in ["y", "n"]:
+                    plot_envelope = (choice == "y")
                     break
-                print("Please enter 'avg'/'average' or 'individual'/'ind'.")
+                print("Please enter 'y' or 'n'.")
+            if plot_envelope:
+                while True:
+                    choice = input("Show average across categories or individual model lines? (avg/individual): ").strip().lower()
+                    if choice in ["avg", "average", "individual", "ind"]:
+                        envelope_type = "average" if choice in ["avg", "average"] else "individual"
+                        break
+                    print("Please enter 'avg'/'average' or 'individual'/'ind'.")
 
     # -------- X --------
 
@@ -877,44 +887,52 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
     x_vals = x_arr.values
 
     # -------- Y loop --------
+    plotted_anything = False
+
     for y_name in y_names:
 
         da = ds_period[y_name]
 
         if x_dim not in da.dims:
             continue
+            
+        plotted_anything = True
 
-        # -------- Case: model dimension exists and ensemble plot is requested --------
+        # -------- Case: envelope logic requested --------
         var_filters = _get_var_filters(dim_selections_gui, y_name) or {}
         
-        # Apply non-model filters to get the background envelope data
-        non_model_filters = {k: v for k, v in var_filters.items() if k != 'model'}
-        da_envelope = apply_gui_filters(da, non_model_filters)
+        # Identify the dimension causing variability
+        variability_dim = next((d for d in da.dims if d != x_dim and da.sizes[d] > 1 and str(d).lower() not in ['time', 'lat', 'lon', 'x', 'y']), None)
 
-        if plot_envelope and 'model' in da_envelope.dims:
+        if plot_envelope and variability_dim is not None:
+            # Apply non-variability filters to get the background envelope data
+            non_var_filters = {k: v for k, v in var_filters.items() if k != variability_dim}
+            da_envelope = apply_gui_filters(da, non_var_filters)
+
             # calculate global min/max for the background envelope
-            main_dims_env = [x_dim, 'model']
-            results_env = handle_xarray_dimensions(da_envelope, main_dims=main_dims_env, dim_selections_gui=non_model_filters, auto_mean_gui=auto_mean_gui)
+            main_dims_env = [x_dim, variability_dim]
+            results_env = handle_xarray_dimensions(da_envelope, main_dims=main_dims_env, dim_selections_gui=non_var_filters, auto_mean_gui=auto_mean_gui)
             
             # Find a consistent color for this variable (to match its lines)
             i_var = y_names.index(y_name)
             c_env = colors_cycle[i_var % len(colors_cycle)]
 
             for sel_env, y_da_env in results_env:
-                y_min = y_da_env.min(dim='model', skipna=True).values
-                y_max = y_da_env.max(dim='model', skipna=True).values
-                x_vals_local = y_da_env[x_dim].values
-                
-                # Plot global envelope only if not in "individual" mode (otherwise it hides the individual lines)
-                if envelope_type != "individual":
-                    ax.fill_between(x_vals_local, y_min, y_max, alpha=0.15,
-                                    color=c_env, label=f"{y_name} (Enveloppe globale)")
+                if variability_dim in y_da_env.dims:
+                    y_min = y_da_env.min(dim=variability_dim, skipna=True).values
+                    y_max = y_da_env.max(dim=variability_dim, skipna=True).values
+                    x_vals_local = y_da_env[x_dim].values
+                    
+                    # Plot global envelope only if not in "individual" mode
+                    if envelope_type != "individual":
+                        ax.fill_between(x_vals_local, y_min, y_max, alpha=0.15,
+                                        color=c_env, label=f"{y_name} (Enveloppe globale)")
 
-            # Foreground: Selective models
-            da_selected = apply_gui_filters(da_envelope, {'model': var_filters.get('model')})
+            # Foreground: Selective models/variables
+            da_selected = apply_gui_filters(da_envelope, {variability_dim: var_filters.get(variability_dim)})
             results_plot = handle_xarray_dimensions(
                 da_selected,
-                main_dims=[x_dim, 'model'] if envelope_type != "average" else [x_dim],
+                main_dims=[x_dim, variability_dim] if envelope_type != "average" else [x_dim],
                 dim_selections_gui=var_filters,
                 auto_mean_gui=auto_mean_gui
             )
@@ -929,34 +947,29 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                     label_prefix += f" ({label_desc})"
 
                 if envelope_type == "average":
-                    did_average = 'model' in da_sel.dims and da_sel.sizes['model'] > 1
-                    y_mean = da_sel.mean(dim='model', skipna=True).values if 'model' in da_sel.dims else da_sel.values
+                    did_average = variability_dim in da_sel.dims and da_sel.sizes[variability_dim] > 1
+                    y_mean = da_sel.mean(dim=variability_dim, skipna=True).values if variability_dim in da_sel.dims else da_sel.values
                     label_final = label_prefix + (" (average)" if did_average else "")
                     ax.plot(x_vals_local, y_mean, label=label_final, linewidth=2.5)
                 else:
-                    # Mode 'individual': draw ALL models as thin transparent lines,
-                    # assigning each its own color from a larger map (tab20),
-                    # then re-draw selected/highlighted ones with full opacity on top.
-                    if 'model' in da_envelope.dims:
-                        all_models = da_envelope['model'].values
-                        # Determine which models are "selected" (from filters)
-                        selected_models = var_filters.get('model', None)
-                        if isinstance(selected_models, list) and len(selected_models) > 0:
-                            selected_set = set(str(m) for m in selected_models)
+                    # Mode 'individual': draw ALL as thin transparent lines
+                    if variability_dim in da_envelope.dims:
+                        all_variability = da_envelope[variability_dim].values
+                        selected_variability = var_filters.get(variability_dim, None)
+                        if isinstance(selected_variability, list) and len(selected_variability) > 0:
+                            selected_set = set(str(m) for m in selected_variability)
                         else:
-                            selected_set = None  # None = all highlighted
+                            selected_set = None
 
-                        # 1. Draw ALL models as faint background lines with distinct colors
-                        colors_models = plt.cm.tab20.colors # Up to 20 distinct colors
-                        for m_idx in range(len(all_models)):
-                            m_name = str(all_models[m_idx])
-                            y_v = da_envelope.isel(model=m_idx).values
+                        colors_models = plt.cm.tab20.colors
+                        for m_idx in range(len(all_variability)):
+                            m_name = str(all_variability[m_idx])
+                            y_v = da_envelope.isel({variability_dim: m_idx}).values
                             if y_v.ndim > 1:
                                 y_v = y_v.mean(axis=tuple(range(1, y_v.ndim)))
                             x_v = da_envelope[x_dim].values
                             is_selected = (selected_set is None or m_name in selected_set)
                             
-                            # Different color for each background line
                             m_color = colors_models[m_idx % len(colors_models)]
                             
                             ax.plot(x_v, y_v,
@@ -964,11 +977,10 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                                     alpha=0.25 if not is_selected else 0.0,
                                     linewidth=0.7, label="_nolegend_")
 
-                        # 2. Draw selected models prominently on top
-                        if 'model' in da_sel.dims:
-                            for m_idx in range(da_sel.sizes['model']):
-                                m_name = str(da_sel['model'].values[m_idx])
-                                y_v = da_sel.isel(model=m_idx).values
+                        if variability_dim in da_sel.dims:
+                            for m_idx in range(da_sel.sizes[variability_dim]):
+                                m_name = str(da_sel[variability_dim].values[m_idx])
+                                y_v = da_sel.isel({variability_dim: m_idx}).values
                                 ax.plot(x_vals_local, y_v,
                                         label=f"{label_prefix} | {m_name}",
                                         alpha=0.9, linewidth=1.8)
@@ -987,6 +999,9 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                     label += " (" + ", ".join(f"{v}" for v in all_info.values()) + ")"
                 ax.plot(x_vals_local, da_sel.values, label=label)
 
+    if not plotted_anything:
+        raise ValueError(f"The selected X-axis '{x_name}' is not present in the variables ({', '.join(y_names)}). No data could be plotted. Please change the X-axis. You may have several date variable. For example, for period-grouped variables, usually select 'time_in_period'.")
+
     # Plot individual line
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -997,6 +1012,7 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
         ax.set_ylim(labels["y_limits"])
 
     ax.grid(True, linestyle="--", alpha=0.5)
+    ax.tick_params(axis="x", bottom=True, top=True, labelbottom=True, labeltop=False)
     
     # ── Threshold lines (Curseurs) ──
     h_color = labels.get("thresh_color", "red")
@@ -1012,6 +1028,7 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
 
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
     plt.subplots_adjust(bottom=0.3)
+    fig.autofmt_xdate()
 
     return fig
 
@@ -1107,59 +1124,70 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     plot_envelope = plot_envelope_gui if plot_envelope_gui is not None else False
     envelope_type = envelope_type_gui if envelope_type_gui is not None else "average"
 
+    # Identify the dimension causing variability
+    variability_dim = next((d for d in x_arr.dims if d != x_dim and x_arr.sizes[d] > 1 and str(d).lower() not in ['time', 'lat', 'lon', 'x', 'y']), None)
+
     x_var_filters = _get_var_filters(dim_selections_gui, x_name)
-    main_dims_x = [x_dim, 'model'] if plot_envelope and 'model' in x_arr.dims else [x_dim]
+    main_dims_x = [x_dim, variability_dim] if plot_envelope and variability_dim in x_arr.dims else [x_dim]
     x_results = handle_xarray_dimensions(x_arr, main_dims=main_dims_x, dim_selections_gui=x_var_filters, auto_mean_gui=auto_mean_gui)
     x_dict = {frozenset(sel.items()) if sel else frozenset(): da_sel for sel, da_sel in x_results}
     
     # -------- Y loop --------
     i_color = 0
+    plotted_anything = False
 
     for i, y_name in enumerate(y_names):
         da = ds_period[y_name]
         if x_dim not in da.dims:
             continue
+            
+        plotted_anything = True
         
         var_filters = _get_var_filters(dim_selections_gui, y_name) or {}
         
-        # Apply non-model filters for global envelope
-        non_model_filters = {k: v for k, v in var_filters.items() if k != 'model'}
-        da_envelope = apply_gui_filters(da, non_model_filters)
+        # Identify the dimension causing variability for Y
+        variability_dim_y = next((d for d in da.dims if d != x_dim and da.sizes[d] > 1 and str(d).lower() not in ['time', 'lat', 'lon', 'x', 'y']), None)
 
-        if plot_envelope and 'model' in da_envelope.dims:
+        # Apply non-variability filters for global envelope
+        non_var_filters = {k: v for k, v in var_filters.items() if k != variability_dim_y}
+        da_envelope = apply_gui_filters(da, non_var_filters)
+
+        if plot_envelope and variability_dim_y is not None and variability_dim_y in da_envelope.dims:
             # calculate global min/max for scatter envelope (errorbars)
-            results_env = handle_xarray_dimensions(da_envelope, main_dims=[x_dim, 'model'], dim_selections_gui=non_model_filters, auto_mean_gui=auto_mean_gui)
+            results_env = handle_xarray_dimensions(da_envelope, main_dims=[x_dim, variability_dim_y], dim_selections_gui=non_var_filters, auto_mean_gui=auto_mean_gui)
             for sel_env, y_da_env in results_env:
                 sel_key_env = frozenset(sel_env.items()) if sel_env else frozenset()
                 x_da_env = x_dict.get(sel_key_env)
                 if x_da_env is None:
                     x_da_env = list(x_dict.values())[0]
 
-                y_min_v = y_da_env.min(dim='model', skipna=True).values.ravel()
-                y_max_v = y_da_env.max(dim='model', skipna=True).values.ravel()
-                x_min_v = x_da_env.min(dim='model', skipna=True).values.ravel()
-                x_max_v = x_da_env.max(dim='model', skipna=True).values.ravel()
+                if variability_dim_y in y_da_env.dims and variability_dim in x_da_env.dims:
+                    y_min_v = y_da_env.min(dim=variability_dim_y, skipna=True).values.ravel()
+                    y_max_v = y_da_env.max(dim=variability_dim_y, skipna=True).values.ravel()
+                    x_min_v = x_da_env.min(dim=variability_dim, skipna=True).values.ravel()
+                    x_max_v = x_da_env.max(dim=variability_dim, skipna=True).values.ravel()
+                
                 # Background: Point cloud for ALL available data
                 i_var = y_names.index(y_name)
                 c_env = colors_cycle[i_var % len(colors_cycle)]
                 
                 x_all = x_da_env.values.ravel()
                 y_all = y_da_env.values.ravel()
-                ax.scatter(x_all, y_all, color=c_env, alpha=0.1, s=10, zorder=0, label=f"{y_name} (Tous modèles)")
+                ax.scatter(x_all, y_all, color=c_env, alpha=0.1, s=10, zorder=0, label=f"{y_name} (Enveloppe globale)")
 
-            # Foreground: Selective models
-            da_selected = apply_gui_filters(da_envelope, {'model': var_filters.get('model')})
-            results_plot = handle_xarray_dimensions(da_selected, main_dims=[x_dim, 'model'] if envelope_type != "average" else [x_dim],
+            # Foreground: Selective models/variables
+            da_selected = apply_gui_filters(da_envelope, {variability_dim_y: var_filters.get(variability_dim_y)})
+            results_plot = handle_xarray_dimensions(da_selected, main_dims=[x_dim, variability_dim_y] if envelope_type != "average" else [x_dim],
                                                    dim_selections_gui=var_filters, auto_mean_gui=auto_mean_gui)
             
             for sel, y_da_sel in results_plot:
-                # Include model and other filters in the label
+                # Include filters in the label
                 all_sel = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
                 label_m = f"{y_name}"
                 if all_sel:
                     label_m += " (" + ", ".join(f"{v}" for k, v in all_sel.items()) + ")"
 
-                sel_key = frozenset({k: v for k, v in sel.items() if k != 'model'}.items())
+                sel_key = frozenset({k: v for k, v in sel.items() if k != variability_dim_y}.items())
                 x_da_sel = x_dict.get(sel_key)
                 if x_da_sel is None:
                     x_da_sel = list(x_dict.values())[0]
@@ -1167,17 +1195,18 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
                 i_color += 1
                 
                 if envelope_type == "average":
-                    did_average = 'model' in y_da_sel.dims and y_da_sel.sizes['model'] > 1
-                    y_m = y_da_sel.mean(dim='model').values.ravel() if 'model' in y_da_sel.dims else y_da_sel.values.ravel()
-                    x_m = x_da_sel.mean(dim='model').values.ravel() if 'model' in x_da_sel.dims else x_da_sel.values.ravel()
+                    did_average = variability_dim_y in y_da_sel.dims and y_da_sel.sizes[variability_dim_y] > 1
+                    y_m = y_da_sel.mean(dim=variability_dim_y).values.ravel() if variability_dim_y in y_da_sel.dims else y_da_sel.values.ravel()
+                    x_m = x_da_sel.mean(dim=variability_dim).values.ravel() if variability_dim in x_da_sel.dims else x_da_sel.values.ravel()
                     label_final = label_m + (" (average)" if did_average else "")
                     ax.scatter(x_m, y_m, color=c, s=60, label=label_final, edgecolor='black')
                 else:
-                    if 'model' in y_da_sel.dims:
-                        for m_idx_s in range(y_da_sel.sizes['model']):
-                            m_name = y_da_sel.model.values[m_idx_s]
+                    if variability_dim_y in y_da_sel.dims:
+                        for m_idx_s in range(y_da_sel.sizes[variability_dim_y]):
+                            m_name = y_da_sel[variability_dim_y].values[m_idx_s]
                             label_ind = f"{y_name} ({m_name})"
-                            ax.scatter(x_da_sel.isel(model=m_idx_s).values, y_da_sel.isel(model=m_idx_s).values, color=c, alpha=0.8, label=label_ind)
+                            ax.scatter(x_da_sel.isel({variability_dim: m_idx_s}).values if variability_dim in x_da_sel.dims else x_da_sel.values, 
+                                       y_da_sel.isel({variability_dim_y: m_idx_s}).values, color=c, alpha=0.8, label=label_ind)
                     else:
                         ax.scatter(x_da_sel.values, y_da_sel.values, color=c, alpha=0.8, label=label_m)
         else:
@@ -1196,6 +1225,9 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
 
                 ax.scatter(x_da_sel.values, y_da_sel.values, color=colors_cycle[i_color % len(colors_cycle)], label=label_p)
                 i_color += 1
+                
+    if not plotted_anything:
+        raise ValueError(f"The selected X-axis '{x_name}' (dimension '{x_dim}') is not present in any of the selected Y-axis variables. No data could be plotted. Please change the X-axis.")
     
     # -------- Styling --------
     
@@ -1207,6 +1239,7 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
         ax.set_ylim(labels["y_limits"])
     ax.set_title(title)
     ax.grid(True, linestyle='--', alpha=0.5)
+    ax.tick_params(axis="x", bottom=True, top=True, labelbottom=True, labeltop=False)
 
     # ── Threshold lines (Curseurs) ──
     h_color = labels.get("thresh_color", "red")
@@ -1220,6 +1253,7 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
 
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
     plt.subplots_adjust(bottom=0.3)
+    fig.autofmt_xdate()
     
     return fig
 

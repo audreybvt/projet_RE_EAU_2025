@@ -919,6 +919,7 @@ def period_grouping(ds, var_name_gui=None, periods_gui=None, time_dim_gui=None):
     period_names = []
     mean_values = []
     max_len = 0
+    longest_time_coords = None
 
     for entry in periods_gui:
         p_name, p_start, p_end = entry
@@ -928,7 +929,10 @@ def period_grouping(ds, var_name_gui=None, periods_gui=None, time_dim_gui=None):
         period_das.append(da_p)
         period_names.append(str(p_name))
         mean_values.append(float(da_p.mean(skipna=True).values))
-        max_len = max(max_len, da_p.sizes[time_dim])
+        
+        if da_p.sizes[time_dim] > max_len:
+            max_len = da_p.sizes[time_dim]
+            longest_time_coords = da_p[time_dim].values
 
     # --- Mean per period variable (1 value per period) ---
     mean_da = xr.DataArray(
@@ -956,16 +960,20 @@ def period_grouping(ds, var_name_gui=None, periods_gui=None, time_dim_gui=None):
     stacked = np.stack(padded_arrays, axis=0)  # (n_periods, max_len, ...)
     extra_dims = [d for d in active_da.dims if d != time_dim]
     dims_result = ['period', 'time_in_period'] + extra_dims
+    
+    # If standard pandas/numpy datetime, extract it, else fallback to arange
+    time_coords_to_use = longest_time_coords if longest_time_coords is not None else np.arange(max_len)
+
     coords_result = {
         'period': period_names,
-        'time_in_period': np.arange(max_len)
+        'time_in_period': time_coords_to_use
     }
 
     series_da = xr.DataArray(
         data=stacked,
         dims=dims_result,
         coords=coords_result,
-        attrs={'description': f"'{var_name}' split by named periods {period_names}. 'time_in_period' = relative step index."}
+        attrs={'description': f"'{var_name}' split by named periods {period_names}. 'time_in_period' uses dates from the longest period as a common time frame."}
     )
     series_var_name = f"{var_name}_by_period"
     ds[series_var_name] = series_da
