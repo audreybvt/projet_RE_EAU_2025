@@ -1,8 +1,22 @@
 # Hydrological Indicators Calculation Functions
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 # ---------------- Set Up Functions ----------------
+
+def _get_unique_var_name(ds, base_name):
+    """
+    Checks if a variable name already exists in the dataset. 
+    If it does, appends _2, _3, etc. to make it unique.
+    """
+    if base_name not in ds.data_vars:
+        return base_name
+    
+    i = 2
+    while f"{base_name}_{i}" in ds.data_vars:
+        i += 1
+    return f"{base_name}_{i}"
 
 def categorical_filter(ds, standard_dims, filter_choice_gui=None, dict_filters_gui=None):
     """
@@ -314,12 +328,14 @@ def SPLI(ds):
 # ---------------- Qmean/QA ----------------
 #   Mean discharge over a chosen period
 
-def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
+def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None, start_gui=None, end_gui=None):
     """
     Return the mean flow rate (Qmean) for a chosen period.
 
     Args:
         ds: Input xarray Dataset.
+        start_gui: Optional start date string (YYYY-MM-DD) for temporal filtering.
+        end_gui: Optional end date string (YYYY-MM-DD) for temporal filtering.
     Returns:
         ds: Original dataset with added resampled time coordinate and mean discharge variable.
     """
@@ -346,6 +362,15 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
             except (ValueError, IndexError):
                 print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
+    # ── Temporal Filtering ──
+    if start_gui or end_gui:
+        import pandas as pd
+        start_ts = pd.to_datetime(start_gui) if start_gui else None
+        end_ts   = pd.to_datetime(end_gui)   if end_gui   else None
+        if time_coord in active_ds.dims:
+            active_ds = active_ds.sel({time_coord: slice(start_ts, end_ts)})
+            selections_made.append(f"Period: {start_ts.date() if start_ts else 'start'} → {end_ts.date() if end_ts else 'end'}")
+
     # Discharge variable selection
     if var_q_gui is not None:
         var_q = var_q_gui
@@ -368,7 +393,7 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
 
     # Calculation
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
-    new_var_name = f"Qmean_{nb}{unite}_{var_q}"
+    new_var_name = _get_unique_var_name(ds, f"Qmean_{nb}{unite}_{var_q}")
 
     try:
         print("Calculation Phase")
@@ -423,22 +448,14 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
 # ---------------- Q90/Q95 ----------------
 #   High-flow Indicators (flow exceeded only 10% or 5% of the time)
 
-def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
+def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None, start_gui=None, end_gui=None):
     """
     Return the flow rates exceeded 90% and 95% of the time for a chosen period (xarray version).
-
-    Args:
-        ds: Input xarray Dataset.
-    Returns:
-        ds: Original dataset with added resampled time coordinate and Q90/Q95 variables.
     """
 
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
-    
-    # Categorical Filtering (reusing your existing helper)
     active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
-    # Time coordinate selection
     if time_coord_gui is not None:
         time_coord = time_coord_gui
     else:
@@ -446,7 +463,6 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         print("\nAvailable coordinates for time:")
         for i, coord in enumerate(coords_list):
             print(f" [{i}] {coord}")
-        
         while True:
             try:
                 idx_t = int(input("Index of Date/Time coordinate: ").strip())
@@ -455,7 +471,15 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
             except (ValueError, IndexError):
                 print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
-    # Discharge variable selection
+    # ── Temporal Filtering ──
+    if start_gui or end_gui:
+        import pandas as pd
+        start_ts = pd.to_datetime(start_gui) if start_gui else None
+        end_ts   = pd.to_datetime(end_gui)   if end_gui   else None
+        if time_coord in active_ds.dims:
+            active_ds = active_ds.sel({time_coord: slice(start_ts, end_ts)})
+            selections_made.append(f"Period: {start_ts.date() if start_ts else 'start'} → {end_ts.date() if end_ts else 'end'}")
+
     if var_q_gui is not None:
         var_q = var_q_gui
     else:
@@ -463,7 +487,6 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         print("\nAvailable variables (for Discharge):")
         for i, var in enumerate(vars_list):
             print(f" [{i}] {var}")
-        
         while True:
             try:
                 idx_q = int(input("Index of Discharge variable (Q): ").strip())
@@ -472,19 +495,14 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
             except (ValueError, IndexError):
                 print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
-    # Time config (reusing your get_time_freq function)
     frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
-    # Naming configuration
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
-    new_var_q90 = f"Q90_{nb}{unite}_{var_q}"
-    new_var_q95 = f"Q95_{nb}{unite}_{var_q}"
+    new_var_q90 = _get_unique_var_name(ds, f"Q90_{nb}{unite}_{var_q}")
+    new_var_q95 = _get_unique_var_name(ds, f"Q95_{nb}{unite}_{var_q}")
 
     try:
         print("Calculation Phase (Quantiles)")
-        # Note: Q90 is the 0.10 quantile (flow exceeded 90% of the time)
-        # Note: Q95 is the 0.05 quantile (flow exceeded 95% of the time)
-        
         resampled_group = active_ds[var_q].resample({time_coord: frequence})
         
         # Calculate Q90
@@ -545,22 +563,14 @@ def Q90_95(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
 # ---------------- VCN10 ----------------
 #   Minimum 10-day consecutive mean flow
 
-def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
+def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None, start_gui=None, end_gui=None):
     """
     Return the minimum 10-day consecutive mean flow (VCN10) for a chosen period (xarray version).
-
-    Args:
-        ds: Input xarray Dataset.
-    Returns:
-        ds: Original dataset with added resampled time coordinate and VCN10 variable.
     """
 
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
-    
-    # Categorical Filtering (reusing your existing helper)
     active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
-    # Time coordinate selection
     if time_coord_gui is not None:
         time_coord = time_coord_gui
     else:
@@ -568,7 +578,6 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
         print("\nAvailable coordinates for time:")
         for i, coord in enumerate(coords_list):
             print(f" [{i}] {coord}")
-        
         while True:
             try:
                 idx_t = int(input("Index of Date/Time coordinate: ").strip())
@@ -577,7 +586,15 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
             except (ValueError, IndexError):
                 print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
-    # Discharge variable selection
+    # ── Temporal Filtering ──
+    if start_gui or end_gui:
+        import pandas as pd
+        start_ts = pd.to_datetime(start_gui) if start_gui else None
+        end_ts   = pd.to_datetime(end_gui)   if end_gui   else None
+        if time_coord in active_ds.dims:
+            active_ds = active_ds.sel({time_coord: slice(start_ts, end_ts)})
+            selections_made.append(f"Period: {start_ts.date() if start_ts else 'start'} → {end_ts.date() if end_ts else 'end'}")
+
     if var_q_gui is not None:
         var_q = var_q_gui
     else:
@@ -585,7 +602,6 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
         print("\nAvailable variables (for Discharge):")
         for i, var in enumerate(vars_list):
             print(f" [{i}] {var}")
-        
         while True:
             try:
                 idx_q = int(input("Index of Discharge variable (Q): ").strip())
@@ -594,18 +610,13 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
             except (ValueError, IndexError):
                 print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
-    # Time config (reusing your get_time_freq function)
     frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
-    # Naming configuration
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
-    new_var_name = f"VCN10_{nb}{unite}_{var_q}"
+    new_var_name = _get_unique_var_name(ds, f"VCN10_{nb}{unite}_{var_q}")
 
     try:
         print(f"Calculation Phase: Finding 10-day minimum mean within every {nb} {label_unite}...")
-        
-        # 1. Calculate the 10-day rolling mean
-        # We assume the time step of the data is daily for VCN10 to make sense
         rolling_10d = active_ds[var_q].rolling({time_coord: 10}, center=False).mean()
 
         # 2. Resample to find the minimum of those 10-day means over the period
@@ -660,22 +671,14 @@ def VCN10(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
 # ---------------- Q10/Q05 ----------------
 #   Low flow indicators (flow exceeded only 10% or 5% of the time)
 
-def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
+def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None, start_gui=None, end_gui=None):
     """
     Return the flow rates exceeded 10% and 5% of the time for a chosen period (xarray version).
-
-    Args:
-        ds: Input xarray Dataset.
-    Returns:
-        ds: Original dataset with added resampled time coordinate and Q10/Q05 variables.
     """
 
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
-    
-    # Categorical Filtering
     active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
-    # Time coordinate selection
     if time_coord_gui is not None:
         time_coord = time_coord_gui
     else:
@@ -683,7 +686,6 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         print("\nAvailable coordinates for time:")
         for i, coord in enumerate(coords_list):
             print(f" [{i}] {coord}")
-        
         while True:
             try:
                 idx_t = int(input("Index of Date/Time coordinate: ").strip())
@@ -692,7 +694,15 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
             except (ValueError, IndexError):
                 print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
-    # Discharge variable selection
+    # ── Temporal Filtering ──
+    if start_gui or end_gui:
+        import pandas as pd
+        start_ts = pd.to_datetime(start_gui) if start_gui else None
+        end_ts   = pd.to_datetime(end_gui)   if end_gui   else None
+        if time_coord in active_ds.dims:
+            active_ds = active_ds.sel({time_coord: slice(start_ts, end_ts)})
+            selections_made.append(f"Period: {start_ts.date() if start_ts else 'start'} → {end_ts.date() if end_ts else 'end'}")
+
     if var_q_gui is not None:
         var_q = var_q_gui
     else:
@@ -700,7 +710,6 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
         print("\nAvailable variables (for Discharge):")
         for i, var in enumerate(vars_list):
             print(f" [{i}] {var}")
-        
         while True:
             try:
                 idx_q = int(input("Index of Discharge variable (Q): ").strip())
@@ -709,19 +718,14 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
             except (ValueError, IndexError):
                 print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
-    # Time config
     frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
-    # Naming configuration
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
-    new_var_q10 = f"Q10_{nb}{unite}_{var_q}"
-    new_var_q05 = f"Q05_{nb}{unite}_{var_q}"
+    new_var_q10 = _get_unique_var_name(ds, f"Q10_{nb}{unite}_{var_q}")
+    new_var_q05 = _get_unique_var_name(ds, f"Q05_{nb}{unite}_{var_q}")
 
     try:
         print("Calculation Phase (High-flow Quantiles)")
-        # Note: Q10 is the 0.90 quantile (flow exceeded 10% of the time)
-        # Note: Q05 is the 0.95 quantile (flow exceeded 5% of the time)
-        
         resampled_group = active_ds[var_q].resample({time_coord: frequence})
         
         # Calculate Q10 (0.90 quantile)
@@ -781,22 +785,14 @@ def Q10_05(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite
 # ---------------- VCX3 ----------------
 #   Maximum 3-day consecutive mean flow
 
-def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None):
+def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None, start_gui=None, end_gui=None):
     """
     Return the maximum 3-day consecutive mean flow (VCX3) for a chosen period (xarray version).
-
-    Args:
-        ds: Input xarray Dataset.
-    Returns:
-        ds: Original dataset with added resampled time coordinate and VCX3 variable.
     """
 
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
-    
-    # Categorical Filtering
     active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
-    # Time coordinate selection
     if time_coord_gui is not None:
         time_coord = time_coord_gui
     else:
@@ -804,7 +800,6 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
         print("\nAvailable coordinates for time:")
         for i, coord in enumerate(coords_list):
             print(f" [{i}] {coord}")
-        
         while True:
             try:
                 idx_t = int(input("Index of Date/Time coordinate: ").strip())
@@ -813,7 +808,15 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
             except (ValueError, IndexError):
                 print(f"Invalid index. Please choose a number between 0 and {len(coords_list)-1}.")
 
-    # Discharge variable selection
+    # ── Temporal Filtering ──
+    if start_gui or end_gui:
+        import pandas as pd
+        start_ts = pd.to_datetime(start_gui) if start_gui else None
+        end_ts   = pd.to_datetime(end_gui)   if end_gui   else None
+        if time_coord in active_ds.dims:
+            active_ds = active_ds.sel({time_coord: slice(start_ts, end_ts)})
+            selections_made.append(f"Period: {start_ts.date() if start_ts else 'start'} → {end_ts.date() if end_ts else 'end'}")
+
     if var_q_gui is not None:
         var_q = var_q_gui
     else:
@@ -821,7 +824,6 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
         print("\nAvailable variables (for Discharge):")
         for i, var in enumerate(vars_list):
             print(f" [{i}] {var}")
-        
         while True:
             try:
                 idx_q = int(input("Index of Discharge variable (Q): ").strip())
@@ -830,18 +832,13 @@ def VCX3(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_g
             except (ValueError, IndexError):
                 print(f"Invalid index. Please choose a number between 0 and {len(vars_list)-1}.")
 
-    # Time config
     frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
 
-    # Naming configuration
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
-    new_var_name = f"VCX3_{nb}{unite}_{var_q}"
+    new_var_name = _get_unique_var_name(ds, f"VCX3_{nb}{unite}_{var_q}")
 
     try:
         print(f"Calculation Phase: Finding 3-day maximum mean within every {nb} {label_unite}...")
-        
-        # 1. Calculate the 3-day rolling mean
-        # We assume daily data. center=False ensures we look at the previous 3 days.
         rolling_3d = active_ds[var_q].rolling({time_coord: 3}, center=False).mean()
 
         # 2. Resample to find the MAXIMUM of those 3-day means over the period
@@ -918,14 +915,16 @@ def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=Non
     # Categorical Filtering
     active_ds, selections_made = categorical_filter(ds, standard_dims, dict_filters_gui=dict_filters_gui)
 
+    # Detect the appropriate time-like dimension
+    t_coord = time_coord_gui or next((d for d in active_ds.dims if 'time' in str(d).lower() or str(d).lower() == 'date'), 'time')
+
     # Time Filtering (Period selection)
-    t_coord = time_coord_gui or 'time'
     if (start_gui or end_gui) and t_coord in active_ds.dims:
         try:
             start_val = pd.to_datetime(start_gui) if start_gui else active_ds[t_coord].min().values
             end_val   = pd.to_datetime(end_gui)   if end_gui   else active_ds[t_coord].max().values
             active_ds = active_ds.sel({t_coord: slice(start_val, end_val)})
-            print(f"-> Period filtering applied: {start_val.date()} to {end_val.date()}")
+            print(f"-> Period filtering applied: {start_val} to {end_val}")
         except Exception as e:
             print(f"-> Warning: Period filtering failed: {e}")
 
@@ -970,9 +969,9 @@ def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=Non
 
     # ── Variable Naming Configuration ──
     # Using explicit English names to avoid confusion between 'count' and 'series'.
-    mag_var_name = f"POT_magnitude_{var_name}_{str(threshold).replace('.','_')}"
-    dev_var_name = f"POT_deviation_{var_name}_{str(threshold).replace('.','_')}"
-    count_var_name = f"Exceedance_Count_{var_name}_{str(threshold).replace('.','_')}"
+    mag_var_name = _get_unique_var_name(ds, f"POT_magnitude_{var_name}_{str(threshold).replace('.','_')}")
+    dev_var_name = _get_unique_var_name(ds, f"POT_deviation_{var_name}_{str(threshold).replace('.','_')}")
+    count_var_name = _get_unique_var_name(ds, f"Exceedance_Count_{var_name}_{str(threshold).replace('.','_')}")
 
     effective_threshold = threshold * (1 + tolerance / 100)
     print(f"Effective threshold used: {effective_threshold:.3f}")
@@ -995,8 +994,7 @@ def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=Non
     added_vars = [mag_var_name, dev_var_name]
     
     try:
-        t_coord = time_coord_gui or 'time'
-        if unite_gui:
+        if unite_gui and t_coord in active_ds.dims:
             frequence, unite, nb, label_unite = get_time_freq(unite_gui, nb_gui)
             new_time_dim = f"{t_coord}_{nb}{unite}_Group"
             
@@ -1066,6 +1064,6 @@ def over_threshold(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=Non
     else:
         print("No exceedance episodes detected.")
 
-    print(f"New variables added: '{new_var_magnitude}' and optionally '{new_var_name}'")
+    print(f"New variables added: {added_vars}")
     
     return ds

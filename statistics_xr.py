@@ -8,15 +8,36 @@ import calendar
 from utils_xr import show_info
 
 # ---------------- Helping Functions ----------------
+
+def _get_unique_var_name(ds, base_name):
+    """
+    Checks if a variable name already exists in the dataset. 
+    If it does, appends _2, _3, etc. to make it unique.
+    """
+    if base_name not in ds.data_vars:
+        return base_name
+    
+    i = 2
+    while f"{base_name}_{i}" in ds.data_vars:
+        i += 1
+    return f"{base_name}_{i}"
+
 #   Function to ask for a date with error handling and support for multiple formats
 def ask_date(ds, start_input_gui=None, end_input_gui=None, log_func=None, is_gui=False):
     """
     Ask the user for a start and end date within the dataset time range.
     Returns (start_date, end_date) as pandas Timestamp or None.
     """
-    time_values = pd.to_datetime(ds["time"].values)
-    min_date = time_values.min()
-    max_date = time_values.max()
+    # Resolve the 'time' variable name (usually 'time', sometimes something else)
+    t_coord = next((c for c in ds.coords if "time" in str(c).lower() or str(c).lower() == "date"), "time")
+    
+    if t_coord in ds.coords:
+        time_values = pd.to_datetime(ds[t_coord].values)
+        min_date = time_values.min()
+        max_date = time_values.max()
+    else:
+        # Fallback if no time coordinate found
+        return pd.to_datetime(start_input_gui) if start_input_gui else None, pd.to_datetime(end_input_gui) if end_input_gui else None
 
     # GUI mode: bypass all input() calls
     if is_gui or start_input_gui is not None or end_input_gui is not None:
@@ -72,14 +93,17 @@ def apply_time_selection(ds, active_da, dims_to_reduce, start_input_gui=None, en
 
     period_label = ""
 
-    # Detect time dimension among the ones we plan to reduce
-    time_dims = [d for d in dims_to_reduce if "time" in d]
+    # Detect time-like dimension among the ones we plan to reduce
+    # Prioritize 'time', then any dimension containing 'time' or 'date'
+    t_dim = None
+    if "time" in dims_to_reduce:
+        t_dim = "time"
+    else:
+        t_dim = next((d for d in dims_to_reduce if "time" in str(d).lower() or str(d).lower() == "date"), None)
 
-    # No time dimension → nothing to do
-    if not time_dims:
+    # No time dimension found in reduce list → nothing to do
+    if not t_dim:
         return active_da, ""
-
-    t_dim = time_dims[0]
 
     # GUI mode: bypass all input() calls - handles None dates (= full range)
     if is_gui or start_input_gui is not None or end_input_gui is not None:
@@ -201,7 +225,7 @@ def mean_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_in
     # Variable naming
     # Create a suffix based on the reduced dimensions
     dims_suffix = "_mean_on_" + "_".join(dims_to_reduce)
-    new_var_name = f"{var_name}{dims_suffix}{period_label}"
+    new_var_name = _get_unique_var_name(ds, f"{var_name}{dims_suffix}{period_label}")
 
     # Add to Dataset
     # Direct assignment: do NOT use xr.where here because when reducing 
@@ -301,7 +325,7 @@ def maximum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
 
     # Variable naming
     dims_suffix = "_max_on_" + "_".join(dims_to_reduce)
-    new_var_name = f"max_{var_name}{dims_suffix}{period_label}"
+    new_var_name = _get_unique_var_name(ds, f"max_{var_name}{dims_suffix}{period_label}")
 
     # Add to Dataset
     if 'time' in dims_to_reduce and 'time' in ds.dims:
@@ -400,7 +424,7 @@ def minimum_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start
 
     # Variable naming
     dims_suffix = "_min_on_" + "_".join(dims_to_reduce)
-    new_var_name = f"min_{var_name}{dims_suffix}{period_label}"
+    new_var_name = _get_unique_var_name(ds, f"min_{var_name}{dims_suffix}{period_label}")
 
     # Add to Dataset
     if 'time' in dims_to_reduce and 'time' in ds.dims:
@@ -498,7 +522,7 @@ def median_value_flexible(ds, var_name_gui=None, dims_to_reduce_gui=None, start_
 
     # Variable naming
     dims_suffix = "_median_on_" + "_".join(dims_to_reduce)
-    new_var_name = f"median_{var_name}{dims_suffix}{period_label}"
+    new_var_name = _get_unique_var_name(ds, f"median_{var_name}{dims_suffix}{period_label}")
 
     # Add to Dataset
     if 'time' in dims_to_reduce and 'time' in ds.dims:
@@ -613,7 +637,7 @@ def percentile_value_flexible(ds, var_name_gui=None, q_gui=None, dims_to_reduce_
 
     # Variable naming
     dims_suffix = f"_perc{int(q*100)}_on_" + "_".join(dims_to_reduce)
-    new_var_name = f"perc{int(q*100)}_{var_name}{dims_suffix}{period_label}"
+    new_var_name = _get_unique_var_name(ds, f"perc{int(q*100)}_{var_name}{dims_suffix}{period_label}")
 
     # Add to Dataset
     if 'time' in dims_to_reduce and 'time' in ds.dims:
@@ -673,25 +697,30 @@ def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=N
 
     active_da = ds[var_name]
 
-    # Handling of time period
+    # Handling of time period (detect temporal dimension)
     period_label = ""
+    t_dim = next((d for d in active_da.dims if "time" in str(d).lower() or str(d).lower() == "date"), "time")
     
-    if "time" in active_da.dims:
+    if t_dim in active_da.dims:
         if not is_gui:
-            print("\n--- Period configuration for the rolling mean ---")
+            print(f"\n--- Period configuration for the rolling mean (dim: {t_dim}) ---")
 
         while True:
 
             start_date, end_date = ask_date(ds, start_input_gui, end_input_gui, is_gui=is_gui)
 
             if start_date or end_date:
-                temp_da = active_da.sel(time=slice(start_date, end_date))
+                try:
+                    temp_da = active_da.sel({t_dim: slice(start_date, end_date)})
+                except Exception:
+                    # In case of dimension name mismatch in slicing
+                    temp_da = active_da
             else:
                 temp_da = active_da
 
             # verify that data exists
-            if temp_da.time.size == 0:
-                print("No data available in this time range. Please choose another period.")
+            if t_dim in temp_da.dims and temp_da[t_dim].size == 0:
+                print(f"No data available in this range for '{t_dim}'. Please choose another period.")
                 if is_gui:
                     break  # Break if using GUI because we cannot prompt again
                 continue
@@ -721,11 +750,11 @@ def rolling_mean_value(ds, var_name_gui=None, window_gui=None, start_input_gui=N
 
     # Rolling mean calculation
     if not is_gui:
-        print(f"\nCalculating rolling mean (window={window}) along 'time' dimension...")
-    rolling_val = active_da.rolling(time=window, center=True, min_periods=1).mean()
+        print(f"\nCalculating rolling mean (window={window}) along '{t_dim}' dimension...")
+    rolling_val = active_da.rolling({t_dim: window}, center=True, min_periods=1).mean()
 
     # Variable naming
-    new_var_name = f"rolling_mean_{var_name}_w{window}{period_label}"
+    new_var_name = _get_unique_var_name(ds, f"rolling_mean_{var_name}_w{window}{period_label}")
 
     # Add to Dataset
     ds[new_var_name] = rolling_val
@@ -818,9 +847,7 @@ def monthly_interannual_average_xr(ds, var_name_gui=None, time_dim_gui=None):
     monthly_stats = monthly_stats.assign_coords(month=month_names)
 
     # Variable naming
-    base_name = f"interannual_month_{var_name}"
-    occurrence = sum(1 for v in ds.data_vars if v.startswith(base_name)) + 1
-    new_var_name = f"{base_name}_{occurrence}"
+    new_var_name = _get_unique_var_name(ds, f"interannual_month_{var_name}")
 
     # Add to Dataset
     ds[new_var_name] = monthly_stats
@@ -941,7 +968,7 @@ def period_grouping(ds, var_name_gui=None, periods_gui=None, time_dim_gui=None):
         coords={'period': period_names},
         attrs={'description': f"Mean of '{var_name}' per defined period. Use 'period' as X-axis for bar chart comparisons."}
     )
-    mean_var_name = f"{var_name}_period_mean"
+    mean_var_name = _get_unique_var_name(ds, f"{var_name}_period_mean")
     ds[mean_var_name] = mean_da
 
     # --- Padded time series variable (same length per period) ---
@@ -973,9 +1000,12 @@ def period_grouping(ds, var_name_gui=None, periods_gui=None, time_dim_gui=None):
         data=stacked,
         dims=dims_result,
         coords=coords_result,
-        attrs={'description': f"'{var_name}' split by named periods {period_names}. 'time_in_period' uses dates from the longest period as a common time frame."}
+        attrs={
+            'description': f"'{var_name}' split by named periods {period_names}. 'time_in_period' uses dates from the longest period as a common time frame.",
+            'period_dates': {p: pd.to_datetime(da_p[time_dim].values).tolist() for p, da_p in zip(period_names, period_das)}
+        }
     )
-    series_var_name = f"{var_name}_by_period"
+    series_var_name = _get_unique_var_name(ds, f"{var_name}_by_period")
     ds[series_var_name] = series_da
 
     # --- Summary ---

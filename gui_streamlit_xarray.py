@@ -1063,6 +1063,8 @@ with tab_ind:
                     var_q_gui=var_q,
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
+                    start_gui=start_gui_ind,
+                    end_gui=end_gui_ind,
                 )
             elif indicator == "Q90/95":
                 ds_work = ind.Q90_95(
@@ -1072,6 +1074,8 @@ with tab_ind:
                     var_q_gui=var_q,
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
+                    start_gui=start_gui_ind,
+                    end_gui=end_gui_ind,
                 )
             elif indicator == "Q10/05":
                 ds_work = ind.Q10_05(
@@ -1081,6 +1085,8 @@ with tab_ind:
                     var_q_gui=var_q,
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
+                    start_gui=start_gui_ind,
+                    end_gui=end_gui_ind,
                 )
             elif indicator == "VCN10":
                 ds_work = ind.VCN10(
@@ -1090,6 +1096,8 @@ with tab_ind:
                     var_q_gui=var_q,
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
+                    start_gui=start_gui_ind,
+                    end_gui=end_gui_ind,
                 )
             elif indicator == "VCX3":
                 ds_work = ind.VCX3(
@@ -1099,6 +1107,8 @@ with tab_ind:
                     var_q_gui=var_q,
                     unite_gui=unite_gui_val,
                     nb_gui=int(nb_gui_val),
+                    start_gui=start_gui_ind,
+                    end_gui=end_gui_ind,
                 )
             elif indicator == "Standardised Piezometric Level Indicator":
                 st.warning("SPLI is not yet implemented in the calculation engine.")
@@ -1253,8 +1263,9 @@ with tab_viz:
         var_x = col_v1.selectbox("X Axis (abscissa)", vars_viz, key="viz_x")
         
         if chart_type == "Scatter plot":
-            var_y = col_v2.selectbox("Y Axis (ordinate)", vars_viz, key="viz_y")
-            plot_vars_ui = [var_x, var_y]
+            var_y = col_v2.selectbox("Main Y Axis (ordinate)", ds_vars(), key="viz_y")
+            vars_extra_y = st.multiselect("Additional Y variables (optional)", ds_vars(), key="viz_extra_y")
+            plot_vars_ui = [var_x, var_y] + (vars_extra_y or [])
         elif chart_type == "Histogram":
             var_main = col_v2.selectbox("Variable to analyze", ds_vars(), key="viz_main")
             plot_vars_ui = [var_main]
@@ -1600,10 +1611,11 @@ with tab_viz:
                 )
 
             elif chart_type == "Scatter plot":
+                plot_vars_y = [var_y] + (vars_extra_y or [])
                 fig = viz.scatter_chart(
                     ds_plot,
                     x_name_gui=var_x,
-                    y_names_gui=[var_y],
+                    y_names_gui=plot_vars_y,
                     start_gui=start_viz,
                     end_gui=end_viz,
                     plot_config_gui=gui_config,

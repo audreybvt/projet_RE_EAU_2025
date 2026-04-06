@@ -655,7 +655,12 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
     # ----------------------
     # Sort setup
     # ----------------------
-    x_str_array = pd.Series([str(v) for v in x_vals])
+    
+    # Smart string representation for X axis (if dates, remove the '00:00:00' part)
+    if np.issubdtype(np.array(x_vals).dtype, np.datetime64) or pd.api.types.is_datetime64_any_dtype(x_vals):
+        x_str_array = pd.Series(pd.to_datetime(x_vals)).dt.strftime('%Y-%m-%d')
+    else:
+        x_str_array = pd.Series([str(v) for v in x_vals])
     sort_key = get_sort_key_for_category(x_str_array)
     if sort_key:
         categorical = apply_categorical_sort(x_str_array, sort_key)
@@ -736,7 +741,27 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
 
         offset = (i - (n_series - 1)/2) * width if n_series > 1 else 0
         bar_positions = x_base + offset
-        ax.bar(bar_positions, y_sorted, width=width, label=label, color=colors[i % len(colors)])
+        
+        # Biphasic coloring: if data has both positive and negative values,
+        # color positive bars and negative bars differently for better readability
+        has_positive = np.any(y_sorted[np.isfinite(y_sorted)] > 0) if np.any(np.isfinite(y_sorted)) else False
+        has_negative = np.any(y_sorted[np.isfinite(y_sorted)] < 0) if np.any(np.isfinite(y_sorted)) else False
+        is_biphasic = has_positive and has_negative
+        
+        if is_biphasic and n_series == 1:
+            # Color each bar individually: blue for positive, coral for negative
+            bar_colors = np.where(y_sorted >= 0, '#4dabf7', '#ff6b6b')
+            ax.bar(bar_positions, y_sorted, width=width, color=bar_colors)
+            # Add a zero line for reference
+            ax.axhline(0, color='black', linewidth=0.8, zorder=3)
+            # Manual legend for biphasic
+            from matplotlib.patches import Patch
+            ax.legend(handles=[
+                Patch(facecolor='#4dabf7', label=f'{label} (above threshold)'),
+                Patch(facecolor='#ff6b6b', label=f'{label} (below threshold)')
+            ], loc='upper center', bbox_to_anchor=(0.5, -0.3), ncol=2, frameon=False)
+        else:
+            ax.bar(bar_positions, y_sorted, width=width, label=label, color=colors[i % len(colors)])
 
         # ── Error bars (envelope) on each bar series ──
         if _env_min is not None and _env_max is not None:
@@ -773,8 +798,12 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
             ax.axvline(float(val), color=v_color, linestyle=t_style, linewidth=1.5, alpha=0.8, zorder=5)
         except: pass
 
-    if n_series > 1: ax.legend()
+    if n_series > 1: 
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.3), ncol=min(n_series, 2), frameon=False)
+    
+    # Adjust layout to leave space for the legend at the bottom
     plt.tight_layout()
+    fig.subplots_adjust(bottom=0.25)
 
     return fig
 
@@ -1002,8 +1031,49 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
     if not plotted_anything:
         raise ValueError(f"The selected X-axis '{x_name}' is not present in the variables ({', '.join(y_names)}). No data could be plotted. Please change the X-axis. You may have several date variable. For example, for period-grouped variables, usually select 'time_in_period'.")
 
+    # -------- Dual Axis Logic (P1 vs P2) --------
+    if x_name == "time_in_period":
+        # Check if we have multiple periods plotted for a single variable
+        # We look into the last plotted DataArray's attributes
+        try:
+            # We assume for simplicity that the user is comparing exactly 2 periods
+            # Find the split dimension 'period'
+            all_selections = []
+            if 'results' in locals(): # From the second branch
+                all_selections = [r[0] for r in results]
+            elif 'results_plot' in locals(): # From the envelope branch
+                all_selections = [r[0] for r in results_plot]
+            
+            periods_present = [sel['period'] for sel in all_selections if 'period' in sel]
+            
+            if len(periods_present) == 2:
+                p1_name, p2_name = periods_present[0], periods_present[1]
+                # Try to get the original dates from attributes
+                # Note: 'da' is the DataArray from the loop
+                period_dates = da.attrs.get('period_dates', {})
+                if period_dates and p1_name in period_dates and p2_name in period_dates:
+                    dates_p2 = pd.to_datetime(period_dates[p2_name])
+                    
+                    # Create twin axis at the top
+                    ax_top = ax.twiny()
+                    # Align the top axis with the same number of steps as the bottom one
+                    ax_top.set_xlim(ax.get_xlim())
+                    
+                    # Set ticks and labels for the top axis (Future period)
+                    # We pick a subset of labels to avoid overcrowding
+                    n_ticks = 5
+                    indices = np.linspace(0, len(dates_p2)-1, n_ticks, dtype=int)
+                    ax_top.set_xticks(ax.get_xticks()[indices] if len(ax.get_xticks()) > indices[-1] else indices)
+                    ax_top.set_xticklabels([d.strftime('%Y') for d in dates_p2[indices]], color='orange', fontweight='bold')
+                    ax_top.set_xlabel(f"Dates for {p2_name}", color='orange', fontweight='bold')
+                    
+                    # Format bottom axis label for P1
+                    ax.set_xlabel(f"Dates for {p1_name}", color='tab:blue', fontweight='bold')
+                    for t in ax.get_xticklabels(): t.set_color('tab:blue')
+        except Exception as e:
+            print(f"Dual axis logic skipped: {e}")
+
     # Plot individual line
-    ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title)
     if labels.get("x_limits") is not None:
@@ -1229,9 +1299,30 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     if not plotted_anything:
         raise ValueError(f"The selected X-axis '{x_name}' (dimension '{x_dim}') is not present in any of the selected Y-axis variables. No data could be plotted. Please change the X-axis.")
     
+    # -------- Dual Axis Logic (P1 vs P2) --------
+    if x_name == "time_in_period":
+        try:
+            # Re-detect periods in current plot
+            periods_present = [sel['period'] for sel, _ in results if 'period' in sel]
+            if len(periods_present) == 2:
+                p1_name, p2_name = periods_present[0], periods_present[1]
+                period_dates = da.attrs.get('period_dates', {})
+                if period_dates and p1_name in period_dates and p2_name in period_dates:
+                    dates_p2 = pd.to_datetime(period_dates[p2_name])
+                    ax_top = ax.twiny()
+                    ax_top.set_xlim(ax.get_xlim())
+                    n_ticks = 5
+                    indices = np.linspace(0, len(dates_p2)-1, n_ticks, dtype=int)
+                    ax_top.set_xticks(ax.get_xticks()[indices] if len(ax.get_xticks()) > indices[-1] else indices)
+                    ax_top.set_xticklabels([d.strftime('%Y') for d in dates_p2[indices]], color='orange', fontweight='bold')
+                    ax_top.set_xlabel(f"Dates for {p2_name}", color='orange', fontweight='bold')
+                    ax.set_xlabel(f"Dates for {p1_name}", color='tab:blue', fontweight='bold')
+                    for t in ax.get_xticklabels(): t.set_color('tab:blue')
+        except Exception as e:
+            print(f"Dual axis logic skipped: {e}")
+
     # -------- Styling --------
     
-    ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     if labels.get("x_limits") is not None:
         ax.set_xlim(labels["x_limits"])
@@ -1251,8 +1342,9 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     for val in labels.get("v_lines", []):
         ax.axvline(float(val), color=v_color, linestyle=t_style, linewidth=1.5, alpha=0.8, zorder=5)
 
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15))
-    plt.subplots_adjust(bottom=0.3)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.3), ncol=min(i_color, 2), frameon=False)
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.25)
     fig.autofmt_xdate()
     
     return fig
@@ -1464,100 +1556,96 @@ def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=
         ds_period = subset_time(ds, start_date, end_date)
         period_text = format_period_text(start_date, end_date)
 
-    # -------- Figure --------
-    fig, ax = plt.subplots(figsize=(10, 6))
-
-    # --- Split the variable into series based on categorical dimensions ---
-    da = ds_period[col_name]
-
-    # Identify categorical (non-time) dimensions that have multiple values
-    standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y', 'station', 'piezometre']
-    time_dims = [d for d in da.dims if 'time' in d.lower() or d in standard_dims]
-
-    # Build results: each entry is (label_dict, flat_data)
-    # We split by any categorical dim that was filtered OR that has > 1 value
-    if dim_selections_gui:
-        # Use the provided filters to generate separate series
-        results = handle_xarray_dimensions(
-            da,
-            main_dims=time_dims,
-            dim_selections_gui=dim_selections_gui if dim_selections_gui else {},
-            auto_mean_gui=False  # Don't auto-mean; we want separate series
-        )
-    else:
-        # No filters: single series
-        results = [({}, da)]
-
-    # Determine global bin range so all series share the same bins
-    all_vals_for_range = []
-    for _, da_sel in results:
-        v = da_sel.values.ravel().astype(float)
-        v = v[np.isfinite(v)]
-        if len(v) > 0:
-            all_vals_for_range.extend(v.tolist())
-
-    if not all_vals_for_range:
-        ax.set_title(f"Histogram of {col_name}{period_text}")
-        ax.text(0.5, 0.5, "No finite data to display", ha='center', va='center', transform=ax.transAxes)
-        return fig
-
-    global_min = float(np.min(all_vals_for_range))
-    global_max = float(np.max(all_vals_for_range))
-
-    # --- Configuration labels/title ---
-    labels = configure_plot(
-        x_default=col_name,
-        y_defaults="Fréquence",
-        period_text=period_text,
-        x_limits=None,
-        y_limits=[0, 1],    # placeholder, will be overridden after plotting
-        multiple_y=False,
-        plot_config_gui=plot_config_gui
-    )
-
-    x_label = labels["x_label"]
-    y_label = labels["y_label"]
-    legend_labels = labels.get("legend_labels", [])
-    title = labels["title"] or f"Histogramme de {col_name}{period_text}"
-
-    # -------- Plotting loop --------
+    # -------- Plotting loop (Grid for many series, overlay for few) --------
     n_series = len(results)
-    colors = cm.viridis(np.linspace(0, 1, max(n_series, 1)))
-    alpha = 0.65 if n_series > 1 else 0.85
-
-    for i, (sel, da_sel) in enumerate(results):
+    
+    # Pre-calculate counts to get a shared Y-axis limit for honest comparison
+    all_series_data = []
+    max_freq = 0
+    for _, da_sel in results:
         data = da_sel.values.ravel().astype(float)
         data = data[np.isfinite(data)]
-        if len(data) == 0:
-            continue
+        if len(data) > 0:
+            counts, _ = np.histogram(data, bins=bins, range=(global_min, global_max))
+            max_freq = max(max_freq, np.max(counts))
+            all_series_data.append(data)
+        else:
+            all_series_data.append(None)
 
-        # Label
+    # Use a grid (subplots) if many series, otherwise use overlay
+    use_grid = n_series > 2
+    
+    if use_grid:
+        n_cols = min(n_series, 3)
+        n_rows = (n_series + n_cols - 1) // n_cols
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 4*n_rows), sharex=True, sharey=True)
+        # Flatten axes array for easy iteration
+        if n_series == 1:
+            axes_flat = [axes]
+        else:
+            axes_flat = axes.flatten()
+    else:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        axes_flat = [ax] * n_series
+        colors = cm.viridis(np.linspace(0, 1, max(n_series, 1)))
+        alpha = 0.65 if n_series > 1 else 0.85
+
+    for i, (sel, data) in enumerate(zip(results, all_series_data)):
+        if data is None: continue
+        
+        ax_curr = axes_flat[i]
+        
+        # Labeling logic
+        info_dict = sel
         if isinstance(legend_labels, list) and i < len(legend_labels) and legend_labels[i]:
             label = legend_labels[i]
         else:
             label = col_name
-        if sel:
-            label += " (" + ", ".join(f"{k}={v}" for k, v in sel.items()) + ")"
+        if info_dict:
+            label += "\n(" + ", ".join(f"{v}" for v in info_dict.values()) + ")"
 
-        ax.hist(
+        # Plotting
+        color_val = cm.viridis(i / n_series) if use_grid else colors[i]
+        
+        ax_curr.hist(
             data,
             bins=bins,
             range=(global_min, global_max),
-            label=label,
-            alpha=alpha,
-            linewidth=0.8,
-            color=colors[i],
+            label=label if not use_grid else None,
+            alpha=0.7 if use_grid else alpha,
+            linewidth=1.0,
+            color=color_val,
             edgecolor='white'
         )
+        
+        if use_grid:
+            ax_curr.set_title(label, fontsize=10, fontweight='bold')
+            ax_curr.grid(True, linestyle='--', alpha=0.3)
+            ax_curr.set_ylim(0, max_freq * 1.1)
 
     # --- Chart styling ---
-    ax.set_title(title)
-    ax.set_xlabel(x_label)
-    ax.set_ylabel(y_label or "Fréquence")
-    if labels.get("x_limits") is not None:
-        ax.set_xlim(labels["x_limits"])
-    if n_series > 1:
-        ax.legend(loc="upper right")
-    ax.grid(True, linestyle='--', alpha=0.5)
-    plt.tight_layout()
+    if use_grid:
+        # Global labels for the grid
+        fig.suptitle(title, fontsize=14, fontweight='bold', y=1.02)
+        fig.text(0.5, 0.02, x_label, ha='center', fontsize=12)
+        fig.text(0.02, 0.5, y_label or "Fréquence", va='center', rotation='vertical', fontsize=12)
+        
+        # Hide empty axes
+        for j in range(n_series, len(axes_flat)):
+            axes_flat[j].axis('off')
+            
+        plt.tight_layout()
+    else:
+        ax.set_title(title)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label or "Fréquence")
+        ax.set_ylim(0, max_freq * 1.1)
+        if labels.get("x_limits") is not None:
+            ax.set_xlim(labels["x_limits"])
+        if n_series > 1:
+            ax.legend(loc="upper right", fontsize='small')
+        ax.grid(True, linestyle='--', alpha=0.5)
+        plt.tight_layout()
+
+    return fig
     return fig
