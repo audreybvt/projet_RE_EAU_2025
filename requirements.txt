@@ -3,3 +3,4 @@ numpy
 xarray
 matplotlib
 netcdf4
+streamlit

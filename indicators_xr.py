@@ -328,16 +328,9 @@ def SPLI(ds):
 # ---------------- Qmean/QA ----------------
 #   Mean discharge over a chosen period
 
-def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None, start_gui=None, end_gui=None):
+def variable_mean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_gui=None, nb_gui=None, start_gui=None, end_gui=None):
     """
-    Return the mean flow rate (Qmean) for a chosen period.
-
-    Args:
-        ds: Input xarray Dataset.
-        start_gui: Optional start date string (YYYY-MM-DD) for temporal filtering.
-        end_gui: Optional end date string (YYYY-MM-DD) for temporal filtering.
-    Returns:
-        ds: Original dataset with added resampled time coordinate and mean discharge variable.
+    Calculate the mean value of a variable over a specific period.
     """
 
     standard_dims = ['time', 'lat', 'lon', 'latitude', 'longitude', 'x', 'y']
@@ -371,18 +364,18 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
             active_ds = active_ds.sel({time_coord: slice(start_ts, end_ts)})
             selections_made.append(f"Period: {start_ts.date() if start_ts else 'start'} → {end_ts.date() if end_ts else 'end'}")
 
-    # Discharge variable selection
+    # Variable selection
     if var_q_gui is not None:
         var_q = var_q_gui
     else:
         vars_list = list(active_ds.data_vars)
-        print("\nAvailable variables (for Discharge):")
+        print("\nAvailable variables:")
         for i, var in enumerate(vars_list):
             print(f" [{i}] {var}")
         
         while True:
             try:
-                idx_q = int(input("Index of Discharge variable (Q): ").strip())
+                idx_q = int(input("Index of variable to analyze: ").strip())
                 var_q = vars_list[idx_q]
                 break
             except (ValueError, IndexError):
@@ -393,7 +386,9 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
 
     # Calculation
     new_time_dim = f"{time_coord}_Group_{nb}{unite}"
-    new_var_name = _get_unique_var_name(ds, f"Qmean_{nb}{unite}_{var_q}")
+    # Use "Mean" prefix instead of "Qmean" unless it's specifically a discharge variable
+    prefix = "Mean"
+    new_var_name = _get_unique_var_name(ds, f"{prefix}_{nb}{unite}_{var_q}")
 
     try:
         print("Calculation Phase")
@@ -407,7 +402,7 @@ def Qmean(ds, dict_filters_gui=None, time_coord_gui=None, var_q_gui=None, unite_
         return ds
 
     # Summary
-    print("Qmean calculation summary:")
+    print(f"{prefix} calculation summary:")
     if selections_made:
         print("Selection:")
         for item in selections_made: print(f" - {item}")

@@ -719,6 +719,14 @@ with tab_stat:
                 key="pg_timedim",
                 help="Choose the time dimension of your source variable. Usually 'time'."
             )
+            if time_dim_pg and ("_group_" in time_dim_pg.lower() or "month" in time_dim_pg.lower()):
+                st.warning(
+                    f"⚠️ **Incompatible dimension detected**: The dimension `{time_dim_pg}` appears to be aggregated "
+                    "(e.g. from an indicator like Qmean/VCN10 or a climatology). "
+                    "Period grouping requires continuous data to correctly align "
+                    "the dates between periods. Doing this on an already aggregated "
+                    "variable will result in misaligned or corrupted period comparisons."
+                )
 
     # Time period
     if stat_func not in ("Monthly interannual average",):
@@ -915,7 +923,7 @@ with tab_ind:
         [
             "Soil_Water_Balance_Index", 
             "Standardised Piezometric Level Indicator", 
-            "Qmean", 
+            "Mean variable", 
             "Q90/95", 
             "Q10/05", 
             "VCN10", 
@@ -925,7 +933,7 @@ with tab_ind:
         key="ind_select",
         help=(
             "Choose the indicator to calculate. "
-            "Qmean = mean over the period. "
+            "Mean = mean over the period (e.g. Qmean for discharge). "
             "Q90/95 = value exceeded 90% or 95% of the time (high values). "
             "Q10/05 = value exceeded only 10% or 5% of the time (low values). "
             "VCN10 = minimum of the rolling means over 10 consecutive time steps (extreme low). "
@@ -949,7 +957,7 @@ with tab_ind:
     unite_gui_val = None
     nb_gui_val    = None
 
-    if indicator in ("Qmean", "Q90/95", "Q10/05", "VCN10", "VCX3", "over_threshold"):
+    if indicator in ("Mean variable", "Q90/95", "Q10/05", "VCN10", "VCX3", "over_threshold"):
         col_tc, col_unit, col_nb = st.columns(3)
         if t_dims_ind:
             time_coord_ind = col_tc.selectbox(
@@ -993,7 +1001,7 @@ with tab_ind:
     elif indicator == "Standardised Piezometric Level Indicator":
         var_q = st.selectbox("Piezometric Level Variable", vars_list_ind, key="ind_varspli")
 
-    elif indicator in ("Qmean", "Q90/95", "Q10/05", "VCN10", "VCX3"):
+    elif indicator in ("Mean variable", "Q90/95", "Q10/05", "VCN10", "VCX3"):
         var_q = st.selectbox(
             "Variable to analyze",
             vars_list_ind,
@@ -1055,8 +1063,8 @@ with tab_ind:
                     var_etr_gui=var_etr,
                     var_dr_gui=var_dr,
                 )
-            elif indicator == "Qmean":
-                ds_work = ind.Qmean(
+            elif indicator == "Mean variable":
+                ds_work = ind.variable_mean(
                     ds_work,
                     dict_filters_gui=dict_filters_gui,
                     time_coord_gui=time_coord_ind,
@@ -1326,14 +1334,14 @@ with tab_viz:
         # Specific options depending on the type
         st.markdown("---")
 
-        if chart_type in ["Line chart", "Scatter plot"]:
+        if chart_type in ["Line chart", "Scatter plot", "Bar chart", "Radar chart"]:
             show_envelope = st.checkbox(
-                "Show uncertainty envelope (min-max range between models/scenarios)",
+                "Show uncertainty envelope (min-max range between models/scenarios/categories)",
                 value=False,
                 help=(
                     "If your dataset contains multiple models or scenarios, the envelope represents "
-                    "the range of possible values between the minimum and maximum of all available models. "
-                    "The shaded area shows the dispersion; the central line = the mean or the selected model(s)."
+                    "the range of possible values between the minimum and maximum of all available models at each point. "
+                    "For Line/Scatter/Radar, it shows a shaded area or error bars. For Bar charts, it adds error bars on each bar."
                 )
             )
             env_type = "average"
@@ -1342,12 +1350,17 @@ with tab_viz:
                     "**Envelope**: The shaded area represents the interval "
                     "[min, max] calculated on all models or scenarios for each time step. "
                     "This allows visualizing the dispersion related to climatic projections. "
-                    "Mode 'average': The shaded area shows the dispersion; the central line = the mean or the selected model(s) "
-                    "Mode 'individual': All curves of unselected models are plotted inside the envelope in a transparent color"
+                    "Mode 'average': The shaded area shows the dispersion; the central line = the mean or the selected model(s)" +
+                    ("\nMode 'individual': All unselected models are plotted inside the envelope (only Line/Scatter/Radar)" if chart_type != "Bar chart" else "")
                 )
+                
+                env_options = ["average"]
+                if chart_type not in ["Bar chart", "Radar chart"]:
+                    env_options.append("individual")
+
                 env_type = st.radio(
                     "Central curve of the envelope",
-                    ["average", "individual"],
+                    env_options,
                     index=0,
                     horizontal=True,
                     help="'average' plots the mean of all models. 'individual' plots a curve per model inside the envelope."
@@ -1367,8 +1380,51 @@ with tab_viz:
                 )
             )
             st.session_state["viz_bins"] = nb_bins
+            
+            # ── Guard B3: period_grouping _by_period ➜ Histogram ──
+            if any("_by_period" in v for v in plot_vars_ui if v):
+                st.warning(
+                    "⚠️ **Variable '_by_period' in Histogram**: This variable contains artificial `NaN` values used "
+                    "to align periods of different lengths. While the Histogram automatically filters them, "
+                    "make sure not to choose a time dimension as the X axis, as it no longer exists."
+                )
 
-    # Time period
+    # ── Guard A1: Check if the selected variable's time dim is string-based (e.g. monthly climatology) ──
+    _ds_check = st.session_state.get("ds")
+    _has_real_time_dim = False
+    _has_grouped_time_dim = False
+    _pot_magnitude_selected = False
+    _all_constant_selected = False
+    if _ds_check is not None and plot_vars_ui:
+        for _pv in plot_vars_ui:
+            if _pv not in _ds_check: continue
+            _da_check = _ds_check[_pv]
+            for _d in _da_check.dims:
+                # Check for various time-related dimension names
+                _low_d = _d.lower()
+                if any(s in _low_d for s in ["time", "month", "year", "season", "per", "day"]):
+                    _coord_vals = _ds_check[_d].values if _d in _ds_check.coords else None
+                    if _coord_vals is not None and len(_coord_vals) > 0:
+                        import numpy as np
+                        if np.issubdtype(np.array(_coord_vals).dtype, np.datetime64):
+                            # Check it's not a grouped indicator dim (e.g. time_Group_1m)
+                            if "_Group_" in _d or "_group_" in _d:
+                                _has_grouped_time_dim = True
+                            else:
+                                _has_real_time_dim = True
+            # POT magnitude check
+            if _pv.startswith("POT_magnitude"):
+                _pot_magnitude_selected = True
+            # All-constant values check (broadcasted percentile/mean)
+            try:
+                _vals_flat = _da_check.values.ravel().astype(float)
+                _vals_flat = _vals_flat[np.isfinite(_vals_flat)]
+                if len(_vals_flat) > 1 and float(np.max(_vals_flat) - np.min(_vals_flat)) < 1e-10:
+                    _all_constant_selected = True
+            except Exception:
+                pass
+
+    # Time period filter — always visible if any time-like dim exists
     t_dims_viz = time_like_dims()
     start_viz = None
     end_viz   = None
@@ -1376,17 +1432,35 @@ with tab_viz:
         with st.expander(
             "⏳ Temporal filtering",
         ):
+            if not _has_real_time_dim:
+                if _has_grouped_time_dim:
+                    st.warning(
+                        "⚠️ **Attention**: The selected variable uses a grouped time dimension "
+                        "(e.g. `time_Group_1m`). Filtering by date might not work as expected on this type of dimension. "
+                        "It is recommended to filter the time *before* calculating the indicators."
+                    )
+                else:
+                    st.warning(
+                        "⚠️ **Attention**: The selected variable does not have a continuous datetime dimension "
+                        "(e.g. Month). Filtering by date might not work correctly. "
+                        "You should filter the time *before* grouping or calculating results."
+                    )
+            
             st.info(
                 "💡 **Temporal filtering**: Select the period to display on the chart. "
                 "The chosen period will appear in the chart title. "
-                "Leave default dates (min/max) = display all available history."
+                "Leave default (min/max) = display all available history."
             )
-            t_v = pd.to_datetime(st.session_state["ds"][t_dims_viz[0]].values)
-            c1, c2 = st.columns(2)
-            d_s = c1.date_input("Start", value=t_v.min().date(), min_value=t_v.min().date(), max_value=t_v.max().date(), key="viz_ds")
-            d_e = c2.date_input("End",   value=t_v.max().date(), min_value=t_v.min().date(), max_value=t_v.max().date(), key="viz_de")
-            start_viz = str(d_s)
-            end_viz   = str(d_e)
+            
+            try:
+                t_v = pd.to_datetime(st.session_state["ds"][t_dims_viz[0]].values)
+                c1, c2 = st.columns(2)
+                d_s = c1.date_input("Start", value=t_v.min().date(), min_value=t_v.min().date(), max_value=t_v.max().date(), key="viz_ds")
+                d_e = c2.date_input("End",   value=t_v.max().date(), min_value=t_v.min().date(), max_value=t_v.max().date(), key="viz_de")
+                start_viz = str(d_s)
+                end_viz   = str(d_e)
+            except Exception:
+                st.error("⚠️ Error while parsing dates from the time dimension. Filtering might be unstable.")
 
     # ── Style options and zoom ──────────────────────────────────────────────
     with st.expander("🎨 Style options & 🔍 Zoom / Axis sliders"):
@@ -1412,6 +1486,7 @@ with tab_viz:
         _x_min_g, _x_max_g = 0.0, 1.0
 
         if _ds_cur is not None and plot_vars_ui:
+            _is_x_temporal = False
             try:
                 _num_vars = [v for v in plot_vars_ui if v in _ds_cur and np.issubdtype(_ds_cur[v].dtype, np.number)]
                 if _num_vars:
@@ -1424,19 +1499,31 @@ with tab_viz:
                 pass
 
             try:
-                if var_x in _ds_cur and np.issubdtype(_ds_cur[var_x].dtype, np.number):
-                    _all_x = _ds_cur[var_x].values.ravel()
-                    _all_x = _all_x[np.isfinite(_all_x)]
-                    if len(_all_x) > 0:
-                        _x_min_g = float(_all_x.min())
-                        _x_max_g = float(_all_x.max())
+                if var_x in _ds_cur:
+                    import pandas as pd
+                    # Temporal detection
+                    if np.issubdtype(_ds_cur[var_x].dtype, np.datetime64) or pd.api.types.is_datetime64_any_dtype(_ds_cur[var_x].dtype):
+                        _is_x_temporal = True
+                        _all_x = _ds_cur[var_x].values
+                        _x_min_g = pd.to_datetime(_all_x).min().date()
+                        _x_max_g = pd.to_datetime(_all_x).max().date()
+                    # Numeric detection
+                    elif np.issubdtype(_ds_cur[var_x].dtype, np.number):
+                        _all_x = _ds_cur[var_x].values.ravel()
+                        _all_x = _all_x[np.isfinite(_all_x)]
+                        if len(_all_x) > 0:
+                            _x_min_g = float(_all_x.min())
+                            _x_max_g = float(_all_x.max())
             except Exception:
                 pass
 
         _y_range = _y_max_g - _y_min_g if _y_max_g != _y_min_g else 1.0
         _x_range = _x_max_g - _x_min_g if _x_max_g != _x_min_g else 1.0
         _y_step = float(f"{_y_range / 100:.4g}")
-        _x_step = float(f"{_x_range / 100:.4g}")
+        if _is_x_temporal:
+            _x_step = None # Step is not used for date sliders by default or handled by Streamlit
+        else:
+            _x_step = float(f"{_x_range / 100:.4g}")
 
         col_sly, col_slx = st.columns(2)
 
@@ -1457,17 +1544,27 @@ with tab_viz:
                 z_ymin, z_ymax = None, None
 
         with col_slx:
-            use_x_zoom = st.checkbox("Enable X-axis zoom (if numeric)", value=False, key="use_x_zoom")
+            use_x_zoom = st.checkbox("Enable X-axis zoom", value=False, key="use_x_zoom")
             if use_x_zoom:
-                x_slider = st.slider(
-                    "X-axis range",
-                    min_value=float(_x_min_g),
-                    max_value=float(_x_max_g),
-                    value=(float(_x_min_g), float(_x_max_g)),
-                    step=_x_step,
-                    key="x_slider",
-                    help=f"X variable values: from {_x_min_g:.4g} to {_x_max_g:.4g}. Only works if the X axis is numeric (not a time axis)."
-                )
+                if _is_x_temporal:
+                    x_slider = st.slider(
+                        "X-axis range (dates)",
+                        min_value=_x_min_g,
+                        max_value=_x_max_g,
+                        value=(_x_min_g, _x_max_g),
+                        key="x_slider",
+                        help=f"X period: from {_x_min_g} to {_x_max_g}."
+                    )
+                else:
+                    x_slider = st.slider(
+                        "X-axis range",
+                        min_value=float(_x_min_g),
+                        max_value=float(_x_max_g),
+                        value=(float(_x_min_g), float(_x_max_g)),
+                        step=_x_step,
+                        key="x_slider",
+                        help=f"X variable values: from {_x_min_g:.4g} to {_x_max_g:.4g}."
+                    )
                 z_xmin, z_xmax = x_slider
             else:
                 z_xmin, z_xmax = None, None
@@ -1550,6 +1647,45 @@ with tab_viz:
     }
 
     # ── Plot button ────────────────────────────────────────────────────────
+
+    # ── Guard B1: rolling_mean → bar chart ──────────────────────────────
+    if chart_type == "Bar chart" and any(v.startswith("rolling_mean") for v in plot_vars_ui if v):
+        st.warning(
+            "⚠️ **Chart type mismatch**: The selected variable is a **rolling mean** (continuous time series). "
+            "A **Bar chart** is adapted for discrete aggregated values (e.g. monthly means, annual indicators). "
+            "➡️ Consider using a **Line chart** instead for better readability."
+        )
+
+    # ── Guard B2/A3: all-constant variable (broadcasted statistic) → line/scatter ──
+    if _all_constant_selected and chart_type in ["Line chart", "Scatter plot"]:
+        st.warning(
+            "⚠️ **Constant variable detected**: The selected variable has the same value at every time step. "
+            "This usually happens when a **Percentile** or **Mean** was reduced over `time` and then broadcast back. "
+            "The chart will display a flat horizontal line. This is mathematically correct but may not be what you expect."
+        )
+
+    # ── Guard A4: POT magnitude → histogram ─────────────────────────────
+    if chart_type == "Histogram" and _pot_magnitude_selected:
+        st.warning(
+            "⚠️ **Histogram of POT_magnitude**: This variable contains artificial zeros (all values below the "
+            "threshold are replaced by 0). The histogram will be dominated by these zeros and will not "
+            "faithfully represent the distribution of exceedance episodes. "
+            "➡️ Use `POT_deviation_*` instead for a biphasic Bar chart, or filter zeros manually before visualizing."
+        )
+
+    # ── Guard B4: radar chart with too many categories ───────────────────
+    if chart_type == "Radar chart" and _ds_check is not None:
+        _cat_var = var_x if 'var_x' in dir() else None
+        if _cat_var and _cat_var in _ds_check:
+            _n_cats = _ds_check[_cat_var].size
+            if _n_cats > 30:
+                st.error(
+                    f"🚫 **Radar chart impossible**: The variable `{_cat_var}` contains **{_n_cats} values**. "
+                    "A Radar chart requires a small number of categories (max ~30, ideally ≤ 12). "
+                    "➡️ Apply a **Climatologie Mensuelle** first to group data by month, or choose a categorical variable "
+                    "(model, scenario, season…) with fewer values."
+                )
+
     if st.button("📈 Plot", key="run_viz"):
         ds_work = st.session_state["ds"]
 
@@ -1637,7 +1773,9 @@ with tab_viz:
                         end_gui=end_viz,
                         plot_config_gui=gui_config,
                         dim_selections_gui=viz_filters,
-                        auto_mean_gui=True
+                        auto_mean_gui=True,
+                        plot_envelope_gui=st.session_state.get("viz_envelope", False),
+                        envelope_type_gui=st.session_state.get("viz_env_type", "average")
                     )
 
             elif chart_type == "Histogram":

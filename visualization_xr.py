@@ -31,7 +31,7 @@ def _get_var_filters(dim_selections_gui, var_name):
     or a nested dictionary {var_name: {dim: [values]}}.
     """
     if not dim_selections_gui:
-        return None
+        return {}
     
     # Check if this is a per-variable nested dictionary
     if any(isinstance(v, dict) for v in dim_selections_gui.values()):
@@ -597,16 +597,19 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
     # Configuration of labels/title
     # ----------------------
     
-    y_values = ds_period[y_name].values.astype(float).flatten()
-    y_values = y_values[np.isfinite(y_values)]
-    y_min = float(y_values.min()) if len(y_values) > 0 else 0
-    y_max = float(y_values.max()) if len(y_values) > 0 else 1
+    try:
+        y_values = ds_period[y_name].values.astype(float).flatten()
+        y_values = y_values[np.isfinite(y_values)]
+        y_min = float(y_values.min()) if len(y_values) > 0 else 0
+        y_max = float(y_values.max()) if len(y_values) > 0 else 1
+    except (ValueError, TypeError):
+        y_min, y_max = None, None
 
     labels = configure_plot(
         x_default=x_name,
         y_defaults=y_name,
         period_text=period_text,
-        x_limits=None,
+        x_limits=None, # By default we don't know the X range for Bar
         y_limits=[y_min, y_max],
         multiple_y=False,
         plot_config_gui=plot_config_gui
@@ -616,7 +619,9 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
     y_label = labels["y_label"]
     title = labels["title"] or f"Bar chart: {y_label} vs {x_label}{period_text}"
     
-    if labels["y_limits"] is not None:
+    if labels.get("x_limits") is not None:
+        ax.set_xlim(labels["x_limits"])
+    if labels.get("y_limits") is not None:
         ax.set_ylim(labels["y_limits"])
 
     # ----------------------
@@ -777,8 +782,18 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
     # ----------------------
     # Styling
     # ----------------------
-    ax.set_xticks(x_base)
-    ax.set_xticklabels(x_str_array.iloc[sort_idx], rotation=45, ha='right')
+    
+    # Decimate labels if too many to avoid overlapping
+    n_labels = len(x_base)
+    max_labels = 25
+    if n_labels > max_labels:
+        step = n_labels // max_labels + 1
+        ax.set_xticks(x_base[::step])
+        ax.set_xticklabels(x_str_array.iloc[sort_idx].iloc[::step], rotation=45, ha='right')
+    else:
+        ax.set_xticks(x_base)
+        ax.set_xticklabels(x_str_array.iloc[sort_idx], rotation=45, ha='right')
+
     ax.set_title(title)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -804,6 +819,7 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
     # Adjust layout to leave space for the legend at the bottom
     plt.tight_layout()
     fig.subplots_adjust(bottom=0.25)
+    fig.autofmt_xdate()
 
     return fig
 
@@ -851,8 +867,11 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
 
     # -------- Configuration labels --------
     # Use ds_period instead of ds here
-    y_min = float(ds_period[y_names].to_array().min().values)
-    y_max = float(ds_period[y_names].to_array().max().values)
+    try:
+        y_min = float(ds_period[y_names].to_array().min().values)
+        y_max = float(ds_period[y_names].to_array().max().values)
+    except (ValueError, TypeError):
+        y_min, y_max = None, None
 
     labels = configure_plot(
             x_default=x_name,
@@ -1026,7 +1045,7 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                 label = y_name
                 if all_info:
                     label += " (" + ", ".join(f"{v}" for v in all_info.values()) + ")"
-                ax.plot(x_vals_local, da_sel.values, label=label)
+                ax.plot(x_vals_local, da_sel.values, label=label, linewidth=2.0)
 
     if not plotted_anything:
         raise ValueError(f"The selected X-axis '{x_name}' is not present in the variables ({', '.join(y_names)}). No data could be plotted. Please change the X-axis. You may have several date variable. For example, for period-grouped variables, usually select 'time_in_period'.")
@@ -1073,7 +1092,23 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
         except Exception as e:
             print(f"Dual axis logic skipped: {e}")
 
+    # -------- Bug Fix: Single point on Time Axis --------
+    # If we have only one point and it's a date, Matplotlib zooms into "00:00:00".
+    # We expand the limits to see the context (e.g. +/- 1 year for annual data)
+    if 'x_vals_local' in locals() and len(x_vals_local) == 1:
+        xv = x_vals_local[0]
+        if np.issubdtype(xv.dtype, np.datetime64):
+            import pandas as pd
+            t = pd.to_datetime(xv)
+            # If it's an annual indicator (_1y), show +/- 2 years
+            if "_1y" in x_name or "_1y" in (y_names[0] if y_names else ""):
+                ax.set_xlim(t - pd.DateOffset(years=2), t + pd.DateOffset(years=2))
+            else:
+                ax.set_xlim(t - pd.DateOffset(months=6), t + pd.DateOffset(months=6))
+
     # Plot individual line
+    if x_name != "time_in_period":
+        ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     ax.set_title(title)
     if labels.get("x_limits") is not None:
@@ -1152,10 +1187,19 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
     
     # -------- Plot configuration --------
     
-    x_min = float(ds_period[x_name].min().values)
-    x_max = float(ds_period[x_name].max().values)
-    y_min = float(ds_period[y_names].to_array().min().values)
-    y_max = float(ds_period[y_names].to_array().max().values)
+    # -------- Plot configuration --------
+    
+    try:
+        x_min = float(ds_period[x_name].min().values)
+        x_max = float(ds_period[x_name].max().values)
+    except (ValueError, TypeError):
+        x_min, x_max = None, None
+
+    try:
+        y_min = float(ds_period[y_names].to_array().min().values)
+        y_max = float(ds_period[y_names].to_array().max().values)
+    except (ValueError, TypeError):
+        y_min, y_max = None, None
     
     labels = configure_plot(
         x_default=x_name,
@@ -1322,7 +1366,8 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
             print(f"Dual axis logic skipped: {e}")
 
     # -------- Styling --------
-    
+    if x_name != "time_in_period":
+        ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     if labels.get("x_limits") is not None:
         ax.set_xlim(labels["x_limits"])
@@ -1352,7 +1397,7 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
 
 # ---------------- Radar Chart ----------------
 
-def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui=None, start_gui=None, end_gui=None, units_gui=None, title_gui=None, legend_gui=None, plot_config_gui=None, dim_selections_gui=None, auto_mean_gui: bool = False):
+def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui=None, start_gui=None, end_gui=None, units_gui=None, title_gui=None, legend_gui=None, plot_config_gui=None, dim_selections_gui=None, auto_mean_gui: bool = False, plot_envelope_gui=False, envelope_type_gui="average"):
     """
     Create a radar chart from an xarray Dataset.
     """
@@ -1408,11 +1453,19 @@ def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui
     N = len(categories)
     if N < 3:
         raise ValueError("A radar chart requires at least 3 categories")
-    
+    if N > 50:
+        raise ValueError(
+            f"A radar chart cannot display {N} categories (axis variable '{cat_name}'). "
+            "Max recommended: 30. Apply a 'Climatologie Mensuelle' to group by month, "
+            "or choose a categorical variable (model, scenario, season) with fewer values."
+        )
+
     # -------- Units & Title --------
     
     if units_gui is not None:
         units_input = units_gui
+    elif is_gui and isinstance(plot_config_gui, dict):
+        units_input = plot_config_gui.get("units", "")
     elif is_gui:
         units_input = ""
     else:
@@ -1422,6 +1475,8 @@ def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui
     
     if title_gui is not None:
         custom_title = title_gui
+    elif is_gui and isinstance(plot_config_gui, dict) and plot_config_gui.get("title"):
+        custom_title = plot_config_gui["title"]
     elif is_gui:
         custom_title = f"Radar chart: {', '.join(value_names)}{units_text}{period_text}"
     else:
@@ -1494,19 +1549,70 @@ def radar_chart(ds: xr.Dataset, var_gui=None, cat_name_gui=None, value_names_gui
     
     for i, (val_name, sel, vals_numeric) in enumerate(all_curves):
 
-        values_list = vals_numeric.tolist()
-        values_list += values_list[:1]
-
         label = val_name
         if sel:
             label += " | " + ", ".join(f"{k}={v}" for k, v in sel.items())
 
-        ax.plot(
-            angles,
-            values_list,
-            label=label,
-            color=colors[i]
-        )
+        # Check for variability dimension to draw envelopes
+        da_orig = ds_period[val_name]
+        var_filters = _get_var_filters(dim_selections_gui, val_name)
+        variability_dim = next((d for d in da_orig.dims if d != cat_dim and da_orig.sizes[d] > 1 and str(d).lower() not in ['time', 'lat', 'lon', 'x', 'y']), None)
+
+        if plot_envelope_gui and variability_dim:
+            # Apply filters except for the variability dimension
+            non_var_filters = {k: v for k, v in var_filters.items() if k != variability_dim}
+            da_env = apply_gui_filters(da_orig, non_var_filters)
+            
+            # Robust Min-Max calculation for each category
+            if cat_dim in da_env.dims:
+                y_min_v = da_env.min(dim=variability_dim, skipna=True).values.ravel()
+                y_max_v = da_env.max(dim=variability_dim, skipna=True).values.ravel()
+            else:
+                _single_min = float(da_env.min(skipna=True).values)
+                _single_max = float(da_env.max(skipna=True).values)
+                y_min_v = np.full(N, _single_min)
+                y_max_v = np.full(N, _single_max)
+            
+            y_avg_v = vals_numeric 
+            
+            # Align lengths if necessary
+            if len(y_min_v) > N: y_min_v = y_min_v[:N]
+            if len(y_max_v) > N: y_max_v = y_max_v[:N]
+            if len(y_min_v) < N: # Padded case
+                y_min_v = np.pad(y_min_v, (0, N - len(y_min_v)), 'edge')
+                y_max_v = np.pad(y_max_v, (0, N - len(y_max_v)), 'edge')
+
+            # Shaded envelope (shadow)
+            # We use a single fill call with concatenated outer and inner boundaries
+            # to create a robust polygon envelope in polar coordinates.
+            y_min_wrap = y_min_v.tolist() + [y_min_v[0]]
+            y_max_wrap = y_max_v.tolist() + [y_max_v[0]]
+            
+            env_angles = angles + angles[::-1]
+            env_rs = y_max_wrap + y_min_wrap[::-1]
+            
+            ax.fill(
+                env_angles, 
+                env_rs, 
+                color=colors[i], alpha=0.15, label="_nolegend_", zorder=1
+            )
+            
+            # Plot the mean line
+            ax.plot(
+                angles, 
+                y_avg_v.tolist() + [y_avg_v[0]], 
+                label=f"{label} (range over {variability_dim})", 
+                color=colors[i], linewidth=2
+            )
+        else:
+            values_list = vals_numeric.tolist()
+            values_list += values_list[:1]
+            ax.plot(
+                angles,
+                values_list,
+                label=label,
+                color=colors[i]
+            )
 
     # -------- Styling --------
     
@@ -1535,6 +1641,9 @@ def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=
         var_gui = x_name_gui
 
     col_name = ask_variable(ds, prompt="Select variable to plot: ", var_gui=var_gui)
+    x_name = ask_variable(ds, prompt="Reference dimension (X): ", var_gui=x_name_gui)
+    if not x_name:
+        x_name = next((d for d in ds.dims if any(s in d.lower() for s in ['time', 'date', 'lat', 'lon', 'x', 'y'])), list(ds.dims)[0])
 
     if bins_gui is not None:
         bins = bins_gui
@@ -1556,6 +1665,62 @@ def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=
         ds_period = subset_time(ds, start_date, end_date)
         period_text = format_period_text(start_date, end_date)
 
+    # -------- Plotting setup --------
+    
+    da = ds_period[col_name]
+    x_arr = ds_period[x_name] if x_name in ds_period else ds_period.coords[x_name]
+    x_dim = x_arr.dims[0] if x_arr.ndim == 1 else None
+    
+    if x_dim is not None and x_dim not in da.dims:
+        raise ValueError(f"The selected X-axis '{x_name}' (dimension '{x_dim}') is not present in the variable '{col_name}'.")
+
+    # Get filters for this variable
+    var_filters = _get_var_filters(dim_selections_gui, col_name) or {}
+
+    # Handle dimensions and selections
+    results = handle_xarray_dimensions(
+        da, 
+        main_dims=[x_dim] if x_dim else list(da.dims),
+        dim_selections_gui=var_filters, 
+        auto_mean_gui=auto_mean_gui
+    )
+    
+    if not results:
+        raise ValueError("No data available to plot after applying filters.")
+
+    # Calculate global limits for consistent binning
+    all_vals = []
+    for _, da_sel in results:
+        vals = da_sel.values.ravel().astype(float)
+        vals = vals[np.isfinite(vals)]
+        # Fix A4: For POT_magnitude variables, artificial zeros bias the distribution.
+        # Filter them out so the histogram represents only actual exceedance values.
+        if col_name.startswith("POT_magnitude"):
+            vals = vals[vals > 0]
+        all_vals.append(vals)
+        
+    all_vals_flat = np.concatenate(all_vals) if all_vals else np.array([])
+    if len(all_vals_flat) == 0:
+        raise ValueError("No valid numerical data to plot.")
+        
+    global_min = float(all_vals_flat.min())
+    global_max = float(all_vals_flat.max())
+    
+    # Configure plot labels and limits
+    labels = configure_plot(
+        x_default=col_name,
+        period_text=period_text,
+        x_limits=[global_min, global_max],
+        y_limits=None,
+        multiple_y=False,
+        plot_config_gui=plot_config_gui
+    )
+    
+    x_label = labels["x_label"]
+    y_label = labels["y_label"]
+    legend_labels = labels["legend_labels"]
+    title = labels["title"] or f"Histogram: {col_name}{period_text}"
+
     # -------- Plotting loop (Grid for many series, overlay for few) --------
     n_series = len(results)
     
@@ -1565,6 +1730,9 @@ def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=
     for _, da_sel in results:
         data = da_sel.values.ravel().astype(float)
         data = data[np.isfinite(data)]
+        # Fix A4: strip artificial zeros for POT_magnitude variables
+        if col_name.startswith("POT_magnitude"):
+            data = data[data > 0]
         if len(data) > 0:
             counts, _ = np.histogram(data, bins=bins, range=(global_min, global_max))
             max_freq = max(max_freq, np.max(counts))
@@ -1590,13 +1758,14 @@ def histogram_chart(ds: xr.Dataset, var_gui=None, col_name_gui=None, x_name_gui=
         colors = cm.viridis(np.linspace(0, 1, max(n_series, 1)))
         alpha = 0.65 if n_series > 1 else 0.85
 
-    for i, (sel, data) in enumerate(zip(results, all_series_data)):
-        if data is None: continue
+    for i, (res_tuple, data) in enumerate(zip(results, all_series_data)):
+        if data is None or len(data) == 0: continue
         
+        sel_dict = res_tuple[0]
         ax_curr = axes_flat[i]
         
         # Labeling logic
-        info_dict = sel
+        info_dict = sel_dict
         if isinstance(legend_labels, list) and i < len(legend_labels) and legend_labels[i]:
             label = legend_labels[i]
         else:
