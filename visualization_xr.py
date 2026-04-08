@@ -739,7 +739,9 @@ def bar_chart(ds: xr.Dataset, x_name_gui=None, y_name_gui=None, y_names_gui=None
         y_num = pd.to_numeric(y_vals, errors='coerce')
         y_sorted = y_num[sort_idx]
         
-        all_info = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
+        list_like_types = (list, np.ndarray, pd.Index)
+        filtered_filters = {k: v for k, v in var_filters.items() if not isinstance(v, list_like_types) and v != 'mean'}
+        all_info = {**filtered_filters, **sel}
         label = y_name
         if all_info:
             label += " (" + ", ".join(f"{v}" for v in all_info.values()) + ")"
@@ -989,7 +991,10 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
                 x_vals_local = da_sel[x_dim].values
                 label_prefix = y_name
                 # Merge current selection and fixed filters for labeling
-                all_info = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
+                # We filter out list-like objects to keep labels concise
+                list_like_types = (list, np.ndarray, pd.Index)
+                filtered_filters = {k: v for k, v in var_filters.items() if not isinstance(v, list_like_types) and v != 'mean'}
+                all_info = {**filtered_filters, **sel}
                 if all_info:
                     label_desc = ", ".join(f"{v}" for k, v in all_info.items())
                     label_prefix += f" ({label_desc})"
@@ -1041,7 +1046,9 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
             results = handle_xarray_dimensions(da_filtered, main_dims=[x_dim], dim_selections_gui=var_filters, auto_mean_gui=auto_mean_gui)
             for sel, da_sel in results:
                 x_vals_local = da_sel[x_dim].values
-                all_info = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
+                list_like_types = (list, np.ndarray, pd.Index)
+                filtered_filters = {k: v for k, v in var_filters.items() if not isinstance(v, list_like_types) and v != 'mean'}
+                all_info = {**filtered_filters, **sel}
                 label = y_name
                 if all_info:
                     label += " (" + ", ".join(f"{v}" for v in all_info.values()) + ")"
@@ -1096,10 +1103,9 @@ def line_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=None, 
     # If we have only one point and it's a date, Matplotlib zooms into "00:00:00".
     # We expand the limits to see the context (e.g. +/- 1 year for annual data)
     if 'x_vals_local' in locals() and len(x_vals_local) == 1:
-        xv = x_vals_local[0]
-        if np.issubdtype(xv.dtype, np.datetime64):
-            import pandas as pd
-            t = pd.to_datetime(xv)
+            xv = x_vals_local[0]
+            if np.issubdtype(xv.dtype, np.datetime64):
+                t = pd.to_datetime(xv)
             # If it's an annual indicator (_1y), show +/- 2 years
             if "_1y" in x_name or "_1y" in (y_names[0] if y_names else ""):
                 ax.set_xlim(t - pd.DateOffset(years=2), t + pd.DateOffset(years=2))
@@ -1296,7 +1302,9 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
             
             for sel, y_da_sel in results_plot:
                 # Include filters in the label
-                all_sel = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
+                list_like_types = (list, np.ndarray, pd.Index)
+                filtered_filters = {k: v for k, v in var_filters.items() if not isinstance(v, list_like_types) and v != 'mean'}
+                all_sel = {**filtered_filters, **sel}
                 label_m = f"{y_name}"
                 if all_sel:
                     label_m += " (" + ", ".join(f"{v}" for k, v in all_sel.items()) + ")"
@@ -1332,7 +1340,9 @@ def scatter_chart(ds: xr.Dataset, var_gui=None, x_name_gui=None, y_names_gui=Non
                 if x_da_sel is None:
                     x_da_sel = list(x_dict.values())[0]
                 
-                all_info = {**{k: v for k, v in var_filters.items() if not isinstance(v, (list, np.ndarray, pd.Index)) and v != 'mean'}, **sel}
+                list_like_types = (list, np.ndarray, pd.Index)
+                filtered_filters = {k: v for k, v in var_filters.items() if not isinstance(v, list_like_types) and v != 'mean'}
+                all_info = {**filtered_filters, **sel}
                 label_p = y_name
                 if all_info:
                     label_p += " (" + ", ".join(f"{v}" for v in all_info.values()) + ")"
