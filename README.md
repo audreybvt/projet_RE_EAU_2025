@@ -2,6 +2,7 @@
 ## Table of Contents
 
 - [Hydrological Visualization Tool](#hydrological-visualization-tool)
+- [For the impatient reader](#for-the-impatient-reader)
 - [Project Structure](#project-structure)
 - [Supported Input Data](#supported-input-data)
   - [NetCDF](#netcdf-input-data-specification)
