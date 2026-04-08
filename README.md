@@ -86,19 +86,18 @@ If you just want to quickly test the tool without reading all the details, here 
 ## Quick Start
 
 ###  Choose a version
-- **Graphical Interface: **
+- **Graphical Interface:** 
   ```bash
   git checkout interface
   pip install -r requirements.txt
   streamlit run gui_streamlit_xarray.py
  ```
-- **Command Line Interface: **
+- **Command Line Interface:**
 ```bash
   git checkout main
   pip install -r requirements.txt
   python main_full_xarray.py
  ```
-git checkout main
 
 
 ## Project Structure
