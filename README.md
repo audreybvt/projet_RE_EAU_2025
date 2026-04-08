@@ -107,7 +107,6 @@ If you just want to quickly test the tool without reading all the details, here 
 PROJET_RE_EAU_2025/
 ├── input/                   # Input files
 ├── output/                  # Generated figures
-├── old/                     # Deprecated code
 │
 ├── data_formatting.py       # Data loading and formatting
 ├── indicators_xr.py         # Compute hydrological indicators
