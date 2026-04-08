@@ -2,6 +2,7 @@
 ## Table of Contents
 
 - [Hydrological Visualization Tool](#hydrological-visualization-tool)
+- [For the impatient reader](#for-the-impatient-reader)
 - [Project Structure](#project-structure)
 - [Supported Input Data](#supported-input-data)
   - [NetCDF](#netcdf-input-data-specification)
@@ -56,7 +57,8 @@ If you just want to quickly test the tool without reading all the details, here 
 - pandas  
 - xarray  
 - matplotlib  
-- netCDF4  
+- netcdf4  
+- **streamlit** (for GUI)
 
 **Supported Input Data:**  
 - **NetCDF (.nc)** files – recommended for large datasets  
@@ -81,11 +83,23 @@ If you just want to quickly test the tool without reading all the details, here 
 - Long format only: each row represents one observation uniquely identified by time + dimensions  
 - Wide-format tables or multi-level headers are **not supported**  
 
-**Quick Start Commands:**  
+## Quick Start
+
+###  Choose a version
+- **Graphical Interface:** 
 ```bash
-pip install -r requirements.txt
-python main_full_xarray.py
-```
+  git checkout interface
+  pip install -r requirements.txt
+  streamlit run gui_streamlit_xarray.py
+   ```
+- **Command Line Interface:** 
+
+```bash
+  git checkout main
+  pip install -r requirements.txt
+  python main_full_xarray.py
+   ```
+
 
 ## Project Structure
 
@@ -93,13 +107,13 @@ python main_full_xarray.py
 PROJET_RE_EAU_2025/
 ├── input/                   # Input files
 ├── output/                  # Generated figures
-├── old/                     # Deprecated code
 │
 ├── data_formatting.py       # Data loading and formatting
 ├── indicators_xr.py         # Compute hydrological indicators
 ├── statistics_xr.py         # Compute statistical functions
 ├── visualization_xr.py      # Plotting functions
 ├── main_full_xarray.py      # Main CLI script
+├── gui_streamlit_xarray.py   # Main GUI script (Streamlit)
 │
 ├── README.md
 └── .gitignore
@@ -543,6 +557,60 @@ These indicators are computed directly on the dataset and can be chained with st
 
 ---
 
+## Graphical User Interface (GUI)
+
+The project includes a modern web-based interface built with **Streamlit**. This is the recommended way to use the tool for most users, as it provides a more visual and intuitive workflow.
+
+### GUI Features
+
+*   **Easy Data Loading**: Upload your NetCDF or CSV files directly through the browser.
+*   **Interactive Visualization**: Explore your data with zooming, panning, and real-time parameter updates.
+*   **Visual Dimension Filtering**: Easily select specific models, scenarios, or locations using dropdown menus and checkboxes.
+*   **Custom Styling**: Adjust chart titles, labels, and color schemes on the fly.
+*   **Data Export**: Preview and download processed data as CSV files after computation.
+
+### GUI Workflow & Features
+
+The interface is organized into a **Sidebar** for data management and a **Main Panel** for analysis, split into three functional tabs:
+
+1.  **Sidebar (Data Management)**:
+    - **Upload**: Drop your files here. The app automatically detects dimensions and variables.
+    - **Inventory**: View a summary of the dimensions (time range, models, stations) and variables available in the loaded dataset.
+    - **Reset**: Quickly clear the session state to start a new analysis.
+
+2.  **Tab 1: Indicators & Statistics**:
+    - **Selection**: Choose one or more variables and the hydrological indicators to calculate (e.g., Qmean, VCN10).
+    - **Aggregation**: Perform statistical operations (mean, percentile) by choosing which dimensions to reduce.
+    - **Results**: Calculated indicators are automatically added to the internal dataset, allowing for chained calculations.
+
+3.  **Tab 2: Visualization**:
+    - **Chart Selection**: Choose from Line, Bar, Scatter, Radar, or Histogram.
+    - **Filters**: Fine-tune the displayed data by selecting specific scenarios, models, or time periods.
+    - **Axis & Labels**: Customize the look of your chart before downloading the figure.
+
+4.  **Tab 3: Export**:
+    - Preview the final processed dataset.
+    - Download the resulting table as a CSV file for further use in other software.
+
+### Technical Architecture (GUI)
+
+The GUI is designed to be a lightweight wrapper around the project's core processing logic, ensuring consistency between the CLI and the web interface.
+
+*   **Modular Processing**: The GUI imports and uses the exact same logic modules as the CLI (`indicators_xr.py`, `statistics_xr.py`). 
+*   **Non-Blocking Logic**: All core functions were refactored to check if they are running in "GUI mode". When active, they bypass terminal-based `input()` prompts and instead rely on parameters passed directly from Streamlit widgets.
+*   **Stateful Pipeline**: The application uses `st.session_state` to persist the `xarray.Dataset`. This allows users to build a "pipeline" of calculations (e.g., calculate an indicator, then calculate a rolling mean on that indicator) without reloading the data.
+*   **Matplotlib Integration**: Visualizations are generated using Matplotlib (from `visualization_xr.py`) and rendered in the browser using `st.pyplot()`, maintaining high-quality scientific plotting standards.
+
+### Launching the GUI
+
+To run the graphical interface, use the following command in your terminal:
+
+```bash
+streamlit run gui_streamlit_xarray.py
+```
+
+---
+
 ## Spatial dimension handling
 
 It is possible to handle spatial dimension using NetCDF files (but not CSV files) as explained in the "NetCDF Input Data Specification" part but note that the code is not yet accomplished for this feature as it was not part of the first objectives. Further work may thus be done.
@@ -559,6 +627,7 @@ The project relies on scientific Python libraries commonly used for environmenta
 * xarray
 * matplotlib
 * netCDF4
+* **streamlit**
 * pathlib (standard library)
 * os (standard library)
 
@@ -576,11 +645,42 @@ pip install -r requirements.txt
 
 ## How to Run
 
-### 1. Run the main script
+Choose if you want to use the interface (GUI) or the terminal (CLI) version.
+
+### Run the GUI
+
+```bash
+streamlit run gui_streamlit_xarray.py
+```
+
+Follow the interactive prompts
+
+You will be asked to:
+
+1. Select file format (NetCDF or CSV)
+2. Upload your file
+3. Choose statistical operations
+4. Choose indicators to compute
+5. Select a visualization
+
+### Run the CLI version
 
 ```bash
 python main_full_xarray.py
 ```
+
+
+Follow the interactive prompts
+
+You will be asked to:
+
+1. Select file format (NetCDF or CSV)
+2. Provide file path(s)
+3. Choose indicators to compute
+4. Choose statistical operations
+5. Select a visualization
+6. Decide whether to continue analysis
+
 
 ---
 
