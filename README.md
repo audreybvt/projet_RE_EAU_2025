@@ -87,7 +87,7 @@ If you just want to quickly test the tool without reading all the details, here 
 
 ###  Choose a version
 - **Graphical Interface:** 
-  ```bash
+```bash
   git checkout interface
   pip install -r requirements.txt
   streamlit run gui_streamlit_xarray.py
