@@ -631,17 +631,44 @@ pip install -r requirements.txt
 
 ---
 
-### 1. Run the GUI (Recommended)
+## How to Run
+
+Choose if you want to use the interface (GUI) or the terminal (CLI) version.
+
+### Run the GUI
 
 ```bash
 streamlit run gui_streamlit_xarray.py
 ```
 
-### 2. Run the CLI version
+Follow the interactive prompts
+
+You will be asked to:
+
+1. Select file format (NetCDF or CSV)
+2. Upload your file
+3. Choose statistical operations
+4. Choose indicators to compute
+5. Select a visualization
+
+### Run the CLI version
 
 ```bash
 python main_full_xarray.py
 ```
+
+
+Follow the interactive prompts
+
+You will be asked to:
+
+1. Select file format (NetCDF or CSV)
+2. Provide file path(s)
+3. Choose indicators to compute
+4. Choose statistical operations
+5. Select a visualization
+6. Decide whether to continue analysis
+
 
 ---
 
