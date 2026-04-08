@@ -83,11 +83,23 @@ If you just want to quickly test the tool without reading all the details, here 
 - Long format only: each row represents one observation uniquely identified by time + dimensions  
 - Wide-format tables or multi-level headers are **not supported**  
 
-**Quick Start Commands:**  
+## Quick Start
+
+###  Choose a version
+- **Graphical Interface: **
+  ```bash
+  git checkout interface
+  pip install -r requirements.txt
+  streamlit run gui_streamlit_xarray.py
+ ```
+- **Command Line Interface: **
 ```bash
-pip install -r requirements.txt
-python run streamlit gui_streamlit_xarray.py
-```
+  git checkout main
+  pip install -r requirements.txt
+  python main_full_xarray.py
+ ```
+git checkout main
+
 
 ## Project Structure
 
